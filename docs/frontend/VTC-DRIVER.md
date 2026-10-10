@@ -1,6 +1,6 @@
 # App CHAUFFEUR — COURSES (VTC) — contrat d'API
 
-> **Version 4.62.2** · 10 octobre 2026
+> **Version 4.62.3** · 10 octobre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Courses : `https://api-staging.dira.llc/api/v1/vtc` · Suivi : `wss://tracking-staging.dira.llc` · SIG : `https://maps.dira.llc/api`
 
 ---
@@ -3832,6 +3832,19 @@ La réponse porte **quatre** champs, et il faut les quatre :
   "compliant": false
 }
 ```
+
+> ## ⚠️ `missing` CONTIENT LES PIÈCES DÉPOSÉES MAIS PAS ENCORE VALIDÉES (v4.62.3)
+>
+> « Manquant » veut dire **« non couvert par une pièce valable »** : une pièce
+> `pending` ne couvre rien tant qu'un humain ne l'a pas regardée. Une pièce
+> déposée ce matin est donc **dans `documents` ET dans `missing`**.
+>
+> ⚠️ **NE LES AFFICHEZ PAS L'UN APRÈS L'AUTRE** — « en cours d'examen » puis
+> « Absent » pour le même papier fait redéposer. « Absent » ne s'affiche que pour
+> un `kind` dont il n'existe **aucun** dépôt.
+>
+> Et « tout déposé, rien encore validé » n'est pas « dossier incomplet » : il n'y
+> a plus rien à faire de ce côté, et le dire évite un appel au support.
 
 > ## ⚠️ LES TROIS REFUS D'UN DÉPÔT, ET LEURS CODES (v4.62.2)
 >

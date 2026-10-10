@@ -1,6 +1,6 @@
 # Specs frontend — par rôle
 
-> **Version 4.62.2** · 10 octobre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics`
+> **Version 4.62.3** · 10 octobre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics`
 
 **Cinq** documents, un par application. Chacun est **autonome** : tout ce qu'un frontend doit savoir pour son rôle, sans avoir à ouvrir les vingt specs de modules.
 
@@ -355,6 +355,34 @@ Chaque document porte la même version en en-tête, et son propre journal des ch
 - [ ] ⚠️ **`TRACKING_JWT_SECRET` renseigné dans chaque environnement déployé.** Vide, l'authentification du service de suivi est **désactivée** : n'importe qui connaissant un `delivery_id` suit la course. Le secret doit valoir **exactement** le `JWT_SECRET` de `dira-food-api`.
 
 ## Journal
+
+### 4.62.3 — 10 octobre 2026
+
+🔧 **UNE RÈGLE D'AFFICHAGE QUI MANQUAIT, trouvée en vérifiant le correctif
+précédent sur staging** — en déposant les six pièces d'une voiture pour de vrai.
+
+⚠️ **`missing` CONTIENT LES PIÈCES DÉPOSÉES MAIS PAS ENCORE VALIDÉES.**
+« Manquant » veut dire *« non couvert par une pièce valable »*, et une pièce
+`pending` ne couvre rien tant qu'un humain ne l'a pas regardée : une pièce
+déposée ce matin est donc **dans `documents` ET dans `missing`**.
+
+La console affichait les deux listes l'une après l'autre : **douze lignes pour
+six pièces**, « en cours d'examen » puis « Absent » pour le même papier. Un
+propriétaire qui vient de tout déposer et lit « Absent » **redépose**.
+
+**La règle** : « Absent » ne s'affiche que pour un `kind` dont il n'existe
+**aucun** dépôt. Et « tout déposé, rien encore validé » n'est **pas** « dossier
+incomplet » — il n'y a plus rien à faire de ce côté, et le dire évite un appel au
+support.
+
+Ajoutée à `VTC-DRIVER.md`, `FOOD-DELIVERY.md` et `PARTNER-FLEET.md` §10.
+
+⚠️ **Et `PARTNER-FLEET.md` retire une promesse** : `papers_missing` figurait
+parmi les alertes de l'accueil et **n'est levé par personne** — le tableau de
+bord ne lit pas la conformité. Une spec qui promet une alerte qui n'arrive jamais
+fait remplacer un écran par elle.
+
+---
 
 ### 4.62.2 — 10 octobre 2026
 

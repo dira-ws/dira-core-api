@@ -1,6 +1,6 @@
 # Console PARTENAIRE — PROPRIÉTAIRE DE FLOTTE PRIVÉE — contrat d'API
 
-> **Version 4.62.2** · 10 octobre 2026
+> **Version 4.62.3** · 10 octobre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Courses : `https://api-staging.dira.llc/api/v1/vtc`
 > Console en service : `https://partner-staging.dira.llc`
 
@@ -389,7 +389,7 @@ la poser au large du golfe de Guinée.
 | `kind` | Ce que la phrase doit dire |
 |---|---|
 | `debt_blocked` | « *{subject}* ne reçoit plus d'appels : sa dette a franchi la limite » |
-| `papers_missing` | « Papiers manquants pour *{subject}* — déposez-les depuis « Papiers » » |
+| `papers_missing` | ⚠️ **DÉCLARÉ, PAS ENCORE SERVI** — voir l'avertissement sous le tableau |
 | `vehicle_withdrawn` | « *{subject}* est repris : rattachez-le à un chauffeur pour le remettre au travail » |
 | `vehicle_maintenance` | « *{subject}* est immobilisé par Dira — contactez le support » |
 | `driver_stale` | « *{count}* téléphone(s) ne donnent plus de position : appelez vos chauffeurs » |
@@ -404,6 +404,11 @@ l'ancienne.
 ⚠️⚠️ **L'ALERTE PORTE LE GESTE, PAS LE CONSTAT.** « 3 voitures sans papiers » est
 un constat : on le lit une fois puis on l'ignore. « Déposez l'assurance de
 AB-1234 » est un geste.
+
+⚠️⚠️ **`papers_missing` EST DÉCLARÉ ET N'EST PAS ENCORE LEVÉ (v4.62.3).** Le
+tableau de bord ne lit pas la conformité : prévoyez la ligne, ne comptez pas sur
+elle, et **ne remplacez pas l'écran « Papiers » par une alerte qui n'arrivera
+pas**. Les cinq autres sont servies.
 
 ⚠️ **UN `kind` INCONNU NE SE JETTE PAS** : affichez-le brut plutôt que de perdre
 une alerte dont la gravité est servie (`severity`).
@@ -874,6 +879,32 @@ la flotte est refusé (`vehicle_not_in_your_fleet`).
 voiture. `document_refuses_vehicle` ne devrait donc jamais vous arriver — et
 `document_needs_vehicle` signifie que votre requête a oublié le champ.
 
+> ## ⚠️⚠️ `missing` CONTIENT LES PIÈCES DÉPOSÉES MAIS PAS ENCORE VALIDÉES (v4.62.3)
+>
+> « Manquant » veut dire **« non couvert par une pièce valable »**, et une pièce
+> `pending` ne couvre rien tant qu'un humain ne l'a pas regardée. Une pièce
+> déposée ce matin est donc **dans `documents` ET dans `missing`**.
+>
+> ⚠️ **NE LES AFFICHEZ PAS L'UN APRÈS L'AUTRE.** La console le faisait : douze
+> lignes pour six pièces, « en cours d'examen » puis « Absent » **pour le même
+> papier**. Un propriétaire qui vient de tout déposer et lit « Absent »
+> **redépose**.
+>
+> **La règle : « Absent » ne s'affiche que pour un `kind` dont il n'existe AUCUN
+> dépôt** (`missing` moins les `documents[].kind`). Les autres sont dites par
+> l'état de leur pièce.
+>
+> ⚠️ **ET L'EN-TÊTE D'UNE VOITURE A TROIS ÉTATS, PAS DEUX :**
+>
+> | | |
+> |---|---|
+> | `compliant: true` | **En règle** |
+> | il reste un `kind` sans aucun dépôt | **Dossier incomplet** |
+> | tout est déposé, rien n'est encore validé | **En cours d'examen chez Dira** |
+>
+> « Il n'y a plus rien à faire de ce côté » est une information : « incomplet »
+> fait chercher quoi déposer encore.
+
 ### ⚠️ Les quatre cas d'une pièce, et ce que l'écran propose
 
 | `state` | Ce que l'écran fait |
@@ -1198,6 +1229,22 @@ réponse a l'air.
 ---
 
 ## 17. Journal
+
+### 4.62.3 — 10 octobre 2026
+
+🔧 **DEUX CORRECTIONS DE CE DOCUMENT, trouvées en vérifiant le correctif
+précédent sur staging** — en déposant les six pièces d'une voiture pour de vrai :
+
+- **`missing` contient les pièces déposées mais pas encore validées**, et la
+  spec ne le disait pas. L'écran affichait donc douze lignes pour six pièces,
+  « en cours d'examen » puis « Absent » pour le même papier. La règle
+  d'affichage, et le troisième état de l'en-tête d'une voiture, sont maintenant
+  en §10.
+- **`papers_missing` était annoncé parmi les alertes de l'accueil et n'est levé
+  par personne** : le tableau de bord ne lit pas la conformité. ⚠️ Une spec qui
+  promet une alerte qui n'arrive jamais fait remplacer un écran par elle.
+
+---
 
 ### 4.62.2 — 10 octobre 2026
 
