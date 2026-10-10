@@ -1,6 +1,6 @@
 # Specs frontend — par rôle
 
-> **Version 4.62.0** · 10 octobre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics`
+> **Version 4.62.1** · 10 octobre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics`
 
 **Cinq** documents, un par application. Chacun est **autonome** : tout ce qu'un frontend doit savoir pour son rôle, sans avoir à ouvrir les vingt specs de modules.
 
@@ -355,6 +355,26 @@ Chaque document porte la même version en en-tête, et son propre journal des ch
 - [ ] ⚠️ **`TRACKING_JWT_SECRET` renseigné dans chaque environnement déployé.** Vide, l'authentification du service de suivi est **désactivée** : n'importe qui connaissant un `delivery_id` suit la course. Le secret doit valoir **exactement** le `JWT_SECRET` de `dira-food-api`.
 
 ## Journal
+
+### 4.62.1 — 10 octobre 2026
+
+✏️ **AUCUN CONTRAT NE CHANGE.** Trois chemins de `PARTNER-FLEET.md` portaient un
+**identifiant réel** au lieu de leur paramètre (`.../vehicles/6ab3713.../take-back`
+au lieu de `.../vehicles/{vehicleID}/take-back`).
+
+⚠️ **CE N'EST PAS UNE COQUILLE, et c'est le test des contrats qui l'a dit.** Les
+routes citées dans ces documents sont **confrontées automatiquement aux routes
+réellement montées** par les services — c'est ce qui empêche une équipe de câbler
+un chemin ou un verbe qui n'existe pas. **Un identifiant littéral sort la
+citation de ce contrôle** : elle ne ressemble plus à la route montée, et plus
+personne ne vérifie qu'elle existe. (Accessoirement, un identifiant recopié d'une
+spec appelle la voiture de quelqu'un d'autre.)
+
+La règle est maintenant écrite dans le document (`PARTNER-FLEET.md` §16) : les
+**chemins** portent leurs paramètres, les **corps** et les **réponses** portent
+des valeurs réalistes.
+
+---
 
 ### 4.62.0 — 10 octobre 2026
 

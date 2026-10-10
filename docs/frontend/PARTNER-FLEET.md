@@ -1,6 +1,6 @@
 # Console PARTENAIRE — PROPRIÉTAIRE DE FLOTTE PRIVÉE — contrat d'API
 
-> **Version 4.62.0** · 10 octobre 2026
+> **Version 4.62.1** · 10 octobre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Courses : `https://api-staging.dira.llc/api/v1/vtc`
 > Console en service : `https://partner-staging.dira.llc`
 
@@ -517,7 +517,7 @@ qu'elle doit corriger.
 ### 6.3 `POST /vtc/partner/vehicles/{vehicleID}/take-back` — reprendre son bien
 
 ```
-POST /vtc/partner/vehicles/6ab371373317b63a136b7272/take-back
+POST /vtc/partner/vehicles/{vehicleID}/take-back
 (aucun corps)
 
 → 200 { …le véhicule, status: "withdrawn"… }
@@ -592,7 +592,7 @@ servis ; si vous en voyez un, signalez-le.
 ### 7.2 ⚠️ `PUT /vtc/partner/drivers/{driverID}/debt-cap` — le geste le plus lourd de la console
 
 ```
-PUT /vtc/partner/drivers/6ab37137b46bacb400cc9ef0/debt-cap
+PUT /vtc/partner/drivers/{driverID}/debt-cap
 { "cap_xof": 25000 }        ← 0 RETIRE la limite
 
 → 200 { …le chauffeur à jour… }
@@ -705,7 +705,7 @@ Les deux appellent le support la même semaine.
 ### 9.2 `PUT /vtc/partner/drivers/{driverID}/pay` — les termes convenus
 
 ```
-PUT /vtc/partner/drivers/6ab37137b46bacb400cc9ef0/pay
+PUT /vtc/partner/drivers/{driverID}/pay
 { "mode": "commission", "share_bp": 7000 }      ← 7000 = 70 % POUR LE CHAUFFEUR
    ou
 { "mode": "salary",     "salary_xof": 120000 }
@@ -1154,7 +1154,27 @@ plateforme.
 
 ---
 
-## 16. Journal
+## 16. ⚠️ Une note sur les exemples de ce document
+
+**Les chemins portent `{vehicleID}`, `{driverID}`, `{id}` — jamais un
+identifiant réel**, même dans un bloc d'exemple qui, par ailleurs, montre des
+valeurs vraies.
+
+⚠️ **Deux raisons, et la seconde est la plus sérieuse.** La première : un
+identifiant recopié d'une spec appelle **la voiture de quelqu'un d'autre**. La
+seconde : les routes citées ici sont **confrontées automatiquement aux routes
+réellement montées** par les services — c'est ce qui empêche une équipe de
+câbler un chemin ou un verbe qui n'existe pas. Un identifiant littéral dans le
+chemin **sort la citation du contrôle** : elle ne ressemble plus à la route
+montée, et plus personne ne vérifie qu'elle existe.
+
+Les **corps** et les **réponses**, eux, portent des valeurs réalistes : ils ne
+sont pas des chemins, et un exemple avec `"id": "…"` ne dit pas de quoi la
+réponse a l'air.
+
+---
+
+## 17. Journal
 
 ### 4.62.0 — 10 octobre 2026
 
