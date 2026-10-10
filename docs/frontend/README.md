@@ -1,6 +1,6 @@
 # Specs frontend — par rôle
 
-> **Version 4.61.1** · 9 octobre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics`
+> **Version 4.62.0** · 10 octobre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics`
 
 **Cinq** documents, un par application. Chacun est **autonome** : tout ce qu'un frontend doit savoir pour son rôle, sans avoir à ouvrir les vingt specs de modules.
 
@@ -70,6 +70,24 @@ sources de vérité pour les mêmes routes. `DIRA-CLIENT` §10 donne l'inventair
 route par route de ce qui vit où.
 
 Le partage de tokens de design et de composants entre les deux familles reste une bonne idée — c'est le **réseau** qui diffère, pas l'habillage.
+
+### 🆕 LA CONSOLE DU PROPRIÉTAIRE DE FLOTTE — [`PARTNER-FLEET.md`](PARTNER-FLEET.md) (v4.62.0)
+
+**Une société de transport possède des voitures que d'autres conduisent.** Elle
+a désormais sa console web — dix écrans, deux bases d'URL, aucun socket — et ce
+document en est le contrat.
+
+⚠️ **CE N'EST PAS UNE CONSOLE D'ADMINISTRATION RÉDUITE, et son §2 est la partie
+qu'il faut lire en premier :** il liste ce que cette surface **ne sert pas, et
+pourquoi**. Un partenaire pose une limite de dette (ce qui **coupe les appels**
+de quelqu'un) et reprend une voiture (ce qui met son conducteur **hors ligne**) :
+treize choses lui sont donc délibérément refusées — suspendre un chauffeur, lire
+son temps en ligne ou son taux d'acceptation, voir un passager, voir le **départ
+et l'arrivée** d'une course (une adresse de départ *est* l'adresse de
+quelqu'un), lire le grand livre d'un chauffeur, lire ses tickets de support.
+
+**Ce ne sont pas des manques à combler.** Si l'un de ces champs apparaît un jour
+dans une réponse, ne l'affichez pas — signalez-le.
 
 ## ⚠️ v4.0.0 — UN vocabulaire d'état pour toute la plateforme
 
@@ -337,6 +355,61 @@ Chaque document porte la même version en en-tête, et son propre journal des ch
 - [ ] ⚠️ **`TRACKING_JWT_SECRET` renseigné dans chaque environnement déployé.** Vide, l'authentification du service de suivi est **désactivée** : n'importe qui connaissant un `delivery_id` suit la course. Le secret doit valoir **exactement** le `JWT_SECRET` de `dira-food-api`.
 
 ## Journal
+
+### 4.62.0 — 10 octobre 2026
+
+🆕 **UN HUITIÈME CONTRAT : [`PARTNER-FLEET.md`](PARTNER-FLEET.md), la console du
+PROPRIÉTAIRE DE FLOTTE PRIVÉE.** Aucune route ne change, aucun champ ne bouge :
+cette version **ajoute un document** pour une surface qui était servie et
+n'était décrite nulle part.
+
+**Ce qu'elle couvre** — dix écrans sur **deux bases** (`…/api/v1/` pour le
+contrat, le personnel et le matériel ; `…/api/v1/vtc/` pour le parc, les
+courses, la paie, les papiers, le support) et **aucun socket** : la carte des
+véhicules se rafraîchit par un appel toutes les dix secondes.
+
+**Ce qui vaut d'être lu avant de câbler :**
+
+- ⚠️ **§2 — ce que cette surface NE SERT PAS**, treize lignes, et chacune est une
+  décision. Un partenaire **ne peut pas suspendre un chauffeur** : ce serait se
+  servir de notre dispatch comme d'un outil de pression sur un travailleur. Il
+  peut **reprendre son bien** — même effet pratique, et c'est honnête.
+- ⚠️ **Les courses de la flotte sont servies SANS DÉPART NI ARRIVÉE.** Une adresse
+  de départ *est* l'adresse de quelqu'un, et l'historique des arrivées d'un
+  chauffeur *est* le carnet d'adresses de ses clients.
+- ⚠️ **Trois rôles** (`owner` / `manager` / `viewer`) et **le défaut est « ne peut
+  pas »** : un `role` absent doit **couper** le pouvoir, jamais l'ouvrir.
+- ⚠️ **Quatre états de véhicule** : « plus vu » n'est **pas** « hors ligne » —
+  l'un appelle un coup de téléphone, l'autre n'appelle rien — et **une voiture en
+  course le reste même si son téléphone s'est tu**.
+- ⚠️ **`cash_xof` est de l'argent à RÉCLAMER, pas à verser**, et c'est le plein
+  tarif : la commission de Dira est dedans. Dans la même colonne que la part à
+  verser, deux chiffres opposés s'additionnent.
+- ⚠️ **Cet argent n'est pas celui de Dira** : la plateforme enregistre les termes
+  convenus et calcule un relevé. Elle ne prélève rien, ne verse rien — et la
+  phrase va **en haut de l'écran**, pas dans une aide.
+- ⚠️ **La fenêtre de dates** (`from`/`to` inclusifs, `tz`, **93 jours**) et ses
+  trois refus, atteignables dès qu'on offre un sélecteur de date libre.
+- **§15 — trente-deux points de recette.**
+
+**Et deux pièges de rédaction qui valent pour toutes les specs :**
+
+> ⚠️ **UN PARAMÈTRE QU'ON INVENTE EST UN PARAMÈTRE TOUJOURS IGNORÉ**, et un
+> **champ** qu'on invente est un champ toujours **vide**. La réponse reste `200`,
+> le filtre ne filtre rien, le prix ne s'affiche pas — et **rien ne crie**.
+> `PARTNER-FLEET.md` §13 donne donc la table des paramètres acceptés **route par
+> route**, et §11 nomme les champs exacts du catalogue de matériel
+> (`sale_price_xof`, `rental_monthly_xof`… — il n'y a **ni** `rent_xof` **ni**
+> `modes[]`).
+
+⚠️ **Au passage, un trou de vérification a été bouché côté courses** : les specs
+citent douze chemins sous `/vtc/...` — dont `PATCH /vtc/rides/{id}/status`,
+précisément la route dont l'erreur de verbe avait fait naître le test des
+contrats — et l'attribution par segment de tête ne les reconnaissait **ni au
+socle, ni aux courses**. Vingt citations de plus sont désormais confrontées aux
+routes réellement montées.
+
+---
 
 ### 4.61.1 — 9 octobre 2026
 
