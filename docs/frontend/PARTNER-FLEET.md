@@ -1,6 +1,6 @@
 # Console PARTENAIRE — PROPRIÉTAIRE DE FLOTTE PRIVÉE — contrat d'API
 
-> **Version 4.62.1** · 10 octobre 2026
+> **Version 4.62.2** · 10 octobre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Courses : `https://api-staging.dira.llc/api/v1/vtc`
 > Console en service : `https://partner-staging.dira.llc`
 
@@ -851,6 +851,29 @@ d'une entreprise.
 ⚠️ **UNE PIÈCE DE VÉHICULE EXIGE SON `vehicle_id`**, et un véhicule non membre de
 la flotte est refusé (`vehicle_not_in_your_fleet`).
 
+> ## ⚠️ LES TROIS REFUS D'UN DÉPÔT, ET LEURS CODES (v4.62.2)
+>
+> | Code | Statut | Ce que ça veut dire |
+> |---|---|---|
+> | `unknown_document_kind` | `422` | ce type n'existe pas — vérifiez l'orthographe |
+> | `document_needs_vehicle` | `422` | cette pièce est celle d'un véhicule : **ajoutez `vehicle_id`** |
+> | `document_refuses_vehicle` | `422` | cette pièce est celle de la personne : **retirez `vehicle_id`** |
+>
+> ⚠️⚠️ **ET SI VOTRE APPLICATION A DÉJÀ REÇU « Requête invalide » SUR UN SELFIE,
+> UN CASIER, UN CONTRÔLE TECHNIQUE OU UNE DES TROIS PHOTOS : C'ÉTAIT NOUS.** La
+> route n'acceptait que quatre types (`licence`, `id_card`, `registration`,
+> `insurance`) alors que `missing` en réclamait neuf — donc des papiers demandés,
+> redits tous les trois jours par la relance, et **refusés à l'envoi**. Corrigé
+> en 4.62.2 : **tous les types servis dans `missing` sont acceptés.**
+>
+> ⚠️ Avant cette version, ces trois refus portaient `validation_failed`, donc le
+> message « Requête invalide » : **un code à vous est ce qui vous permet de
+> souligner le bon champ.**
+
+⚠️ **ICI, `vehicle_id` EST TOUJOURS EXIGÉ** : une société n'a que des papiers de
+voiture. `document_refuses_vehicle` ne devrait donc jamais vous arriver — et
+`document_needs_vehicle` signifie que votre requête a oublié le champ.
+
 ### ⚠️ Les quatre cas d'une pièce, et ce que l'écran propose
 
 | `state` | Ce que l'écran fait |
@@ -1175,6 +1198,38 @@ réponse a l'air.
 ---
 
 ## 17. Journal
+
+### 4.62.2 — 10 octobre 2026
+
+🔧 **LE DÉPÔT D'UN PAPIER DE SOCIÉTÉ NE MARCHAIT PAS, et ce document le promettait
+dès sa première ligne.** Trouvé en rédigeant §10, en essayant de déposer les six
+pièces pour de vrai. Trois défauts sur la même requête :
+
+- **quatre des six types étaient refusés** à l'envoi (`inspection` et les trois
+  photos) : la route n'en acceptait que quatre sur les neuf que `missing`
+  réclame ;
+- **la marque de société n'était écrite nulle part**, si bien qu'une pièce
+  acceptée **n'apparaissait jamais** dans l'écran de la société — un dépôt
+  invisible, à refaire ;
+- **chaque dépôt rendait `500`** — sur un papier pourtant déjà enregistré. Un
+  `500` qui mentait, donc un propriétaire qui recommençait.
+
+Rien à changer dans votre code : §10 décrivait le comportement attendu, et c'est
+le serveur qui a été corrigé. **Les trois refus du dépôt portent désormais leur
+propre code** (tableau en §10) — avant, ils sortaient tous en « Requête
+invalide ».
+
+---
+
+### 4.62.1 — 10 octobre 2026
+
+✏️ **Correction de rédaction.** Trois chemins de ce document portaient un
+identifiant réel au lieu de leur paramètre. Ce n'est pas une coquille : les
+routes citées ici sont confrontées automatiquement aux routes réellement montées
+par les services, et **un identifiant littéral sort la citation de ce contrôle**.
+La règle, avec sa raison, est en §16.
+
+---
 
 ### 4.62.0 — 10 octobre 2026
 

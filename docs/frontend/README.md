@@ -1,6 +1,6 @@
 # Specs frontend — par rôle
 
-> **Version 4.62.1** · 10 octobre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics`
+> **Version 4.62.2** · 10 octobre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics`
 
 **Cinq** documents, un par application. Chacun est **autonome** : tout ce qu'un frontend doit savoir pour son rôle, sans avoir à ouvrir les vingt specs de modules.
 
@@ -355,6 +355,46 @@ Chaque document porte la même version en en-tête, et son propre journal des ch
 - [ ] ⚠️ **`TRACKING_JWT_SECRET` renseigné dans chaque environnement déployé.** Vide, l'authentification du service de suivi est **désactivée** : n'importe qui connaissant un `delivery_id` suit la course. Le secret doit valoir **exactement** le `JWT_SECRET` de `dira-food-api`.
 
 ## Journal
+
+### 4.62.2 — 10 octobre 2026
+
+🔧 **LE DÉPÔT D'UN PAPIER NE MARCHAIT QUE POUR QUATRE TYPES SUR NEUF.** Trouvé en
+rédigeant `PARTNER-FLEET.md`, en essayant de déposer les six pièces qu'un écran
+réclame.
+
+La route n'acceptait que `licence`, `id_card`, `registration` et `insurance`,
+alors que `missing` réclame aussi `selfie`, `criminal_record`, `inspection` et
+les **trois photos de véhicule**. Autrement dit : des papiers **demandés**, redits
+tous les trois jours par la relance `documents_missing`, et **refusés à l'envoi**
+— en « Requête invalide ».
+
+⚠️ **SI VOTRE APPLICATION A DÉJÀ REÇU CE REFUS SUR UN SELFIE OU UN CASIER,
+C'ÉTAIT NOUS.** Personne n'était bloqué pour autant (rien ne coupe le travail sur
+`compliant`), ce qui explique que ça ait pu durer : la seule trace visible était
+une liste de papiers manquants qu'**aucune application ne pouvait vider**.
+
+**Les trois refus du dépôt portent désormais leur propre code** — ils sortaient
+tous en `validation_failed` :
+
+| Code | Ce que ça veut dire |
+|---|---|
+| `unknown_document_kind` | ce type n'existe pas |
+| `document_needs_vehicle` | **ajoutez `vehicle_id`** |
+| `document_refuses_vehicle` | **retirez `vehicle_id`** |
+
+Un code à vous est ce qui vous permet de **souligner le bon champ** ; « Requête
+invalide » ne désigne rien.
+
+**Rien à recoder** : les specs décrivaient déjà le comportement attendu, c'est le
+serveur qui a été corrigé. Les blocs ajoutés sont dans `VTC-DRIVER.md`,
+`FOOD-DELIVERY.md` et `PARTNER-FLEET.md` §10.
+
+Deux autres défauts de la même requête, invisibles depuis une application : la
+marque de société n'était écrite nulle part (un dépôt accepté **n'apparaissait
+jamais** dans l'écran de la société), et chaque dépôt d'un partenaire rendait un
+`500` **sur un papier déjà enregistré** — un `500` qui mentait.
+
+---
 
 ### 4.62.1 — 10 octobre 2026
 
