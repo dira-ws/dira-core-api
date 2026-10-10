@@ -77,3 +77,18 @@ other = "La purge d'un compte effacé n'est pas branchée sur ce service"
 # que son propriétaire le sache.
 [errors.vehicle_not_in_your_fleet]
 other = "Ce véhicule n'appartient pas à votre flotte"
+
+# LES TROIS REFUS D'UN DÉPÔT DE PIÈCE.
+#
+# ⚠️ `unknown_document_kind` EST DEVENU ATTEIGNABLE le jour où le DTO a cessé de
+# doubler la liste des types : il portait `validation_failed`, donc « Requête
+# invalide ». Les deux autres DISENT QUOI FAIRE — ajouter le véhicule, ou le
+# retirer — et c'est exactement la phrase qu'un code partagé fait perdre.
+[errors.unknown_document_kind]
+other = "Ce type de pièce n'existe pas"
+
+[errors.document_needs_vehicle]
+other = "Cette pièce est celle d'un véhicule : dites lequel"
+
+[errors.document_refuses_vehicle]
+other = "Cette pièce est celle de la personne, pas d'un véhicule : retirez le véhicule"
