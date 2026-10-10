@@ -144,7 +144,7 @@ func TestSpecsCiteRoutesThisServiceServes(t *testing.T) {
 	t.Logf("%d citations de routes du socle vérifiées dans %d specs", checked, len(specs))
 }
 
-// TestEveryRoleSpecIsPresent : les cinq contrats de rôle sont là.
+// TestEveryRoleSpecIsPresent : les contrats de rôle sont là, tous.
 //
 // ⚠️ Une spec SUPPRIMÉE ne casse rien — elle laisse simplement une équipe sans
 // contrat, et personne ne s'en aperçoit avant qu'on la réclame. Les nommer ici
@@ -167,6 +167,11 @@ func TestEveryRoleSpecIsPresent(t *testing.T) {
 		"FOOD-CLIENT.md",
 		"FOOD-DELIVERY.md",
 		"FOOD-MERCHANT.md",
+		// La console du PROPRIÉTAIRE DE FLOTTE — un tiers extérieur qui a des
+		// pouvoirs sur le travail d'autres personnes (v4.62.0). ⚠️ Son §2 dit
+		// ce que cette surface NE sert PAS : c'est le contrat, pas une liste
+		// de manques à combler.
+		"PARTNER-FLEET.md",
 		"README.md",
 		"VTC-CLIENT.md",
 		"VTC-DRIVER.md",

@@ -1,0 +1,1180 @@
+# Console PARTENAIRE — PROPRIÉTAIRE DE FLOTTE PRIVÉE — contrat d'API
+
+> **Version 4.62.0** · 10 octobre 2026
+> Socle : `https://api-staging.dira.llc/api/v1` · Courses : `https://api-staging.dira.llc/api/v1/vtc`
+> Console en service : `https://partner-staging.dira.llc`
+
+---
+
+## 0. ⚠️⚠️ LIRE CECI AVANT TOUT LE RESTE
+
+**Cette surface n'est pas une console d'administration réduite.** Elle sert un
+**tiers extérieur** — une société de transport — qui a des pouvoirs sur **le
+travail d'autres personnes** :
+
+- il pose une **limite de dette** sur un chauffeur, ce qui **coupe ses appels** ;
+- il **reprend sa voiture**, ce qui met son conducteur **hors ligne** ;
+- il enregistre les **termes de sa rémunération**.
+
+Chaque fois qu'on ajoute quelque chose ici, la question n'est donc pas « est-ce
+techniquement disponible ? » mais « **qu'est-ce que ça lui donne sur une
+personne ?** ». La section 2 liste ce qui est **délibérément absent** — et ce
+n'est pas une liste de manques à combler, c'est le contrat.
+
+⚠️ **TOUT CE QUI EST SERVI ICI VIT SOUS `/partner/...`.** Si une interface
+partenaire appelle une route d'exploitation (`/admin/...`), le serveur répond
+`403` — mais le code aura appris à la demander, et c'est ainsi qu'une console
+devient autre chose que ce qu'elle est.
+
+---
+
+## 1. Deux bases d'URL, aucun socket
+
+| | Rôle | Base |
+|---|---|---|
+| **Socle** (`dira-core-api`) | connexion, **ma flotte**, **mon personnel**, **le matériel de la société** | `…/api/v1/` |
+| **Courses** (`dira-vtc-api`) | **le parc**, **les conducteurs**, **les courses**, **la paie**, **les papiers**, **le support** | `…/api/v1/vtc/` |
+
+> **Le jeton est le même des deux côtés.** Une seule connexion, au socle.
+
+⚠️ **AUCUN TEMPS RÉEL PAR SOCKET, et c'est un choix.** La carte des véhicules se
+rafraîchit par un **appel HTTP toutes les dix secondes** (`GET
+/vtc/partner/live`). Un socket aurait demandé à maintenir un flux par
+propriétaire connecté pour une information qui n'a pas besoin d'être à la
+seconde : une voiture se déplace, elle n'apparaît pas.
+
+⚠️ **DEUX APPELS POUR L'ACCUEIL, PAS UN.** `GET /vtc/partner/dashboard` porte
+les totaux (rechargé au **changement de période**) et `GET /vtc/partner/live`
+porte la carte (toutes les **dix secondes**). Les fondre fait **réagréger un
+mois de courses six fois par minute**, pour déplacer trois marqueurs.
+
+---
+
+## 1 bis. Conventions
+
+| | |
+|---|---|
+| Auth | `Authorization: Bearer <access_token>` — le même jeton pour le socle et pour les courses |
+| Erreurs | `{ "error": { "code": "snake_case", "message": "…", "fields"?: ["…"], "reason"?: "…" } }` |
+| Pagination | `?limit=20&cursor=<id>` → `{ "items": [...], "next_cursor": "…" }` — `next_cursor` absent = dernière page |
+| Montants | **entiers**, en XOF (`…_xof`). Jamais de flottant. |
+| Dates | ISO 8601 UTC (`2026-10-10T10:41:23Z`). Une **date seule** s'écrit `YYYY-MM-DD`. |
+| Coordonnées | `[lng, lat]`, dans cet ordre, partout |
+| Langue | `Accept-Language: fr` ou `en` — les messages d'erreur suivent |
+| Pays | **rien à envoyer** : voir la section *Le pays* |
+| Fil | `X-Request-ID` — sur chaque réponse ; à l'aller, facultatif mais recommandé |
+
+**Traitez le `code`, pas le message.** Le message est traduit et peut changer ;
+le code est le contrat.
+
+⚠️⚠️ **ET AFFICHEZ LE `message` MOT POUR MOT.** Les refus de cette surface
+**disent quoi faire** — « demandez à son chauffeur de le déclarer dans
+l'application Dira Chauffeur », « demandez un accès *gérant* à son
+propriétaire ». Les récrire perd la phrase qui évite l'appel au support. Le
+`code` sert à **décider**, le `message` à **montrer**.
+
+**`401`** = jeton expiré : `POST /auth/refresh`, puis rejouer la requête ; si le
+rafraîchissement échoue, revenir à la connexion.
+**`403`** = ce rôle, ou cette personne, n'a pas accès — **ne pas réessayer**.
+
+⚠️ **UN SEUL RAFRAÎCHISSEMENT À LA FOIS.** Le jeton de rafraîchissement **tourne**
+(l'ancien est consommé). Trois listes chargées ensemble rendent trois `401` : sans
+verrou, deux des trois rejouent avec un jeton déjà dépensé et la session tombe au
+**premier chargement de page**. Un seul appel en vol, les autres l'attendent.
+
+### 🧵 Le fil d'une requête — `X-Request-ID`
+
+Chaque réponse porte un `X-Request-ID` : le nom sous lequel cette requête est
+écrite dans nos journaux, **y compris sur un refus et y compris sur un `500`**.
+Gardez-le avec l'erreur que vous enregistrez — un ticket qui cite le fil se lit
+en trente secondes.
+
+⚠️ **Un build qui tourne dans un navigateur ne lit cet en-tête que si la façade
+l'expose.** Raison de plus d'**envoyer le vôtre** : l'en-tête est accepté à
+l'aller et repris tel quel. Forme : **64 caractères au plus**, dans
+`a-z A-Z 0-9 - _ .` ; hors de ces règles il est **refusé, pas tronqué**, et le
+serveur tire le sien (la réponse dit lequel a été retenu).
+
+⚠️ **Jamais de donnée personnelle dedans** : ce mot est recopié dans les
+journaux de plusieurs services, et une base de journaux ne se purge pas comme un
+compte se supprime.
+
+### ⚠️ Le pays — rien à envoyer
+
+Dira s'installe pays par pays et **toute donnée est bornée par pays**. Sur cette
+surface, il n'y a **rien à faire** : le pays vient du **compte**, inscrit dans le
+jeton, et le serveur borne chaque lecture. Un propriétaire ne change pas de pays
+en changeant un en-tête.
+
+⚠️ **N'envoyez pas `X-Dira-Country`** pour « voir un autre pays » : l'en-tête
+qui nomme un pays **non servi** par le déploiement est **ignoré, pas refusé**, et
+l'écriture se rangerait dans le pays du compte sans que rien ne le signale. La
+réponse porte le pays **retenu** dans le même en-tête : si vous le lisez,
+c'est pour l'afficher, pas pour le choisir.
+
+⚠️ **Une société ne possède des voitures que dans UN pays.** Un contrat par
+pays, un compte par contrat. Si le même groupe opère au Togo et au Sénégal, ce
+sont **deux flottes et deux accès** — et c'est voulu : la monnaie, les
+commissions et les règles d'appel diffèrent.
+
+---
+
+## 2. ⚠️ CE QUE CETTE SURFACE NE SERT PAS — et pourquoi
+
+**N'en dessinez pas les écrans.** Chaque ligne est une décision, pas un retard.
+
+| Absent | Pourquoi |
+|---|---|
+| **Suspendre un chauffeur** | ce serait se servir de notre dispatch comme d'un **outil de pression sur un travailleur**. Le propriétaire peut **reprendre son bien** — même effet pratique, et c'est honnête : la voiture est à lui, la personne reste chauffeur Dira |
+| **Le temps en ligne d'un chauffeur** | ce chiffre n'existe que pour **peser sur quelqu'un**. Le serveur ne le sert pas à cette surface |
+| **Le taux d'acceptation d'un chauffeur** | même raison. Et un bonus assis dessus a été **refusé à l'écriture** ailleurs sur la plateforme, pour la même raison |
+| **Le passager d'une course** | nom, numéro, note : rien. Un propriétaire n'a aucune raison de connaître les clients de son chauffeur |
+| **Le départ et l'arrivée d'une course** | ⚠️ **une adresse de départ EST l'adresse de quelqu'un**, et l'historique des arrivées **est son carnet d'adresses**. Les courses sont servies **sans aucun point géographique** |
+| **Le grand livre d'un chauffeur** | son matériel, ses bonus, ses prélèvements : c'est **sa** relation avec Dira. La flotte voit ce que **ses voitures** ont produit, pas le compte de la personne |
+| **Les tickets de support d'un chauffeur** | ⚠️ **ne jamais ouvrir ça** : un chauffeur doit pouvoir écrire « mon propriétaire prend 90 % et ne répare pas les freins ». Le guichet borne au **participant** |
+| **Valider les pièces d'un chauffeur** | la conformité est arbitrée par Dira. Le propriétaire **dépose** les papiers de ses voitures, il ne les approuve pas |
+| **Un prix, une commission, un réglage d'appel** | la tarification est une politique de pays. Une société ne fixe pas le prix d'une course Dira |
+| **Détacher une voiture de sa flotte** | ⚠️ **c'est l'exploitation Dira qui le fait**, sur demande et avec un motif. Les écrans d'argent d'une flotte sont calculés sur les véhicules qu'elle possède **aujourd'hui** : une société qui détacherait elle-même ferait **disparaître de ses propres relevés** le mois qu'elle a encaissé avec cette voiture — et les espèces qui vont avec |
+| **Créer un compte chauffeur** | le rattachement **ne crée aucun compte**, sinon un partenaire enrôlerait des conducteurs sans pièce d'identité ni casier judiciaire |
+| **S'inscrire comme partenaire** | `POST /auth/register` **refuse** le rôle `partner`. Une seule porte : l'exploitation ouvre l'accès depuis la fiche du contrat |
+| **Notifications poussées** | c'est une console web. Les alertes sont **calculées à la lecture** (`dashboard.alerts`), pas envoyées |
+
+> ⚠️ **SI L'UN DE CES CHAMPS APPARAÎT UN JOUR DANS UNE RÉPONSE, NE L'AFFICHEZ
+> PAS — signalez-le.** C'est un défaut côté serveur, et une interface qui
+> l'affiche le rend définitif.
+
+---
+
+## 3. La porte : se connecter, puis lire SA flotte
+
+### 3.1 La connexion
+
+```
+POST /auth/login
+{
+  "email":    "kodjo@teranga.sn",
+  "password": "…",
+  "app":      "partner",        ← ⚠️ OBLIGATOIRE
+  "platform": "web"
+}
+
+→ 200 { "access_token": "…", "refresh_token": "…", "user": { … } }
+```
+
+⚠️⚠️ **`app: "partner"` EST OBLIGATOIRE, et c'est ce qui protège les deux
+côtés.** Le serveur refuse un compte qui n'est pas partenaire **avant même
+d'émettre un jeton** :
+
+```
+→ 403 { "error": { "code": "wrong_app", "reason": "driver",
+        "message": "Ce compte est un compte chauffeur : ouvrez l'application Dira Chauffeur" } }
+```
+
+Sans ce champ, un chauffeur se connecterait ici et tomberait sur des `403`
+**écran par écran**, sans jamais comprendre.
+
+⚠️ **`error.reason` ET NON `error.meta`** — c'est `reason` qui porte le rôle réel.
+⚠️ **UNE VALEUR DE `reason` INCONNUE N'EST PAS UNE ERREUR, ET SURTOUT PAS UN
+BLANC.** La liste s'allonge (`client`, `driver`, `merchant`, `courier`,
+`partner`…) : une interface qui traduit `reason` en nom d'application affiche
+« Ouvrez l'application&nbsp;» — phrase coupée. **Repli : `error.message`, déjà
+traduit.**
+
+Puis `POST /auth/refresh` (rotation), `POST /auth/logout` (`{ refresh_token }`),
+et `GET /me` pour le compte nu.
+
+### 3.2 ⚠️ `GET /partner/me` est LA PORTE — pas un détail de l'en-tête
+
+```
+GET /partner/me        (socle)
+
+→ 200 {
+  "id":             "6ac8c5be57f350bd9013280d",
+  "name":           "Transports Teranga",
+  "contact_name":   "Kodjo Mensah",
+  "contact_phone":  "+221771999001",
+  "contact_email":  "kodjo@teranga.sn",
+  "contract_ref":   "CT-2026-DEMO",
+  "commission_bp":  1800,        ← taux négocié, en points de base ; absent/null = le taux de la plateforme
+  "status":         "active",    ← active | suspended
+  "role":           "owner",     ← MON rôle dans cette flotte (voir §4)
+  "created_at":     "2026-10-09T10:45:18Z"
+}
+```
+
+**Appelez-la en premier, après la connexion, et traitez ses deux refus comme des
+écrans pleins — pas comme des pannes :**
+
+| Code | Statut | Ce que l'écran doit dire |
+|---|---|---|
+| `partner_no_fleet` | `403` | « Aucune flotte n'est encore rattachée à ce compte. Demandez à Dira d'y rattacher votre contrat. » |
+| `partner_fleet_suspended` | `403` | « Le contrat de cette flotte est suspendu : contactez Dira. **Vos chauffeurs, eux, continuent de travailler.** » |
+
+⚠️ **LA SECONDE PHRASE DE `partner_fleet_suspended` N'EST PAS DÉCORATIVE.** Un
+propriétaire qui lit « contrat suspendu » croit que ses voitures sont arrêtées et
+appelle ses chauffeurs pour les faire rentrer. Une suspension de contrat ferme
+**la console**, pas le travail.
+
+⚠️ **Un écran vide à la place de ces phrases fait appeler le support** — et le
+support répondra ce que la phrase disait déjà.
+
+⚠️ **LA FLOTTE N'EST JAMAIS DANS UN CHEMIN D'URL.** Aucune route de cette
+surface ne porte d'identifiant de flotte : elle est **résolue à chaque requête**
+à partir du jeton. Si une route vous en demandait un, c'est un défaut côté
+serveur — **ne le contournez pas en l'envoyant**. (Conséquence utile : un contrat
+suspendu prend effet **à la requête suivante**, pas à l'expiration du jeton.)
+
+---
+
+## 4. Trois rôles — et le défaut est « ne peut pas »
+
+`role`, servi par `GET /partner/me`, vaut `owner`, `manager` ou `viewer`.
+
+| Rôle | Lit | Écrit | Gère le personnel |
+|---|---|---|---|
+| `owner` — le **signataire du contrat** | ✅ | ✅ | ✅ |
+| `manager` — le **répartiteur** | ✅ | ✅ | ❌ |
+| `viewer` — le **comptable** | ✅ | ❌ | ❌ |
+
+⚠️⚠️ **NE DESSINEZ PAS UN BOUTON QUE LE SERVEUR REFUSERA — et dites pourquoi il
+manque.** Un bouton affiché puis refusé a déjà **promis** quelque chose. Lisez
+le rôle **avant** de rendre l'écran, et remplacez le geste par la phrase qui
+mène à la bonne personne.
+
+⚠️ **LE DÉFAUT EST « NE PEUT PAS ».** Un `role` **absent** (un socle plus ancien,
+une réponse tronquée) doit **couper** le pouvoir, jamais l'ouvrir. On ferme un
+bouton par excès de prudence ; on n'ouvre pas une limite de dette par accident.
+
+⚠️ **`owner` NE SE DONNE PAS, IL SE SIGNE.** Le serveur refuse `owner` à
+l'écriture (`fleet_role_unknown` : « Le rôle doit être *gérant* ou *lecteur* »),
+et on ne retire pas le propriétaire — **pas même lui-même**.
+
+Les refus que vous verrez si l'écran devance le rôle :
+
+```
+→ 403 { "code": "partner_read_only",
+        "message": "Votre rôle sur cette flotte est en lecture seule : demandez un accès « gérant » à son propriétaire" }
+
+→ 403 { "code": "fleet_not_owner",
+        "message": "Seul le signataire du contrat peut gérer le personnel de la flotte" }
+```
+
+⚠️ **Les deux ne disent pas la même chose** : le premier envoie vers le
+propriétaire de la flotte, le second dit que **même un gérant** n'y touche pas.
+Les fondre en « Interdit » envoie tout le monde au support.
+
+---
+
+## 5. L'ACCUEIL — ce qui cloche, qui travaille, où, et combien
+
+⚠️⚠️ **L'ORDRE DE CETTE PAGE EST SA SEULE DÉCISION DE DESIGN**, et il suit ce
+qu'un propriétaire se demande en l'ouvrant :
+
+1. **est-ce que quelque chose cloche ?** → les alertes
+2. **est-ce que mes voitures travaillent ?** → les compteurs
+3. **où sont-elles ?** → la carte
+4. **combien ça a rapporté ?** → les totaux
+
+**L'argent est en DERNIER, délibérément.** C'est le chiffre qu'on regarde une
+fois par jour ; les trois premiers demandent un geste **tout de suite**. Un
+tableau de bord qui ouvre sur un total se referme sans que personne n'ait appelé
+le chauffeur dont le téléphone est muet.
+
+### 5.1 `GET /vtc/partner/dashboard` — les totaux, les compteurs, les alertes
+
+```
+GET /vtc/partner/dashboard?from=2026-10-01&to=2026-10-10&tz=Africa/Dakar
+
+→ 200 {
+  "fleet": "Transports Teranga",
+  "from":  "2026-10-01",            ← la fenêtre RETENUE (voir §13)
+  "to":    "2026-10-10",
+  "totals": {                       ← ⚠️ ABSENT, et non à zéro, si indisponible
+    "rides":           75,
+    "fare_xof":        344400,      ← le prix CLIENT encaissé
+    "commission_xof":  63259,       ← la part de Dira
+    "driver_xof":      281141,      ← ce qui reste à partager entre la société et son chauffeur
+    "distance_m":      1044466,
+    "duration_s":      165721,
+    "cash_xof":        175350,      ← le PLEIN TARIF des courses payées en espèces
+    "cancelled_rides": 4
+  },
+  "counts": {
+    "vehicles": 3, "on_ride": 0, "online": 1, "stale": 0, "offline": 2,
+    "drivers": 3, "debt_xof": -3396, "over_limit": 0,
+    "withdrawn": 0, "maintenance": 0
+  },
+  "vehicles": [ … voir §5.2 … ],
+  "alerts":  [ { "kind": "no_vehicle", "severity": "warn", "subject": "DK-8740-EE" } ]
+}
+```
+
+⚠️⚠️ **UN CHIFFRE INDISPONIBLE S'AFFICHE « — », JAMAIS 0.** `totals` est
+**absent** quand l'agrégation n'a pas pu être faite. Sur un tableau de bord
+d'argent, **un zéro faux est la pire réponse possible : on le croit**, et on en
+tire une conclusion sur sa journée.
+
+⚠️⚠️ **UNE DETTE NÉGATIVE EST UN CRÉDIT — CHANGEZ LE MOT, PAS LE SIGNE.**
+`counts.debt_xof` peut être négatif (le chauffeur a payé d'avance).
+« -3 396 F » sous le mot « dette » se lit comme un bug ; affichez
+« 3 396 F d'avance ».
+
+⚠️ **`cash_xof` EST DE L'ARGENT À RÉCLAMER, PAS À VERSER** — et c'est le **plein
+tarif**, commission de Dira comprise. C'est ce que le chauffeur a **réellement eu
+en main**. Servir sa seule part aurait fait réclamer moins qu'il ne détient.
+
+### 5.2 `GET /vtc/partner/live` — la carte, toutes les dix secondes
+
+```
+GET /vtc/partner/live
+
+→ 200 { "items": [ {
+  "vehicle_id":     "6ab371373317b63a136b7272",
+  "plate":          "DK-8740-EE",
+  "class_key":      "eco",
+  "brand":          "Hyundai",  "model": "i20",
+  "status":         "service",            ← service | maintenance | withdrawn
+  "state":          "on_ride",            ← on_ride | online | stale | offline
+  "driver_id":      "6ab37137b46bacb400cc9ef0",
+  "driver_user_id": "6ab3713774c82fdf276f8909",
+  "driver_name":    "Astou Diouf",
+  "driver_phone":   "+221771000118",      ← pour l'APPELER : c'est le geste de la plupart des alertes
+  "geo":            [-17.4467, 14.6937],  ← [lng, lat] — ABSENT si jamais vu
+  "last_seen_at":   "2026-10-10T09:58:12Z",
+  "ride":           { "id": "…", "status": "on_board", "since": "2026-10-10T09:41:00Z",
+                      "distance_m": 4200, "fare_xof": 2500 },
+  "debt_xof":       -935,
+  "over_limit":     false
+} ] }
+```
+
+#### ⚠️ Quatre états, et les confondre coûte un appel téléphonique
+
+| `state` | Mot | Ton | Le geste |
+|---|---|---|---|
+| `on_ride` | **En course** | ok | rien — il travaille |
+| `online` | **Disponible** | ok | rien — il attend un appel |
+| `stale` | **Plus vu** | ⚠️ alerte | **APPELEZ-LE** : il se croit disponible et ne reçoit plus d'appels |
+| `offline` | **Hors ligne** | neutre | rien — il a fini sa journée |
+
+⚠️⚠️ **« PLUS VU » N'EST PAS « HORS LIGNE ».** L'un appelle un coup de téléphone,
+l'autre n'appelle rien. Les fondre a fait chercher des pannes de réseau là où
+quelqu'un avait rangé son téléphone — et laissé un chauffeur se croire
+disponible toute une matinée.
+
+⚠️⚠️ **UNE VOITURE EN COURSE RESTE EN COURSE, MÊME SI SON TÉLÉPHONE S'EST TU.**
+`on_ride` l'emporte sur `stale` : un passager à bord qu'on ne voit plus **ne doit
+pas disparaître de la carte** — c'est précisément le moment où on le cherche.
+
+#### ⚠️ La carte ne se recrée pas à chaque battement
+
+Recréer l'objet de carte recharge les tuiles et **ramène la vue au centre**,
+annulant le zoom qu'on venait de faire. Créez-la **une fois**, **déplacez** les
+marqueurs, et ne **recadrez qu'au premier** jeu de positions.
+
+⚠️ **`geo` ABSENT N'EST PAS `[0, 0]`.** Une voiture jamais vue n'a pas de
+position : comptez-la dans un bandeau (« 2 véhicules sans position ») au lieu de
+la poser au large du golfe de Guinée.
+
+⚠️ **AFFICHEZ « DEPUIS COMBIEN DE TEMPS », PAS UN HORODATAGE.** « À bord depuis
+2 h 05 » fait repérer une voiture bloquée ; `2026-10-10T09:41:00Z` non.
+
+#### Les six alertes — et c'est le GESTE qui est servi, pas la phrase
+
+```json
+{ "kind": "debt_blocked", "severity": "high", "subject": "Kofi" }
+{ "kind": "driver_stale", "severity": "warn", "count": 3 }
+```
+
+| `kind` | Ce que la phrase doit dire |
+|---|---|
+| `debt_blocked` | « *{subject}* ne reçoit plus d'appels : sa dette a franchi la limite » |
+| `papers_missing` | « Papiers manquants pour *{subject}* — déposez-les depuis « Papiers » » |
+| `vehicle_withdrawn` | « *{subject}* est repris : rattachez-le à un chauffeur pour le remettre au travail » |
+| `vehicle_maintenance` | « *{subject}* est immobilisé par Dira — contactez le support » |
+| `driver_stale` | « *{count}* téléphone(s) ne donnent plus de position : appelez vos chauffeurs » |
+| `no_vehicle` | « *{subject}* n'a aucun conducteur : rattachez-le depuis « Mon parc » » |
+
+⚠️⚠️ **LE SERVEUR SERT LE GENRE ET LE SUJET, PAS LA PHRASE** — une phrase
+traduite côté serveur aurait figé la langue de la console. Écrivez-les **en un
+seul endroit** de votre code : trois écrans qui montrent les mêmes alertes
+finissent par dire trois choses, et c'est celle qu'on lit le moins qui garde
+l'ancienne.
+
+⚠️⚠️ **L'ALERTE PORTE LE GESTE, PAS LE CONSTAT.** « 3 voitures sans papiers » est
+un constat : on le lit une fois puis on l'ignore. « Déposez l'assurance de
+AB-1234 » est un geste.
+
+⚠️ **UN `kind` INCONNU NE SE JETTE PAS** : affichez-le brut plutôt que de perdre
+une alerte dont la gravité est servie (`severity`).
+
+---
+
+## 6. MON PARC — rattacher une voiture, la reprendre
+
+### 6.1 `GET /vtc/partner/vehicles` — le parc
+
+```
+GET /vtc/partner/vehicles?limit=50&cursor=<id>
+
+→ 200 { "items": [ {
+  "id":            "6ab371373317b63a136b7272",
+  "license_plate": "DK-8740-EE",
+  "class_key":     "eco",
+  "brand":         "Hyundai",  "model": "i20",  "color": "blanc",
+  "seats":         4,
+  "description":   "Hyundai i20 blanche",     ← GÉNÉRÉE par le serveur
+  "status":        "service",                 ← service | maintenance | withdrawn
+  "driver_id":     "6ab37137b46bacb400cc9ef0",
+  "driver_name":   "Astou Diouf",
+  "is_active":     true,                      ← la voiture que le conducteur a choisie aujourd'hui
+  "photo_url":     "…",  "images": [ "…" ],
+  "fleet_id":      "…",  "fleet_name": "Transports Teranga",
+  "usage":         "vtc"
+} ], "next_cursor": "…" }
+```
+
+#### ⚠️ Trois états, et le troisième ne se dit PAS comme les autres
+
+| `status` | Mot à afficher | Qui a décidé | Ce que l'écran propose |
+|---|---|---|---|
+| `service` | **En service** | — | reprendre la voiture |
+| `maintenance` | **Immobilisé par Dira** | **Dira** | *rien* — « contactez le support » |
+| `withdrawn` | **Reprise** | **le propriétaire** | la rattacher à un conducteur |
+
+⚠️⚠️ **`maintenance` ET `withdrawn` NE SE DISENT PAS PAREIL, PARCE QUE
+L'INTERLOCUTEUR N'EST PAS LE MÊME.** « Immobilisé » envoie chercher un garage ;
+une voiture `withdrawn` roule très bien — elle n'est simplement plus confiée à
+personne. Et c'est cette ligne qu'on relit quand un chauffeur appelle pour
+demander pourquoi il ne reçoit plus d'appels.
+
+⚠️⚠️ **CETTE ROUTE NE PREND QUE `limit` ET `cursor` — AUCUN FILTRE.** Filtrez
+**dans la page** (en service / repris / immobilisé, avec ou sans conducteur) :
+un parc de société se compte en dizaines, pas en milliers. **Un paramètre qu'on
+invente est un paramètre toujours ignoré**, et c'est le pire des défauts : la
+liste répond `200`, l'écran affiche tout, et personne ne voit que le filtre ne
+filtre rien. Le tableau des paramètres acceptés, route par route, est en §13.
+
+⚠️ **UN ÉTAT INCONNU SE NOMME, IL NE PREND PAS LE CHEMIN RASSURANT.** N'écrivez
+pas « immobilisé, **sinon** en service » : le jour où un quatrième état arrive,
+cette écriture l'affiche en vert alors que la voiture ne prend aucune course —
+et le compteur de la même page, lui, comptera juste. Deux chiffres qui se
+contredisent sur un écran : on croit celui qui a l'air d'une phrase.
+
+### 6.2 ⚠️ `POST /vtc/partner/vehicles/assign` — PLAQUE + TÉLÉPHONE, jamais des identifiants
+
+```
+POST /vtc/partner/vehicles/assign
+{ "plate": "DK-8740-EE", "driver_phone": "+221771000118" }
+
+→ 200 { …le véhicule à jour, avec son nouveau conducteur… }
+```
+
+⚠️⚠️ **DEUX CHOSES QU'UN PROPRIÉTAIRE CONNAÎT ET QU'IL NE PEUT PAS DEVINER.**
+Avec des identifiants, il aurait balayé le parc d'un pays en changeant un
+chiffre. **N'offrez donc aucune liste de véhicules « disponibles » ni de
+chauffeurs à choisir** : il n'y en a pas, et c'est la protection.
+
+⚠️ **ÉGALITÉ EXACTE SUR LA PLAQUE.** « AB1234 » ne ramène pas « AB12345 » :
+rattacher la voiture du voisin serait indétectable des deux côtés. Si deux
+voitures portent la même plaque, le serveur **refuse** au lieu de choisir
+(`vehicle_plate_ambiguous`).
+
+#### Les cinq refus de ce geste, et ce que l'écran doit en faire
+
+| Code | Statut | Le message dit déjà quoi faire |
+|---|---|---|
+| `vehicle_plate_unknown` | `404` | « Aucun véhicule avec cette plaque : **demandez à son chauffeur de le déclarer dans l'application Dira Chauffeur** » |
+| `driver_phone_unknown` | `404` | « Ce numéro n'est pas celui d'un chauffeur Dira : **la personne doit d'abord s'inscrire dans l'application Dira Chauffeur** » |
+| `vehicle_in_another_fleet` | `409` | « Ce véhicule appartient déjà à une autre flotte » |
+| `vehicle_plate_ambiguous` | `409` | « Deux véhicules portent cette plaque : **le support Dira doit corriger** avant le rattachement » |
+| `driver_in_another_country` | `422` | « Ce chauffeur est enregistré dans un autre pays que le véhicule » |
+
+⚠️ **`vehicle_in_another_fleet` NE DIT PAS LAQUELLE, et c'est voulu** : un
+partenaire n'a pas à apprendre, en tapant des plaques, quelle société possède
+quoi.
+
+⚠️ **Ces deux `404` ne sont pas des erreurs techniques — ce sont les deux cas
+les plus fréquents du geste.** Affichez-les **sous le champ concerné**, pas dans
+une bannière rouge : la personne doit savoir si c'est la plaque ou le numéro
+qu'elle doit corriger.
+
+#### ⚠️ Ce que le geste fait d'autre — à écrire dans la confirmation
+
+1. La voiture passe en **`service`** (un rattachement remet au travail une
+   voiture reprise).
+2. **Si le chauffeur n'avait aucun véhicule actif, celle-ci le devient.** Sans
+   cela, l'écran du partenaire dirait « rattaché » et le dispatch « aucun
+   véhicule » — l'écart se règle par un appel au support.
+3. **Le chauffeur est prévenu** (`vehicle_assigned`). On ne lui demande pas son
+   accord — c'est la voiture du partenaire —, donc **cette notification est son
+   seul contre-pouvoir**.
+4. ⚠️ **Si la voiture change de conducteur, l'ANCIEN est traité comme une
+   reprise** : sorti du vivier, prévenu (`vehicle_taken_back`). Le laisser en
+   ligne aurait envoyé des appels vers une voiture qui roule pour quelqu'un
+   d'autre.
+
+### 6.3 `POST /vtc/partner/vehicles/{vehicleID}/take-back` — reprendre son bien
+
+```
+POST /vtc/partner/vehicles/6ab371373317b63a136b7272/take-back
+(aucun corps)
+
+→ 200 { …le véhicule, status: "withdrawn"… }
+```
+
+⚠️ **UN POST SANS CORPS, ET PAS UN `PATCH` D'ÉTAT.** Le partenaire ne **choisit**
+pas l'état du véhicule : il fait **un geste**, dont nous décidons les
+conséquences. Un champ `status` dans un corps aurait laissé un propriétaire
+écrire « maintenance » et croire avoir repris sa voiture.
+
+**La confirmation doit porter les conséquences, dans cet ordre :**
+
+> **« {plaque} sera reprise à {conducteur}.**
+> Il passera **hors ligne** s'il conduisait cette voiture, et recevra un
+> message. **Il reste chauffeur Dira** et peut conduire un autre véhicule. »
+
+⚠️⚠️ **« IL RESTE CHAUFFEUR DIRA » N'EST PAS UNE POLITESSE.** C'est la
+différence entre reprendre un bien et suspendre quelqu'un — et le propriétaire
+doit savoir qu'il fait le premier, parce que c'est le seul des deux qu'il peut
+faire.
+
+⚠️ **Le véhicule GARDE son `driver_id`** : c'est la trace de qui l'avait, la
+première question d'un litige. Ne l'affichez pas comme « conducteur actuel »
+sur une voiture `withdrawn` — écrivez « repris à {nom} ».
+
+⚠️ **Reprendre une voiture qui n'était PAS la voiture active du chauffeur ne le
+met pas hors ligne** (il roule avec une autre). N'annoncez pas une conséquence
+qui n'aura pas lieu : lisez `is_active`.
+
+⚠️ **Il n'y a pas de « remettre en service » : on RATTACHE.** Une voiture reprise
+revient au travail par `assign` (§6.2), avec un conducteur nommé. Un bouton
+« remettre en service » aurait rendu une voiture à personne.
+
+---
+
+## 7. MES CONDUCTEURS — et la limite qui coupe les appels
+
+### 7.1 `GET /vtc/partner/drivers`
+
+```
+GET /vtc/partner/drivers
+
+→ 200 { "items": [ {
+  "driver_id":    "6ab37137b46bacb400cc9ef0",
+  "user_id":      "6ab3713774c82fdf276f8909",
+  "name":         "Astou Diouf",
+  "phone":        "+221771000118",
+  "status":       "active",
+  "online":       true,
+  "rides_count":  41,          ← SES COURSES AVEC VOS VOITURES, pas toutes ses courses
+  "rating_avg":   4.7,
+  "plates":       [ "DK-8740-EE" ],
+  "vehicle_ids":  [ "…" ],
+  "debt_xof":     -935,
+  "debt_cap_xof": 25000,       ← VOTRE limite ; absente = aucune
+  "debt_cap_by":  "Transports Teranga",   ← le nom inscrit dessus
+  "over_limit":   false,
+  "pay":          { "mode": "commission", "share_bp": 7000, "by": "…", "at": "…" }
+} ] }
+```
+
+⚠️ **CE SONT « VOS CONDUCTEURS », PAS « DES CHAUFFEURS ».** Quelqu'un apparaît
+ici **parce qu'il conduit une de vos voitures** — pas parce qu'il travaille pour
+vous. S'il rend la voiture, il disparaît de la liste, et c'est correct.
+
+⚠️ **`rides_count` EST BORNÉ À VOS VÉHICULES.** Un chauffeur peut conduire sa
+propre voiture le matin et la vôtre l'après-midi.
+
+⚠️ **NI TEMPS EN LIGNE, NI TAUX D'ACCEPTATION** — voir §2. Ils ne sont pas
+servis ; si vous en voyez un, signalez-le.
+
+### 7.2 ⚠️ `PUT /vtc/partner/drivers/{driverID}/debt-cap` — le geste le plus lourd de la console
+
+```
+PUT /vtc/partner/drivers/6ab37137b46bacb400cc9ef0/debt-cap
+{ "cap_xof": 25000 }        ← 0 RETIRE la limite
+
+→ 200 { …le chauffeur à jour… }
+```
+
+⚠️⚠️ **CETTE LIMITE COUPE LES APPELS DE QUELQU'UN.** Au-delà, le dispatch ne lui
+envoie plus de course : c'est son travail qui s'arrête. La confirmation doit le
+dire, et dire aussi qui en répond :
+
+> **« Au-delà de 25 000 F de dette, {nom} ne recevra plus d'appels.**
+> **Votre nom de société sera inscrit sur cette limite.** »
+
+⚠️ **LE NOM VIENT DE LA FLOTTE, PAS D'UN CHAMP.** Le corps ne porte **aucun
+auteur** : un champ libre aurait laissé écrire « l'exploitation » sur une
+décision de société. « Qui a posé 5 000 ? » doit avoir une réponse le jour où le
+chauffeur la demande — et c'est ce jour-là qu'on en a besoin.
+
+⚠️ **`0` RETIRE VOTRE LIMITE, CE N'EST PAS « ZÉRO FRANC ».** Et dites-le : **le
+plafond du PAYS continue de s'appliquer.** Ce n'est pas une porte ouverte, c'est
+le retrait d'un resserrement. `debt_cap_by` est alors vidé — l'auteur d'une levée
+n'a pas à rester sur la fiche.
+
+⚠️ `amount_out_of_range` (`422`) : « Ce montant doit être compris entre 0 et
+100 000 000 F : **vérifiez le nombre de zéros** ». Ce montant se tape à la main,
+et l'erreur n'est jamais « j'ai voulu cent millions ».
+
+### 7.3 Les deux refus de périmètre
+
+| Code | Statut | |
+|---|---|---|
+| `driver_not_in_your_fleet` | `403` | « Ce chauffeur ne conduit aucun de vos véhicules » |
+| `vehicle_not_in_your_fleet` | `403` | « Ce véhicule n'appartient pas à votre flotte » |
+
+⚠️ **`403` ET NON `404`.** Un `404` ferait croire à un partenaire dont on vient
+de détacher un véhicule qu'il **a disparu de la base** — et il appellerait pour
+le faire « recréer ».
+
+⚠️ **Chaque objet est revérifié contre la flotte À CHAQUE REQUÊTE**, pas
+seulement filtré dans la liste. N'en concluez pas qu'un identifiant lu ailleurs
+« marchera » : il faut le taper, et il sera refusé.
+
+---
+
+## 8. LES COURSES DE LA FLOTTE — sans passager, sans adresse
+
+```
+GET /vtc/partner/rides?from=2026-10-01&to=2026-10-10&tz=Africa/Dakar&limit=50&cursor=<id>
+
+→ 200 { "items": [ {
+  "id":              "6abaeea5e57931887160b55c",
+  "status":          "completed",
+  "mode":            "standard",       ← standard | rental | pool …
+  "rental_hours":    4,                ← location : la durée vendue
+  "share_pct":       70,               ← course partagée : la PART du tarif ordinaire
+  "driver_user_id":  "6ab37137b46bacb400cc9ed0",
+  "driver_name":     "Sokhna Mbengue",
+  "vehicle_id":      "6ab371373317b63a136b7270",
+  "plate":           "DK-6528-CC",
+  "class_key":       "confort",
+  "created_at":      "2026-09-28T14:11:28Z",
+  "ended_at":        "2026-09-28T14:39:02Z",
+  "distance_m":      8420,
+  "distance_source": "gps",            ← gps | route | estimate
+  "duration_s":      1654,
+  "fare_xof":        3100,             ← le prix CLIENT
+  "commission_xof":  558,              ← la part de Dira
+  "driver_xof":      2542,             ← ce qui reste à partager (société + chauffeur)
+  "payment_method":  "cash",
+  "paid":            true,
+  "settled":         true
+} ], "next_cursor": "…" }
+```
+
+⚠️⚠️ **NI PASSAGER, NI DÉPART, NI ARRIVÉE — ET CE N'EST PAS UN OUBLI.** Une
+adresse de départ **est l'adresse de quelqu'un** ; l'historique des arrivées d'un
+chauffeur **est le carnet d'adresses de ses clients**. N'affichez pas un espace
+vide intitulé « Trajet » : écrivez ce que la ligne contient (une plaque, une
+durée, une distance, un montant).
+
+⚠️⚠️ **LA BORNE EST LE VÉHICULE, PAS LE CHAUFFEUR.** Sont servies les courses
+faites **avec vos voitures**. Les courses que le même chauffeur fait avec sa
+propre voiture **ne vous regardent pas** — et ne sont pas là.
+
+⚠️ **`driver_user_id` ET NON `driver_id`** sur cette route : c'est l'identifiant
+de **compte**. Ne le croisez pas avec `driver_id` de `/vtc/partner/drivers`, qui
+est l'identifiant de **profil de chauffeur** ; `user_id` y est servi pour faire
+le lien.
+
+⚠️ **`distance_source` CHANGE CE QU'ON PEUT DIRE DU CHIFFRE.** `estimate` n'est
+pas une mesure : ne le présentez pas comme un relevé de compteur.
+
+⚠️ **LES COURSES ANNULÉES SONT COMPTÉES À PART** (`totals.cancelled_rides`), pas
+mêlées au nombre de courses. Un propriétaire qui additionne les deux croit avoir
+perdu de l'argent sur des courses qui n'ont jamais eu lieu.
+
+---
+
+## 9. LA FINANCE — commission ou salaire, et le relevé
+
+### 9.1 ⚠️⚠️ CE QUE CET ÉCRAN N'EST PAS
+
+> **CET ARGENT N'EST PAS CELUI DE DIRA.** Nous **enregistrons les termes** que
+> vous avez convenus avec votre chauffeur et nous **calculons un relevé**. Nous
+> ne prélevons rien, nous ne versons rien.
+
+⚠️ **ÉCRIVEZ CETTE PHRASE EN HAUT DE L'ÉCRAN, pas dans une aide.** Sans elle, un
+propriétaire attend un virement, et un chauffeur attend d'être payé par Dira.
+Les deux appellent le support la même semaine.
+
+### 9.2 `PUT /vtc/partner/drivers/{driverID}/pay` — les termes convenus
+
+```
+PUT /vtc/partner/drivers/6ab37137b46bacb400cc9ef0/pay
+{ "mode": "commission", "share_bp": 7000 }      ← 7000 = 70 % POUR LE CHAUFFEUR
+   ou
+{ "mode": "salary",     "salary_xof": 120000 }
+
+→ 200 { "mode": "commission", "share_bp": 7000, "by": "Transports Teranga", "at": "…" }
+```
+
+⚠️⚠️ **`share_bp` EST LA PART DU CHAUFFEUR, pas celle de la société.** Les deux
+conventions existent sur le terrain, et une inversion ferait verser 30 % à
+quelqu'un qui devait en toucher 70 — **sans que rien ne le signale**, puisque les
+deux nombres sont plausibles. Écrivez-le sur le champ : « ce que **le chauffeur**
+garde ».
+
+⚠️ **L'ARRONDI VA AU CHAUFFEUR.** Un franc perdu cent fois est perdu par la même
+personne.
+
+⚠️ **EN SALAIRE, LE SALAIRE EST DÛ À PART** — y compris une semaine sans course.
+Ne l'affichez pas comme une part des recettes.
+
+⚠️ **ON N'ÉCRIT QUE LE CHAMP DU MODE CHOISI.** Le serveur efface l'autre : une
+fiche portant « 150 000 F de salaire » à côté de « 50 % de commission » aurait
+laissé la prochaine lecture **deviner** lequel fait foi.
+
+#### Les quatre refus — et chacun propose une sortie
+
+| Code | Le message |
+|---|---|
+| `pay_zero_share` | « Un chauffeur qui ne garde rien n'est pas en commission : **enregistrez plutôt un salaire, avec son montant** » |
+| `pay_share_range` | « La part du chauffeur doit être comprise entre **0,01 % et 100 %** » |
+| `pay_salary_needs_amount` | « Un salaire doit porter son montant » |
+| `pay_mode_unknown` | « La rémunération est soit une commission, soit un salaire » |
+
+⚠️⚠️ **`pay_zero_share` EST UN CHOIX DE PRODUIT, PAS UNE VALIDATION.** « Le
+chauffeur garde 0 % » veut dire qu'il travaille **sans rien toucher** ; si c'est
+l'accord, il s'appelle un salaire et il porte un montant. Laisser passer ce zéro
+aurait permis d'enregistrer, dans nos données, un travail non rémunéré — et de
+s'en servir comme d'une preuve d'accord. **Affichez la phrase : elle dit par où
+sortir.**
+
+⚠️ `amount_out_of_range` s'applique aussi au salaire (« vérifiez le nombre de
+zéros »).
+
+### 9.3 `GET /vtc/partner/payroll` — le relevé, chauffeur par chauffeur
+
+```
+GET /vtc/partner/payroll?from=2026-10-01&to=2026-10-10&tz=Africa/Dakar
+
+→ 200 { "items": [ {
+  "driver_id":        "…",  "user_id": "…",
+  "name":             "Astou Diouf",  "phone": "+221771000118",
+  "plates":           [ "DK-8740-EE" ],
+  "rides":            24,
+  "earned_xof":       96800,     ← produit AVEC VOS VOITURES (part hors commission Dira)
+  "cash_xof":         41200,     ← ⚠️ À RÉCLAMER, pas à verser : le plein tarif encaissé en espèces
+  "terms":            { "mode": "commission", "share_bp": 7000 },
+  "driver_share_xof": 67760,     ← sa part, selon les termes
+  "fleet_share_xof":  29040,     ← la vôtre
+  "salary_xof":       0,
+  "debt_xof":         -935,
+  "over_limit":       false
+} ] }
+```
+
+⚠️⚠️ **`cash_xof` EST LE PLEIN TARIF DES COURSES PAYÉES EN ESPÈCES.** C'est ce
+que le chauffeur **détient** : la commission de Dira est dedans (elle devient sa
+dette), et votre part aussi. **Ne l'affichez jamais dans la même colonne que
+`driver_share_xof`** — l'un est à encaisser, l'autre à verser, et les aligner
+fait additionner deux choses opposées.
+
+⚠️ **LE RELEVÉ EST BORNÉ À VOS VÉHICULES.** Un défaut corrigé : il agrégeait
+**toutes** les courses du chauffeur, personnelles comprises, si bien que ses
+gains propres entraient dans ce que la société lui réclame. **C'est de l'argent
+qu'on demande à quelqu'un** — la borne n'est pas cosmétique.
+
+⚠️ **AUCUNE LIGNE DU GRAND LIVRE DU CHAUFFEUR** n'est servie (ses locations de
+matériel, ses bonus, ses prélèvements). N'inventez pas un « solde » : affichez
+`debt_xof` sous le mot *dette envers Dira*, et rien de plus.
+
+### 9.4 `GET /vtc/partner/earnings` — la vue courte
+
+Même fenêtre, une ligne par chauffeur : `rides`, `earned_xof`, `debt_xof`,
+`over_limit`, `plates`.
+
+⚠️ **`earned_xof` EST LA PART HORS COMMISSION DIRA, PAS LE PRIX CLIENT.** Servir
+le prix client ferait croire au propriétaire qu'on lui doit la différence.
+
+---
+
+## 10. LES PAPIERS DE SES VOITURES
+
+⚠️⚠️ **CE CHAPITRE EXISTE PARCE QU'ON RÉCLAMAIT AU CHAUFFEUR LA CARTE GRISE
+D'UNE VOITURE QUI N'EST PAS LA SIENNE** — et la relance le lui redisait tous les
+trois jours. Les papiers d'un véhicule de société se déposent par **la société**.
+
+```
+GET /vtc/partner/compliance
+
+→ 200 {
+  "compliant": false,
+  "vehicles": [ {
+    "vehicle_id": "6ab371373317b63a136b7270",
+    "plate":      "DK-6528-CC",
+    "compliant":  false,
+    "missing":    [ "insurance", "inspection" ],
+    "documents":  [ {
+      "id":         "…",
+      "kind":       "registration",
+      "vehicle_id": "6ab371373317b63a136b7270",
+      "file_url":   "…",
+      "state":      "valid",       ← pending | valid | expiring | expired | rejected
+      "expires_at": "2027-03-31",
+      "by_fleet":   true,          ← déposée par la SOCIÉTÉ (et non par le conducteur)
+      "updated_at": "…"
+    } ]
+  } ]
+}
+```
+
+```
+POST /vtc/partner/compliance/documents
+{
+  "kind":       "insurance",
+  "vehicle_id": "6ab371373317b63a136b7270",
+  "file_url":   "https://files.dira.llc/…",   ← déposé au préalable
+  "expires_at": "2027-03-31"
+}
+```
+
+### ⚠️ Six types, et SIX SEULEMENT
+
+| Type | |
+|---|---|
+| `registration` | carte grise |
+| `insurance` | assurance |
+| `inspection` | contrôle technique |
+| `vehicle_front` · `vehicle_rear` · `vehicle_side` | les trois photos — **trois types, pas une galerie** |
+
+⚠️⚠️ **UNE SOCIÉTÉ NE DÉPOSE JAMAIS LA PIÈCE D'IDENTITÉ DE QUELQU'UN.** Permis,
+carte d'identité, casier judiciaire, selfie : **refusés** sur cette route. Ne les
+proposez pas — la confusion aurait rangé le permis d'un chauffeur dans le dossier
+d'une entreprise.
+
+⚠️ **UNE PIÈCE DE VÉHICULE EXIGE SON `vehicle_id`**, et un véhicule non membre de
+la flotte est refusé (`vehicle_not_in_your_fleet`).
+
+### ⚠️ Les quatre cas d'une pièce, et ce que l'écran propose
+
+| `state` | Ce que l'écran fait |
+|---|---|
+| `pending` | « en cours d'examen » — **aucun bouton** |
+| `valid` | la date d'expiration, et rien d'autre |
+| `expiring` | ⚠️ **à montrer bien visible** : c'est ce qui fait renouveler avant un contrôle de police |
+| `expired` / `rejected` | **remplacer**, avec `rejected_reason` affiché mot pour mot |
+
+⚠️ **`expiring` ET `expired` SONT CALCULÉS À LA LECTURE**, pas stockés : ils
+basculent tout seuls. N'attendez pas un événement.
+
+⚠️⚠️ **`missing` N'EST PAS LA LISTE DU CHAUFFEUR.** La plateforme sert deux
+listes distinctes — ce qui manque **à la personne** (son permis) et ce qui manque
+**à la société** (l'assurance d'une voiture) — et **il est interdit de les
+concaténer**. Le destinataire change, pas la réalité : une voiture sans assurance
+roule sans papiers dans les deux cas, mais ce n'est pas la même personne qui doit
+agir.
+
+⚠️ **LE DÉPÔT PAR LE CONDUCTEUR RESTE ACCEPTÉ** : les papiers sont souvent dans
+la boîte à gants. Une pièce sans `by_fleet` n'est pas une anomalie — affichez-la
+comme les autres, sans proposer de la remplacer si elle est `valid`.
+
+---
+
+## 11. LE MATÉRIEL DE LA SOCIÉTÉ — **SOCLE** (sans `/vtc`)
+
+Gilets, casques, téléphones : une société en prend pour ses chauffeurs.
+
+```
+GET /partner/equipment/catalogue      (socle)
+
+→ 200 { "items": [ {
+  "id":                  "6ab2533ebdafb23b6d19f1b1",
+  "kind":                "phone",
+  "name":                "Téléphone portable Dira",
+  "description":         "Smartphone Android avec l'application installée…",
+  "photos":              [ ],
+  "sale_price_xof":      0,          ← 0 ou absent = CETTE FORMULE N'EST PAS PROPOSÉE
+  "rental_daily_xof":    500,
+  "rental_weekly_xof":   3000,
+  "rental_monthly_xof":  10000,
+  "deposit_xof":         15000,
+  "stock":               20,
+  "active":              true
+} ] }
+```
+
+⚠️⚠️ **LES CHAMPS SONT `sale_price_xof` ET `rental_{daily,weekly,monthly}_xof`.**
+Il n'y a **ni `rent_xof`, ni `modes[]`**. Une console les a inventés : le
+catalogue s'est affiché **sans aucun prix, sans aucune erreur** — un champ absent
+vaut `undefined`. **Un champ qu'on invente est un champ toujours vide, et c'est
+le pire des défauts : rien ne crie.**
+
+⚠️ **NE PROPOSEZ QUE LES FORMULES QUI ONT UN PRIX.** Offrir « Achat » sur un
+article dont `sale_price_xof` vaut 0 fait cliquer pour lire « cette formule n'est
+pas proposée ». Un pays peut ne vendre qu'une formule.
+
+⚠️ **AFFICHEZ LE LOYER MENSUEL** (repli : semaine, puis jour) : on n'équipe pas
+une flotte à la journée.
+
+```
+POST /partner/equipment/requests
+{ "item_id": "6ab2533ebdafb23b6d19f1b1", "quantity": 3, "mode": "rental", "note": "…" }
+
+→ 201 { "id": "…", "item_name": "Téléphone portable Dira", "quantity": 3,
+         "mode": "rental", "status": "requested",
+         "price_xof": 9000, "deposit_xof": 45000,
+         "fleet_name": "Transports Agoè" }
+```
+
+⚠️ **`mode` VAUT `sale`, `rental` OU `loan` — PAS `rent`.** Les deux mots sont
+plausibles, et celui qu'on invente échoue à l'envoi (`422` sur le champ `mode`).
+
+```
+GET /partner/equipment       → { "items": [ …contrats de la société… ] }
+```
+
+Statuts : `requested` → `draft` → `accepted` → `active` (remis) → `returned` /
+`completed`, ou `cancelled` / `defaulted`.
+
+⚠️⚠️ **UNE SOCIÉTÉ RÈGLE SUR FACTURE — il n'y a pas de grand livre de flotte.**
+Tous les canaux de recouvrement sont **fermés** sur un contrat de société : rien
+n'est prélevé sur des gains, rien sur un portefeuille, et **aucun blocage pour
+retard**. N'affichez donc ni échéancier de prélèvement, ni « bloqué » : ces
+champs existent dans la réponse (structure commune avec les contrats d'une
+personne) et valent `false`/`0` ici.
+
+⚠️ **LE PORTEUR N'EST PAS UNE PERSONNE** : `user_id` est **vide** sur un contrat
+de société, et `fleet_name` porte le nom. N'affichez pas « attribué à — ».
+
+---
+
+## 12. LE PERSONNEL — **SOCLE** (sans `/vtc`)
+
+⚠️⚠️ **POURQUOI CET ÉCRAN EXISTE : un seul compte par société = un mot de passe
+partagé**, et plus rien ne dit **qui** a posé la limite qui a coupé quelqu'un.
+
+```
+GET /partner/members           (socle — ⚠️ lisible par TOUT le personnel, viewer compris)
+
+→ 200 { "items": [ {
+  "user_id":  "6ac924d6b9c3193bbf5dfbfa",
+  "role":     "owner",        ← owner | manager | viewer
+  "name":     "Kodjo Mensah",
+  "phone":    "+221771999001",
+  "email":    "kodjo@teranga.sn",
+  "owner":    true,
+  "added_by": "…",  "added_at": "…"
+} ] }
+
+POST /partner/members          (⚠️ le PROPRIÉTAIRE seul)
+{ "name": "Ndèye Fall", "phone": "+221777000001", "email": "compta.sn@dira.llc",
+  "role": "viewer", "password": "…" }
+→ 201 { …le membre… }
+
+DELETE /partner/members/{userID}    (⚠️ le PROPRIÉTAIRE seul)
+→ 204
+```
+
+⚠️ **LA LISTE EST LISIBLE PAR TOUS, Y COMPRIS UN `viewer`** — et ce n'est pas un
+pouvoir, c'est le contraire : savoir qui a accès est ce qui permet de signaler un
+compte qui ne devrait plus être là.
+
+⚠️ **LE MOT DE PASSE EST EXIGÉ, et le propriétaire le transmet de vive voix.** Un
+tirage du serveur affiché masqué finit **recopié de travers**.
+
+⚠️⚠️ **« DÉTACHER » N'EST PAS « SUPPRIMER ».** Le compte n'est pas effacé : c'est
+peut-être le compte personnel de la personne, et une société n'a pas à pouvoir
+effacer quelqu'un qu'elle congédie. Écrivez-le dans la confirmation.
+
+⚠️ **ON NE RETIRE PAS LE PROPRIÉTAIRE — pas même lui-même.** N'affichez pas le
+bouton sur sa ligne (`owner: true`).
+
+### Les refus de cet écran
+
+| Code | Le message |
+|---|---|
+| `fleet_not_owner` | « Seul le signataire du contrat peut gérer le personnel de la flotte » |
+| `fleet_role_unknown` | « Le rôle doit être « gérant » ou « lecteur » » |
+| `fleet_already_member` | « Ce compte fait déjà partie du personnel de cette flotte » |
+| `fleet_member_not_found` | le membre n'est pas dans cette flotte |
+| `phone_belongs_to_another_role` | « Ce numéro appartient déjà à un compte Dira qui n'est pas un partenaire : **utilisez un autre numéro** » |
+
+⚠️⚠️ **`phone_belongs_to_another_role` EST LE PIÈGE LE PLUS FRÉQUENT, et il a une
+cause banale : le gérant d'une flotte est très souvent DÉJÀ un passager Dira.**
+Un compte = un rôle = une application. Le refus **nomme le geste** : un autre
+numéro. Sans cette phrase, l'écran afficherait « accès ouvert » pendant que la
+connexion répondrait `403 wrong_app`.
+
+---
+
+## 13. LA FENÊTRE DE DATES — `from`, `to`, `tz`
+
+Quatre routes en dépendent : `dashboard`, `rides`, `payroll`, `earnings`.
+
+```
+?from=2026-10-01&to=2026-10-10&tz=Africa/Dakar
+```
+
+| | |
+|---|---|
+| `from`, `to` | `YYYY-MM-DD`, **tous deux inclusifs**. Absents → **les sept derniers jours** |
+| `tz` | nom de fuseau IANA. Absent → `Africa/Lome` |
+
+⚠️⚠️ **`to` EST INCLUSIF.** Qui demande « du 1er au 31 » veut le 31. Le serveur
+s'en charge ; ne retirez pas un jour « pour compenser », et ne recopiez pas la
+borne haute dans un filtre exclusif côté interface.
+
+⚠️⚠️ **ENVOYEZ LE FUSEAU DU NAVIGATEUR.** Un serveur en UTC ne sait pas à quelle
+heure une journée de Lomé commence, et une période décalée d'une heure **fait
+manquer les courses du soir** — celles qui font le chiffre. La réponse porte la
+fenêtre **retenue** (`from`, `to`) : affichez-la.
+
+⚠️ **LA RÉPONSE EST LA SOURCE DE VÉRITÉ DE LA PÉRIODE AFFICHÉE.** Mettez
+l'étiquette (« ce mois ») à jour **depuis** `from`/`to`, jamais depuis ce que
+l'interface croit avoir demandé.
+
+### Les trois refus de la fenêtre
+
+| Code | Le message |
+|---|---|
+| `window_too_long` | « Une période ne peut pas dépasser **93 jours** : resserrez les dates, un mois par exemple » |
+| `window_backwards` | « La date de début est après la date de fin : **inversez-les** » |
+| `window_unknown_tz` | « Votre appareil a envoyé un fuseau horaire que ce serveur ne connaît pas : **vérifiez son réglage de date et d'heure** » |
+
+⚠️⚠️ **LES TROIS SONT ATTEIGNABLES DÈS QUE VOUS OFFREZ DES SÉLECTEURS DE DATE
+LIBRES** — et c'est le cas de Finance, Gains et Courses. Affichez le `message` :
+il porte la limite **et** le geste. (Ces refus ont longtemps sorti en « Requête
+invalide », faute d'un code à eux ; si vous revoyez cette phrase ici, c'est une
+régression à signaler.)
+
+⚠️ **LA BORNE DE 93 JOURS EST UNE PROTECTION DE LA BASE**, pas une politique de
+confidentialité : l'agrégation balaie les courses du parc. « Depuis le début »
+sur cinquante voitures est la requête qu'on lance une fois par curiosité et qui
+met la base à genoux pour tout le monde.
+
+### ⚠️ Les paramètres acceptés, route par route
+
+| Route | Paramètres |
+|---|---|
+| `GET /vtc/partner/live` | *aucun* |
+| `GET /vtc/partner/dashboard` | `from` `to` `tz` |
+| `GET /vtc/partner/vehicles` | `limit` `cursor` |
+| `GET /vtc/partner/drivers` | *aucun* |
+| `GET /vtc/partner/rides` | `from` `to` `tz` `limit` `cursor` |
+| `GET /vtc/partner/payroll` | `from` `to` `tz` |
+| `GET /vtc/partner/earnings` | `from` `to` `tz` |
+| `GET /vtc/partner/compliance` | *aucun* |
+| `GET /vtc/tickets` | `status` `category` `limit` `cursor` |
+| `GET /partner/me` · `/partner/members` · `/partner/equipment` · `/partner/equipment/catalogue` | *aucun* |
+
+⚠️ **UN PARAMÈTRE QU'ON INVENTE EST UN PARAMÈTRE TOUJOURS IGNORÉ** — la réponse
+reste `200`, et le filtre ne filtre rien sans que personne le voie. Tout ce qui
+n'est pas dans cette table se filtre **dans la page**.
+
+---
+
+## 14. LE SUPPORT — ses fils, et SEULEMENT les siens
+
+```
+POST /vtc/tickets
+{ "category": "vehicle", "message": "Les pièces de deux de nos voitures arrivent à échéance…",
+  "priority": "normal" }
+→ 201 { "id": "…", "reference": "…", "category": "vehicle", "status": "open", … }
+
+GET  /vtc/tickets?status=open&category=vehicle&limit=20&cursor=<id>
+GET  /vtc/tickets/{id}
+POST /vtc/tickets/{id}/messages        { "body": "…" }
+```
+
+Catégories utiles ici : `vehicle` (une voiture immobilisée, des papiers
+refusés), `payment` (un montant), `account` (l'accès à la console), `other`.
+Statuts : `open`, `in_progress`, `waiting`, `resolved`, `closed`.
+
+⚠️⚠️ **LE PARTENAIRE NE VOIT QUE SES PROPRES FILS — ET IL NE FAUT JAMAIS OUVRIR
+ÇA.** Le guichet borne au **participant** pour tout compte non administrateur. Un
+chauffeur doit pouvoir écrire « mon propriétaire prend 90 % et ne répare pas les
+freins » sans que son propriétaire le lise.
+
+⚠️ **ÉCRIVEZ-LE EN TÊTE D'ÉCRAN** (« Vous voyez vos échanges avec Dira. Les
+demandes de vos chauffeurs leur appartiennent. ») : sans cette phrase, l'écran
+se lit comme une liste incomplète, et quelqu'un finit par demander « l'accès aux
+tickets de mes chauffeurs ».
+
+⚠️ Le champ du message s'appelle **`message`** à la création et **`body`** dans
+une réponse au fil. Deux routes, deux noms : c'est le guichet commun de la
+plateforme.
+
+---
+
+## 15. ⚠️ Ce qu'un écran ne doit PAS faire — récapitulatif de recette
+
+À essayer avant de considérer une interface partenaire prête.
+
+**La porte**
+1. Se connecter **sans** `app: "partner"` → vérifier que l'interface ne le fait jamais.
+2. Un compte chauffeur sur cette console → `403 wrong_app`, et la phrase du serveur s'affiche.
+3. Un compte partenaire **sans flotte** → `partner_no_fleet` en **écran plein**.
+4. Un contrat **suspendu** → `partner_fleet_suspended`, **avec** « vos chauffeurs continuent de travailler ».
+
+**Les rôles**
+5. Ouvrir la console en `viewer` → **aucun bouton d'écriture dessiné**, et une phrase qui dit à qui demander.
+6. Forcer un `PUT` en `viewer` → `partner_read_only` affiché mot pour mot.
+7. Un `manager` sur l'écran du personnel → pas de bouton, `fleet_not_owner` si forcé.
+8. Supprimer `role` de la réponse (bouchon) → l'interface doit **couper** les boutons, pas les ouvrir.
+
+**La carte**
+9. Un véhicule **sans `geo`** → compté dans un bandeau, **pas posé à `[0,0]`**.
+10. Un véhicule `on_ride` dont `last_seen_at` est vieux → **reste « En course »**.
+11. Zoomer, attendre deux battements → **la vue ne revient pas au centre**.
+12. `stale` et `offline` côte à côte → **deux mots différents**, et seul le premier porte une alerte.
+
+**L'argent**
+13. `totals` absent → « — » partout, **jamais 0**.
+14. `debt_xof` négatif → « 3 396 F d'avance », pas « -3 396 F de dette ».
+15. `cash_xof` → libellé « à réclamer », dans une colonne séparée de la part à verser.
+16. Commission à 0 % → la phrase `pay_zero_share` s'affiche, qui **propose le salaire**.
+17. Part à 150 % → `pay_share_range` (« entre 0,01 % et 100 % »), pas « Requête invalide ».
+18. Salaire avec trois zéros de trop → `amount_out_of_range` (« vérifiez le nombre de zéros »).
+
+**Les dates**
+19. Demander du 1er janvier au 31 décembre → `window_too_long`, et la phrase propose de resserrer.
+20. Inverser les dates → `window_backwards`.
+21. Comparer l'étiquette affichée aux `from`/`to` **de la réponse**.
+
+**Les gestes qui touchent une personne**
+22. Rattacher une plaque inconnue → la phrase renvoie vers **l'application Dira Chauffeur**.
+23. Rattacher avec le numéro d'un client → `driver_phone_unknown`, même renvoi.
+24. Reprendre la voiture **active** d'un chauffeur → la confirmation annonce « hors ligne » **et** « il reste chauffeur Dira ».
+25. Reprendre une voiture **non active** → la confirmation **n'annonce pas** « hors ligne ».
+26. Poser une limite de dette → la confirmation nomme la conséquence **et** dit que le nom de la société sera inscrit.
+27. Poser `cap_xof: 0` → l'écran dit « limite retirée — **le plafond du pays s'applique toujours** ».
+
+**Le matériel et les papiers**
+28. Un article sans `sale_price_xof` → la formule « Achat » **n'est pas proposée**.
+29. Demander un `mode: "rent"` → vérifier que l'interface envoie bien `rental`.
+30. Déposer un permis sur la route de la société → refusé ; vérifier que l'interface ne le propose pas.
+31. Une pièce `rejected` → `rejected_reason` affiché mot pour mot, avec le bouton « remplacer ».
+32. `missing` et la liste du chauffeur → **jamais concaténées**.
+
+---
+
+## 16. Journal
+
+### 4.62.0 — 10 octobre 2026
+
+🆕 **PREMIÈRE PUBLICATION.** La console du propriétaire de flotte est en
+service ; ce document est son contrat. Elle couvre dix écrans — accueil (carte en
+direct), parc, conducteurs, courses, finance, gains, papiers, matériel,
+personnel, support — sur **deux bases d'URL** et **sans aucun socket**.
+
+Ce qui vaut d'être lu avant de câbler quoi que ce soit :
+
+- **§2 — ce que cette surface ne sert PAS**, et pourquoi. Treize lignes qui sont
+  le contrat, pas une liste de manques.
+- **§4 — trois rôles, et le défaut est « ne peut pas »** : un `role` absent coupe
+  le pouvoir.
+- **§5 — quatre états de véhicule** : « plus vu » n'est pas « hors ligne », et une
+  voiture en course le reste même si son téléphone s'est tu.
+- **§6 — rattacher se fait par PLAQUE + TÉLÉPHONE**, et le geste a trois effets
+  de bord qui doivent figurer dans la confirmation.
+- **§9 — cet argent n'est pas celui de Dira** : on enregistre des termes, on ne
+  verse rien. Et `cash_xof` est à **réclamer**, pas à verser.
+- **§13 — la fenêtre de dates** et ses trois refus, atteignables dès qu'on offre
+  un sélecteur libre.
+- **§15 — trente-deux points de recette.**
