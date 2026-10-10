@@ -33,14 +33,22 @@ func NewRepository(m *db.Mongo, collection string) *Repository {
 //
 // ⚠️ Le remplacement repasse la pièce en `pending` : une image nouvelle est
 // une image que personne n'a regardée, même si l'ancienne était validée.
-func (r *Repository) UpsertDocument(ctx context.Context, d *Document) (*Document, error) {
-	now := time.Now().UTC()
-	filter := bson.M{"owner_id": d.OwnerID, "kind": d.Kind}
-	if d.VehicleID != nil {
-		filter["vehicle_id"] = *d.VehicleID
-	} else {
-		filter["vehicle_id"] = bson.M{"$exists": false}
-	}
+// upsertUpdate dit CE QUE LA BASE GARDERA d'une pièce déposée.
+//
+// ⚠️⚠️ EXTRAITE POUR ÊTRE ÉPROUVÉE, et c'est le défaut qui l'a fait extraire :
+// `fleet_id` était posé sur la structure par `SubmitFleetDocument`, réclamé par
+// la lecture du parc (`FleetDocumentsOfVehicles` filtre `fleet_id: {$exists}`)
+// — et recopié dans aucun opérateur d'écriture. La pièce partait en base sans
+// marque de société, et l'écran de la société ne la retrouvait jamais : un dépôt
+// accepté, invisible, à refaire.
+//
+// Rien ne pouvait le voir. Le dépôt réel n'est pas testé (c'est le rôle de
+// l'interface `Store`), et la doublure des tests, elle, rangeait la structure
+// REÇUE telle quelle — donc plus fidèle que la chose qu'elle double.
+//
+// ⚠️ LA RÈGLE QUE CE DÉCOUPAGE REND VÉRIFIABLE : **un champ sur lequel une
+// lecture filtre est un champ qu'une écriture doit poser.**
+func upsertUpdate(d *Document, now time.Time) bson.M {
 	set := bson.M{
 		"file_url":   d.FileURL,
 		"status":     DocPending,
@@ -49,18 +57,34 @@ func (r *Repository) UpsertDocument(ctx context.Context, d *Document) (*Document
 	if d.ExpiresAt != nil {
 		set["expires_at"] = *d.ExpiresAt
 	}
+	// ⚠️ EN `$set` ET NON EN `$setOnInsert` : une pièce déposée avant cette
+	// correction existe déjà sans marque, et seul un `$set` la répare au
+	// prochain dépôt. (Le filtre porte `owner_id`, donc le dépôt d'un
+	// conducteur et celui de sa société sont deux documents distincts : il n'y
+	// a aucun risque de marquer la pièce de quelqu'un d'autre.)
+	if d.FleetID != nil {
+		set["fleet_id"] = *d.FleetID
+	}
 	unset := bson.M{"reviewed_by": "", "reviewed_at": "", "rejected_reason": ""}
 	if d.ExpiresAt == nil {
 		unset["expires_at"] = ""
 	}
-	update := bson.M{
-		"$set":         set,
-		"$unset":       unset,
-		"$setOnInsert": bson.M{"owner_id": d.OwnerID, "kind": d.Kind, "created_at": now},
-	}
+	onInsert := bson.M{"owner_id": d.OwnerID, "kind": d.Kind, "created_at": now}
 	if d.VehicleID != nil {
-		update["$setOnInsert"].(bson.M)["vehicle_id"] = *d.VehicleID
+		onInsert["vehicle_id"] = *d.VehicleID
 	}
+	return bson.M{"$set": set, "$unset": unset, "$setOnInsert": onInsert}
+}
+
+func (r *Repository) UpsertDocument(ctx context.Context, d *Document) (*Document, error) {
+	now := time.Now().UTC()
+	filter := bson.M{"owner_id": d.OwnerID, "kind": d.Kind}
+	if d.VehicleID != nil {
+		filter["vehicle_id"] = *d.VehicleID
+	} else {
+		filter["vehicle_id"] = bson.M{"$exists": false}
+	}
+	update := upsertUpdate(d, now)
 	opts := options.FindOneAndUpdate().SetUpsert(true).SetReturnDocument(options.After)
 	var out Document
 	if err := r.documents.FindOneAndUpdate(ctx, filter, update, opts).Decode(&out); err != nil {

@@ -16,7 +16,31 @@ import (
 // empilerait les pièces ferait passer au vert une règle — « une image nouvelle
 // est une image que personne n'a regardée » — que la production applique.
 
+// fakeStore tient lieu de base de données.
+//
+// ⚠️⚠️ ET IL NE DOIT JAMAIS ÊTRE PLUS GÉNÉREUX QUE LE DÉPÔT RÉEL. Sa première
+// écriture rangeait la structure reçue TELLE QUELLE (`append(f.documents, *d)`)
+// — donc avec tous ses champs —, alors que `Repository.UpsertDocument` construit
+// un `$set`/`$setOnInsert` explicite et n'en recopie que certains. La doublure
+// était donc PLUS FIDÈLE que la chose qu'elle double : `fleet_id` n'a jamais été
+// persisté en vrai, tous les tests des papiers de société passaient au vert, et
+// l'écran d'une société ne retrouvait aucune de ses pièces.
+//
+// `persisted` recopie donc, champ par champ, CE QUE LE DÉPÔT ÉCRIT. Un champ que
+// le dépôt oublie est désormais un champ que les tests perdent aussi.
 type fakeStore struct{ documents []Document }
+
+// persisted rend la pièce telle que la base la gardera — pas telle que
+// l'appelant l'a construite.
+func persisted(d *Document) Document {
+	out := Document{
+		ID: d.ID, OwnerID: d.OwnerID, Kind: d.Kind,
+		VehicleID: d.VehicleID, FleetID: d.FleetID,
+		FileURL: d.FileURL, ExpiresAt: d.ExpiresAt,
+		Status: d.Status, CreatedAt: d.CreatedAt, UpdatedAt: d.UpdatedAt,
+	}
+	return out
+}
 
 func (f *fakeStore) key(d *Document) string {
 	return docKey(d.Kind, d.VehicleID) + ":" + d.OwnerID.Hex()
@@ -31,14 +55,20 @@ func (f *fakeStore) UpsertDocument(_ context.Context, d *Document) (*Document, e
 			f.documents[i].FileURL, f.documents[i].ExpiresAt = d.FileURL, d.ExpiresAt
 			f.documents[i].Status, f.documents[i].RejectedReason = DocPending, ""
 			f.documents[i].UpdatedAt = now
+			// ⚠️ ET LA MARQUE DE SOCIÉTÉ EST RÉÉCRITE, comme le fait le `$set`
+			// du dépôt réel : c'est ce qui répare une pièce déposée avant la
+			// correction, et le double doit le refléter.
+			if d.FleetID != nil {
+				f.documents[i].FleetID = d.FleetID
+			}
 			out := f.documents[i]
 			return &out, nil
 		}
 	}
 	d.ID = primitive.NewObjectID()
 	d.Status, d.CreatedAt, d.UpdatedAt = DocPending, now, now
-	f.documents = append(f.documents, *d)
-	out := *d
+	f.documents = append(f.documents, persisted(d))
+	out := f.documents[len(f.documents)-1]
 	return &out, nil
 }
 

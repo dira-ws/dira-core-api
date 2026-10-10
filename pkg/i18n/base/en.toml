@@ -61,3 +61,14 @@ other = "Purging an erased account is not wired on this service"
 # A vehicle paper submitted by its OWNER (pkg/compliance).
 [errors.vehicle_not_in_your_fleet]
 other = "This vehicle does not belong to your fleet"
+
+# The three refusals of a document upload. The last two say what to do — add the
+# vehicle, or remove it — which is precisely the phrase a shared code loses.
+[errors.unknown_document_kind]
+other = "This document type does not exist"
+
+[errors.document_needs_vehicle]
+other = "This document belongs to a vehicle: say which one"
+
+[errors.document_refuses_vehicle]
+other = "This document belongs to the person, not to a vehicle: remove the vehicle"

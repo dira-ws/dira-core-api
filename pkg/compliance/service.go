@@ -11,7 +11,26 @@ import (
 
 // SubmitDocumentRequest is the driver's upload of one compliance paper.
 type SubmitDocumentRequest struct {
-	Kind    string `json:"kind" validate:"required,oneof=licence id_card registration insurance"`
+	// Kind : le type de la pièce.
+	//
+	// ⚠️⚠️ PAS DE `oneof` ICI, ET C'EST UNE CORRECTION, PAS UN RELÂCHEMENT. La
+	// liste écrite à la main n'en portait QUATRE — `licence id_card
+	// registration insurance` — alors que la plateforme en EXIGE neuf
+	// (`PersonKinds`, `VehicleKinds`, plus le permis). `inspection`,
+	// `selfie`, `criminal_record` et les trois photos étaient donc réclamés par
+	// `Missing`, redits tous les trois jours par la relance… et REFUSÉS À
+	// L'ENVOI, en « Requête invalide ».
+	//
+	// Personne n'était bloqué pour autant (rien ne coupe le travail sur
+	// `compliant`), ce qui explique que ça ait pu durer : la seule conséquence
+	// visible était une liste de papiers manquants qu'aucune application ne
+	// pouvait vider.
+	//
+	// ⚠️ LA LISTE VIT MAINTENANT EN UN SEUL ENDROIT — `docOwner`, que
+	// `CheckOwner` consulte et qui refuse un type inconnu par son propre code
+	// (`unknown_document_kind`). Une règle de produit écrite deux fois est
+	// perdue une fois, et c'est la copie qui gagne.
+	Kind    string `json:"kind" validate:"required"`
 	FileURL string `json:"file_url" validate:"required,url,max=2048"`
 	// VehicleID est REQUIS pour une carte grise ou une assurance, et REFUSÉ
 	// pour un permis ou une pièce d'identité. Le type de la pièce décide ; ce

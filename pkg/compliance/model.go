@@ -12,6 +12,7 @@
 package compliance
 
 import (
+	"net/http"
 	"time"
 
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -174,11 +175,20 @@ const (
 const ExpiryWarningDays = 15
 
 var (
-	errUnknownDocKind  = apperr.Validation("unknown document kind")
-	errDocNeedsVehicle = apperr.Validation(
-		"this document belongs to a vehicle: vehicle_id is required")
-	errDocRefusesVehicle = apperr.Validation(
-		"this document belongs to the driver, not to a vehicle: remove vehicle_id")
+	// ⚠️⚠️ CES TROIS REFUS PORTENT LEUR PROPRE CODE, et ce n'est pas cosmétique.
+	// `apperr.Validation` produit le code `validation_failed` ; la traduction se
+	// faisant PAR LE CODE, la phrase écrite ici est jetée et remplacée par
+	// « Requête invalide ». Le premier est devenu ATTEIGNABLE le jour où le
+	// `oneof` du DTO a été retiré — le rendre muet aurait remplacé un défaut par
+	// un autre. Et les deux suivants DISENT QUOI FAIRE (« ajoutez le véhicule »,
+	// « retirez-le ») : une phrase pareille ne doit jamais être perdue.
+	errUnknownDocKind = apperr.New("unknown_document_kind",
+		"this document type does not exist", http.StatusUnprocessableEntity)
+	errDocNeedsVehicle = apperr.New("document_needs_vehicle",
+		"this document belongs to a vehicle: say which one", http.StatusUnprocessableEntity)
+	errDocRefusesVehicle = apperr.New("document_refuses_vehicle",
+		"this document belongs to the person, not to a vehicle: remove the vehicle",
+		http.StatusUnprocessableEntity)
 	errDocumentNotFound = apperr.NotFound("document_not_found", "document not found")
 	// ⚠️ NOMMÉ, et non un « champ requis » générique : la personne doit savoir
 	// QUOI chercher sur son extrait — la date de délivrance, dont la validité
