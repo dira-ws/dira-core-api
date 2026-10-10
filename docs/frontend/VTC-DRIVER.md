@@ -1,6 +1,6 @@
 # App CHAUFFEUR — COURSES (VTC) — contrat d'API
 
-> **Version 4.62.1** · 10 octobre 2026
+> **Version 4.62.2** · 10 octobre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Courses : `https://api-staging.dira.llc/api/v1/vtc` · Suivi : `wss://tracking-staging.dira.llc` · SIG : `https://maps.dira.llc/api`
 
 ---
@@ -3832,6 +3832,25 @@ La réponse porte **quatre** champs, et il faut les quatre :
   "compliant": false
 }
 ```
+
+> ## ⚠️ LES TROIS REFUS D'UN DÉPÔT, ET LEURS CODES (v4.62.2)
+>
+> | Code | Statut | Ce que ça veut dire |
+> |---|---|---|
+> | `unknown_document_kind` | `422` | ce type n'existe pas — vérifiez l'orthographe |
+> | `document_needs_vehicle` | `422` | cette pièce est celle d'un véhicule : **ajoutez `vehicle_id`** |
+> | `document_refuses_vehicle` | `422` | cette pièce est celle de la personne : **retirez `vehicle_id`** |
+>
+> ⚠️⚠️ **ET SI VOTRE APPLICATION A DÉJÀ REÇU « Requête invalide » SUR UN SELFIE,
+> UN CASIER, UN CONTRÔLE TECHNIQUE OU UNE DES TROIS PHOTOS : C'ÉTAIT NOUS.** La
+> route n'acceptait que quatre types (`licence`, `id_card`, `registration`,
+> `insurance`) alors que `missing` en réclamait neuf — donc des papiers demandés,
+> redits tous les trois jours par la relance, et **refusés à l'envoi**. Corrigé
+> en 4.62.2 : **tous les types servis dans `missing` sont acceptés.**
+>
+> ⚠️ Avant cette version, ces trois refus portaient `validation_failed`, donc le
+> message « Requête invalide » : **un code à vous est ce qui vous permet de
+> souligner le bon champ.**
 
 > ## ⚠️⚠️ `missing` ET `missing_fleet` NE SE CONCATÈNENT JAMAIS (v4.61.0)
 >
