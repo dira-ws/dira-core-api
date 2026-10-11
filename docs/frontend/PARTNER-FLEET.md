@@ -1,8 +1,15 @@
-# Console PARTENAIRE — PROPRIÉTAIRE DE FLOTTE PRIVÉE — contrat d'API
+# PARTENAIRE — PROPRIÉTAIRE DE FLOTTE PRIVÉE — contrat d'API
 
-> **Version 4.63.0** · 11 octobre 2026
+> **Version 4.64.0** · 11 octobre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Courses : `https://api-staging.dira.llc/api/v1/vtc`
 > Console en service : `https://partner-staging.dira.llc`
+>
+> ⚠️ **CE CONTRAT SERT DEUX SURFACES : la console web ET l'application
+> mobile.** Les routes, les refus et les règles de périmètre sont les mêmes ;
+> **la section 1 ter dit tout ce qu'un téléphone ajoute** — la connexion avec
+> son appareil, le fond de carte, le verrou, les notifications, le compte, le
+> hors ligne et le battement de la carte. Lisez-la avant de dessiner un
+> écran.
 
 ---
 
@@ -116,6 +123,252 @@ c'est pour l'afficher, pas pour le choisir.
 pays, un compte par contrat. Si le même groupe opère au Togo et au Sénégal, ce
 sont **deux flottes et deux accès** — et c'est voulu : la monnaie, les
 commissions et les règles d'appel diffèrent.
+
+---
+
+## 📱 1 ter. SUR UN TÉLÉPHONE — ce qui change, et ce qui ne change pas (v4.64.0)
+
+Ce document a d'abord décrit une **console web**. Il décrit maintenant aussi une
+**application**, et tout ce qui précède reste vrai : mêmes routes, mêmes refus,
+mêmes règles de périmètre. Ce qui suit est ce qu'un téléphone ajoute.
+
+> ⚠️⚠️ **LE PUBLIC NE CHANGE PAS, LE MOMENT SI.** Un propriétaire de flotte
+> ouvre une console le soir, assis, pour régler la paie. Il ouvre une
+> application **debout, dans une cour, entre deux voitures** — pour savoir si
+> quelque chose cloche et qui appeler. Les écrans qui comptent sur un téléphone
+> sont donc **l'accueil, la carte et les conducteurs** ; la paie et le grand
+> livre s'y consultent, ils ne s'y règlent pas confortablement.
+>
+> **N'en déduisez pas qu'il faut les retirer** : un gérant qui n'a que son
+> téléphone doit pouvoir tout faire. Déduisez-en l'ORDRE des écrans.
+
+### 📱 1 ter.1 La connexion depuis une application
+
+Le corps gagne trois champs que la console n'envoyait pas :
+
+```json
+POST /auth/login
+{ "email": "…", "password": "…",
+  "app": "partner",
+  "platform": "android",                      // android | ios | web
+  "device_id": "<identifiant d'installation>",
+  "device_name": "Tecno Spark 10 · Android 13" }
+```
+
+⚠️ **`app: "partner"` EST OBLIGATOIRE, et il l'était déjà.** Sans lui, un
+chauffeur se connecte ici, reçoit un jeton parfaitement valide, puis se fait
+refuser écran par écran — et croit l'application cassée plutôt que de comprendre
+qu'il s'est trompé d'application. Avec lui, le socle refuse **avant** d'émettre
+le jeton (`403 wrong_app`), et son `reason` **nomme l'application à ouvrir** :
+affichez-le tel quel.
+
+⚠️ **`device_id` EST L'IDENTIFIANT D'INSTALLATION, pas celui du matériel.** Il
+doit survivre à une mise à jour et mourir avec une réinstallation. N'utilisez ni
+l'IMEI, ni l'identifiant publicitaire, ni rien qui suive la personne d'une
+application à l'autre.
+
+⚠️⚠️ **PLUSIEURS APPAREILS SONT PERMIS, ET LE PLUS ANCIEN EST CHASSÉ.** Au-delà
+du plafond, la session la plus ancienne est fermée **en silence côté serveur** :
+son prochain appel rendra `401`. L'application doit donc traiter un `401` comme
+« ma session a été fermée ailleurs » et **revenir à la porte sans drame**, pas
+comme une panne.
+
+⚠️ **LE PLAFOND EST UN RÉGLAGE DE PAYS — n'en codez AUCUN nombre en dur, et
+n'en affichez aucun.** Le défaut est de trois, mais un pays peut le changer, et
+le serveur ne vous dit pas lequel s'applique. Un écran qui annoncerait « 3
+appareils maximum » mentirait le jour où ce pays passe à deux — et la personne
+chercherait le bug chez elle.
+
+⚠️ **ET UN PARTENAIRE N'EST PAS UN CHAUFFEUR.** La règle de **l'appareil
+unique** — un seul téléphone par compte, le précédent chassé à chaque connexion
+— ne vise **que le rôle `driver`**. Si vous reprenez du code de l'application
+chauffeur, ne reprenez pas celui-là : un propriétaire a souvent un téléphone et
+une tablette, et les faire se chasser l'un l'autre rendrait l'application
+inutilisable.
+
+Un gérant et un propriétaire qui **partagent un compte** — ça arrive — se
+chassent en revanche mutuellement ; c'est la raison de la section 12 (un compte
+par personne).
+
+#### ⚠️ La réponse porte deux blocs que la console ignorait
+
+```json
+{ "access_token": "…", "refresh_token": "…", "user": { … },
+  "maps":     { "basemap": "dira" },
+  "app_lock": { "mode": "optional", "biometrics": true,
+                "pin_length": 4, "grace_seconds": 120, "max_attempts": 5 } }
+```
+
+Ils sont servis **à tous les comptes**, partenaire compris. La console web n'en
+faisait rien ; une application, si.
+
+### 🗺️ 1 ter.2 LE FOND DE CARTE — `maps`
+
+Cette surface a une **carte en direct** (section 5.2). Sur un téléphone, c'est
+l'écran qu'on vient voir.
+
+| Valeur | Ce que l'application affiche |
+|---|---|
+| `"dira"` | **notre** fond, tuiles OSM — aucune clé, aucun compte |
+| `"google"` | Google Maps, avec **la clé embarquée dans l'application** |
+
+⚠️⚠️ **LE SERVEUR NE SERT AUCUNE CLÉ, NULLE PART.** Ni le socle, ni la console,
+ni ce bloc. `basemap` dit seulement **lequel des deux fonds** ce pays a choisi ;
+la clé Google, si elle est nécessaire, vit dans l'application et se restreint
+chez Google par signature d'application. Un serveur qui servirait une clé la
+servirait à tout porteur d'un jeton — c'est-à-dire à quiconque sait se
+connecter.
+
+⚠️ **C'EST UN RÉGLAGE DE PAYS, PAS DE COMPTE.** Il peut changer d'un
+déploiement à l'autre : relisez-le **à chaque connexion et à chaque
+rafraîchissement du jeton**, et n'en faites pas une constante de compilation.
+
+### 🔒 1 ter.3 LE VERROU DE L'APPLICATION — `app_lock`
+
+| Champ | Sens |
+|---|---|
+| `mode` | `off` · `optional` · `required` |
+| `biometrics` | l'empreinte ou le visage sont acceptés |
+| `pin_length` | la longueur du code |
+| `grace_seconds` | délai avant de redemander après un passage en arrière-plan |
+| `max_attempts` | essais avant de fermer la session |
+
+⚠️⚠️ **CE VERROU EST LOCAL, ET IL NE REMPLACE PAS LE MOT DE PASSE.** Il protège
+contre quelqu'un qui prend le téléphone posé sur un comptoir, pas contre
+quelqu'un qui connaît l'identifiant. `required` **n'autorise pas** à garder la
+session ouverte éternellement — le jeton expire comme ailleurs.
+
+⚠️ **ET IL EST PARTICULIÈREMENT JUSTIFIÉ ICI.** Cette application pose des
+limites de dette et reprend des voitures : un téléphone déverrouillé posé dans
+une cour donne ces pouvoirs à qui le ramasse. Si le pays sert `optional`,
+**proposez-le à la première ouverture** plutôt que de l'enterrer dans les
+réglages.
+
+### 🔔 1 ter.4 LES NOTIFICATIONS — et l'avertissement qui compte
+
+```
+POST   /me/devices                 { "token": "<jeton FCM/APNs>", "platform": "android" }  → 201
+DELETE /me/devices/{token}                                                                  → 204
+GET    /me/notifications[?limit=&cursor=]  → { "items": [...], "unread": 0, "next_cursor": "…" }
+POST   /me/notifications/read                                                               → 200
+POST   /me/notifications/{id}/read                                                          → 200
+```
+
+⚠️ **DÉCLAREZ LE TÉLÉPHONE APRÈS LA CONNEXION, ET RETIREZ-LE À LA
+DÉCONNEXION.** Un jeton laissé derrière continue de recevoir : le propriétaire
+suivant du téléphone — ou la personne à qui on l'a prêté — lirait les alertes
+d'une société qui n'est pas la sienne.
+
+⚠️ **LE CENTRE DE NOTIFICATIONS EXISTE PARCE QU'UNE POUSSÉE NE LAISSE AUCUNE
+TRACE.** Un téléphone éteint, une bannière balayée, et le message n'existe plus
+nulle part. `GET /me/notifications` est l'endroit où il reste.
+
+> ### ⚠️⚠️ AUJOURD'HUI, RIEN NE POUSSE VERS UN PROPRIÉTAIRE DE FLOTTE
+>
+> **Vérifié au 11 octobre 2026, dans le code :** les deux seules notifications
+> liées à une flotte — `vehicle_assigned` et `vehicle_taken_back` — partent vers
+> **le chauffeur**, pas vers la société. Aucune autre ne vise un compte
+> `partner`.
+>
+> **Conséquence pour vous : la boîte d'un partenaire est vide, et elle le
+> restera tant que le serveur n'aura pas changé.** `GET /me/notifications` rend
+> `{"items": [], "unread": 0}` — ce n'est ni un bug, ni un problème de jeton, ni
+> un filtre mal posé. **Ne cherchez pas.**
+>
+> ⚠️ **Et n'en faites pas un écran vide qui a l'air cassé.** Si vous dessinez un
+> centre de notifications, écrivez-y ce qui est vrai — « vous serez prévenu ici
+> dès que Dira enverra des alertes à votre société » — plutôt qu'un « aucune
+> notification » qui se lit comme une panne.
+>
+> **Ce qui mériterait une poussée, quand le serveur l'enverra** (c'est la
+> demande à porter côté serveur, pas une promesse de ce contrat) : une pièce qui
+> expire sous 30 jours, un chauffeur qui atteint sa limite de dette, une voiture
+> immobilisée depuis plus de 24 h, un ticket de support répondu.
+>
+> **En attendant, les alertes se lisent dans `GET /vtc/partner/dashboard`**
+> (section 5.1), au premier plan. C'est la seule source, et c'est pour ça que
+> l'accueil s'ouvre dessus.
+
+### 👤 1 ter.5 MON COMPTE — et le mot de passe (v4.64.0)
+
+```
+GET    /me                        → le compte
+PATCH  /me                        { "name"?, "first_name"?, "last_name"?, "email"?, "avatar_url"? }
+PATCH  /me/preferences            { "locale"?, "theme"?, … }
+POST   /me/password               { "current_password", "new_password" }   → 204
+```
+
+> ### ⚠️⚠️ `POST /me/password` EST NOUVEAU, ET IL COMBLE UN TROU ORDINAIRE
+>
+> Cette route **n'existait pas** avant la v4.64.0. Les accès de cette plateforme
+> sont **ouverts par quelqu'un d'autre**, qui choisit le mot de passe et le
+> transmet de vive voix : Dira ouvre celui d'un partenaire, le propriétaire
+> ouvre celui de son gérant. Sans ce geste, **celui qui a créé le compte en
+> connaît le mot de passe pour toujours**, et la personne qui s'en sert n'a
+> aucun moyen de reprendre la main.
+>
+> **Mettez-le sur le chemin, pas au fond des réglages.** C'est le premier geste
+> à faire après une première connexion.
+
+| Refus | Code | Ce que l'écran en fait |
+|---|---|---|
+| Mauvais mot de passe actuel | `current_password_wrong` | souligner **ce champ-là** ; la phrase dit déjà d'aller demander à qui a ouvert l'accès |
+| Le même qu'avant | `password_unchanged` | souligner le nouveau |
+| Moins de 8 / plus de 120 | `password_too_short` · `password_too_long` | **la phrase porte le nombre** : affichez-la, n'écrivez pas « trop court » |
+| Compte sans mot de passe | `account_has_no_password` | ne peut pas arriver ici — un partenaire entre par mot de passe |
+
+⚠️ **L'ANCIEN MOT DE PASSE EST EXIGÉ, et c'est ce qui sépare « changer son mot
+de passe » de « prendre un compte ».** Un téléphone laissé déverrouillé
+suffirait sinon à verrouiller quelqu'un **hors** de son propre compte, en y
+gardant l'accès.
+
+⚠️ **LE TÉLÉPHONE NE SE CHANGE PAS ICI.** `PATCH /me` ne porte pas de champ
+`phone`, et le serveur ne l'accepterait pas : le numéro **identifie** le compte.
+Montrez-le en lecture, et dites où il se change (auprès de Dira).
+
+⚠️ **ET ON NE SUPPRIME PAS SON COMPTE DEPUIS CETTE APPLICATION.** Le socle sert
+bien `DELETE /me` (RGPD, en deux temps), mais ici ce serait un piège : l'accès
+d'un partenaire vient d'un **contrat**, pas d'une inscription. Un propriétaire
+qui effacerait son compte laisserait sa flotte **sans signataire** — ses
+voitures, ses conducteurs et ses papiers derrière une porte que plus personne
+n'ouvre. **Écrivez-le** plutôt que de vous taire : quelqu'un qui cherche ce
+bouton et ne le trouve pas écrit au support.
+
+### 📴 1 ter.6 HORS LIGNE — ce qu'on garde, ce qu'on ne garde jamais
+
+Il n'y a **aucune route de synchronisation** sur cette surface, et ce n'est pas
+un oubli : un propriétaire **consulte**, il ne produit pas d'opérations au bord
+de la route. Les gestes qu'il pose — une limite de dette, une reprise de
+voiture — **touchent quelqu'un d'autre** et ne doivent pas partir d'une file
+rejouée plus tard, alors que la situation a changé.
+
+| | |
+|---|---|
+| **À garder** pour l'affichage | le dernier `dashboard`, le dernier parc, la dernière liste de conducteurs, le dernier relevé |
+| **Jamais en file d'attente** | la limite de dette, la reprise d'une voiture, le rattachement, les termes de paie, les écritures du grand livre |
+
+⚠️ **UN CHIFFRE GARDÉ DOIT PORTER SON HEURE.** « 142 500 F » sans date se lit
+comme le total de maintenant. Affichez « il y a 3 h » à côté, et **grisez** ce
+qui n'a pas été rafraîchi.
+
+⚠️ **ET LA CARTE NE SE GARDE PAS.** Une position de voiture vieille de dix
+minutes est pire qu'une carte vide : on appelle un chauffeur en croyant savoir
+où il est. Hors réseau, la carte affiche **« positions indisponibles »**, pas
+les dernières connues.
+
+### ⏱️ 1 ter.7 Le battement de dix secondes s'arrête en arrière-plan
+
+`GET /vtc/partner/live` est appelé **toutes les dix secondes** tant que la carte
+est à l'écran — et **seulement** là.
+
+⚠️ **ARRÊTEZ-LE DÈS QUE L'APPLICATION PASSE EN ARRIÈRE-PLAN**, et dès que la
+carte n'est plus l'onglet actif. Six appels par minute laissés en fond, c'est la
+batterie d'un propriétaire qui descend pendant qu'il ne regarde rien — et il
+désinstalle sans jamais dire pourquoi.
+
+⚠️ **NE RATTRAPEZ PAS LES BATTEMENTS MANQUÉS** au retour au premier plan :
+faites **un** appel, et reprenez le rythme. Rejouer trente appels d'un coup ne
+rend pas une carte plus à jour, elle rend juste le serveur plus occupé.
 
 ---
 
@@ -1373,6 +1626,42 @@ réponse a l'air.
 ---
 
 ## 17. Journal
+
+### 4.64.0 — 11 octobre 2026
+
+📱 **CE CONTRAT SERT AUSSI UNE APPLICATION MOBILE** (§1 ter). Les routes, les
+refus et les règles de périmètre ne changent pas ; ce qui s'ajoute est **ce
+qu'un téléphone demande** et que la console web ignorait.
+
+🆕 **La connexion déclare son appareil** : `platform`, `device_id`,
+`device_name`. ⚠️ **Trois appareils au plus, le plus ancien est chassé en
+silence** — un `401` veut donc dire « ma session a été fermée ailleurs », pas
+« panne ».
+
+🆕 **`maps` et `app_lock` étaient DÉJÀ servis** à tous les comptes, partenaire
+compris : la console n'en faisait rien, une application, si. ⚠️ **Aucune clé de
+carte n'est servie, nulle part** — `basemap` dit seulement lequel des deux fonds
+ce pays a choisi.
+
+🆕 **`POST /me/password`** — changer son mot de passe. ⚠️ **Cette route
+n'existait pas**, et c'était un trou ordinaire : les accès sont ouverts par
+quelqu'un d'autre, qui en connaissait donc le mot de passe pour toujours.
+
+> ⚠️⚠️ **ET UN AVERTISSEMENT QUI VOUS ÉVITERA UNE JOURNÉE** : aujourd'hui,
+> **rien ne pousse de notification vers un propriétaire de flotte**. Vérifié
+> dans le code : `vehicle_assigned` et `vehicle_taken_back` partent vers **le
+> chauffeur**. La boîte d'un partenaire est vide, et ce n'est ni un bug, ni un
+> jeton, ni un filtre. **Ne cherchez pas** — et n'en faites pas un écran vide
+> qui a l'air cassé. Les alertes se lisent dans `GET /vtc/partner/dashboard`.
+
+⚠️ **La carte ne se garde pas hors ligne**, et son battement **s'arrête en
+arrière-plan** : une position vieille de dix minutes fait appeler un chauffeur
+en croyant savoir où il est, et six appels par minute en fond vident une
+batterie sans que personne ne regarde.
+
+⚠️ **On ne supprime pas son compte depuis cette application** — l'accès vient
+d'un contrat, et un propriétaire qui l'effacerait laisserait sa flotte sans
+signataire. La page doit le **dire**, pas se taire.
 
 ### 4.63.0 — 11 octobre 2026
 
