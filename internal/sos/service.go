@@ -110,8 +110,11 @@ type Service struct {
 	accounts Accounts
 	staff    StaffAlerts
 	policy   Policy
-	audit    Auditor
-	now      func() time.Time
+	// detections : la MESURE des fausses alertes. Facultative — sans elle, on
+	// ne mesure pas, et ce n'est pas une panne.
+	detections *DetectionRepository
+	audit      Auditor
+	now        func() time.Time
 }
 
 func NewService(repo *Repository) *Service {
@@ -122,6 +125,13 @@ func (s *Service) SetAccounts(a Accounts)       { s.accounts = a }
 func (s *Service) SetStaffAlerts(a StaffAlerts) { s.staff = a }
 func (s *Service) SetPolicy(p Policy)           { s.policy = p }
 func (s *Service) SetAuditor(a Auditor)         { s.audit = a }
+
+// SetDetections branche la MESURE des fausses alertes (câblage).
+//
+// ⚠️ FACULTATIVE, et la route répond `204` sans elle. Ne pas mesurer est une
+// perte de statistique ; faire échouer une application qui mesure serait une
+// perte d'attention sur une route que personne ne regarde.
+func (s *Service) SetDetections(r *DetectionRepository) { s.detections = r }
 
 var (
 	errNotFound = apperr.NotFound("sos_not_found", "this alert does not exist")

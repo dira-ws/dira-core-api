@@ -1,6 +1,7 @@
 package sos
 
 import (
+	"encoding/json"
 	"net/http"
 	"strconv"
 	"time"
@@ -32,6 +33,10 @@ func (h *Handler) Mount(r chi.Router, authMW func(http.Handler) http.Handler) {
 		g.Get("/sos/me", h.mine)
 		g.Post("/sos/{id}/position", h.position)
 		g.Post("/sos/{id}/cancel", h.cancel)
+		// ⚠️ LA MESURE DES FAUSSES ALERTES, et elle ne passe JAMAIS devant une
+		// alerte : son plafond rend `429` sans rien bloquer d'autre. Un compte
+		// bavard en comptes rendus doit rester capable d'appeler au secours.
+		g.Post("/sos/detections", h.detections)
 	})
 	r.Group(func(g chi.Router) {
 		// ⚠️ LA PORTÉE EST `core`, PAS `vtc` NI `food`. Une personne en danger
@@ -51,6 +56,9 @@ func (h *Handler) Mount(r chi.Router, authMW func(http.Handler) http.Handler) {
 		g.Post("/admin/sos/{id}/contacted", h.contacted)
 		g.Post("/admin/sos/{id}/emergency-called", h.emergencyCalled)
 		g.Post("/admin/sos/{id}/close", h.close)
+		// LA VUE QUI SERT À RÉGLER LES SEUILS : pays × application × source ×
+		// révision.
+		g.Get("/admin/sos/detections", h.detectionStats)
 	})
 }
 
@@ -252,4 +260,63 @@ func (h *Handler) close(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httpx.JSON(w, http.StatusOK, out)
+}
+
+// POST /sos/detections — les comptes rendus de proposition.
+//
+// ⚠️⚠️ `204`, ET PRESQUE JAMAIS AUTRE CHOSE. Cette route est appelée en
+// arrière-plan, sans insistance, par une application dont personne ne lit la
+// réponse : un corps illisible, une date folle, un `outcome` inventé ne
+// produisent rien d'autre qu'une mesure perdue. Les deux seuls refus sont un
+// lot trop grand (erreur de câblage) et le plafond du jour.
+func (h *Handler) detections(w http.ResponseWriter, r *http.Request) {
+	userID, _ := auth.UserFromContext(r.Context())
+	var batch DetectionBatch
+	// ⚠️⚠️ PAS `httpx.Decode` ICI, ET C'EST LA SEULE EXCEPTION DU DÉPÔT.
+	//
+	// `httpx.Decode` REFUSE une clé inconnue, et cette règle est bonne presque
+	// partout : une application qui envoie `first_name` à une route qui ne le
+	// lit pas croirait l'avoir enregistré.
+	//
+	// Ici elle se retourne contre nous. Ces comptes rendus sont envoyés en
+	// arrière-plan, SANS RÉESSAI, et personne ne lit la réponse. Le jour où une
+	// application ajoute un champ, tout serveur plus ancien jetterait LE LOT
+	// ENTIER — en répondant `204`, donc sans que rien ne le signale. On perdrait
+	// précisément la mesure qui dit qu'un seuil ne déclenche plus, c'est-à-dire
+	// la panne que cette route existe pour trouver.
+	//
+	// Le champ en trop est donc IGNORÉ, jamais stocké : `Detection` ne le porte
+	// pas, et c'est le type qui garantit qu'il n'entre pas en base.
+	//
+	// ⚠️ ET UN CORPS ILLISIBLE NE FAIT PAS ÉCHOUER L'ENVOI non plus : ce qui
+	// arrive cassé par une coupure réseau est perdu, pas transformé en erreur
+	// qu'une application devra gérer sur une route dont elle ignore la réponse.
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&batch); err != nil {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	if err := h.svc.RecordDetections(r.Context(), userID, batch); err != nil {
+		httpx.Error(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// GET /admin/sos/detections[?app=&source=&days=] — la vue qui règle les seuils.
+func (h *Handler) detectionStats(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	f := DetectionFilter{App: q.Get("app"), Source: q.Get("source")}
+	// ⚠️ TRENTE JOURS PAR DÉFAUT, et bornés à la conservation : une fenêtre
+	// plus large que ce qu'on garde donnerait l'illusion d'une série longue.
+	days := 30
+	if n, err := strconv.Atoi(q.Get("days")); err == nil && n > 0 && n <= 90 {
+		days = n
+	}
+	f.Since = time.Now().UTC().AddDate(0, 0, -days)
+	out, err := h.svc.DetectionStats(r.Context(), f)
+	if err != nil {
+		httpx.Error(w, r, err)
+		return
+	}
+	httpx.JSON(w, http.StatusOK, map[string]any{"items": out, "days": days})
 }

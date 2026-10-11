@@ -615,3 +615,14 @@ other = "La fenêtre du bruit ne peut pas être plus courte que la durée forte 
 
 [errors.sos_unknown_app]
 other = "Les seuils de détection se règlent par application : utilisez client, driver ou courier"
+
+# LA MESURE DES FAUSSES ALERTES — `POST /sos/detections`.
+#
+# ⚠️ CES DEUX REFUS NE BLOQUENT JAMAIS `POST /sos`. Les comptes rendus sont une
+# statistique : les perdre coûte une mesure. Les laisser épuiser quoi que ce
+# soit d'autre coûterait une alerte.
+[errors.detections_batch_too_large]
+other = "Envoyez au plus 50 comptes rendus de détection par appel"
+
+[errors.detections_quota_reached]
+other = "Assez de comptes rendus pour aujourd'hui : le reste est abandonné, et rien d'autre n'est affecté"

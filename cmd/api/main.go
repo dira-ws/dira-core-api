@@ -519,6 +519,15 @@ func run(logger *slog.Logger) error {
 	sosSvc.SetStaffAlerts(staffAlerts{staff: staffSvc, notify: notifySvc})
 	sosSvc.SetPolicy(sosPolicy{countries: countrySvc})
 	sosSvc.SetAuditor(auditRec)
+	// LA MESURE DES FAUSSES ALERTES — ce que le serveur ne voyait pas.
+	//
+	// ⚠️ UN INDEX QUI RATE N'ÉTEINT PAS LES ALERTES. Les comptes rendus sont
+	// une statistique ; le bouton d'alerte, non. On journalise et on continue.
+	sosDetections := sos.NewDetectionRepository(mongo)
+	if err := sosDetections.EnsureIndexes(ctx); err != nil {
+		logger.Error("sos: index des mesures non posé — la mesure est dégradée", "error", err)
+	}
+	sosSvc.SetDetections(sosDetections)
 
 	// LES OBJECTIFS À ATTEINDRE — voir `internal/challenge`.
 	//
