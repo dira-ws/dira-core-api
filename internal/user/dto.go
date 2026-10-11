@@ -225,6 +225,21 @@ type UserResponse struct {
 	// n'a pas à voir un onglet « livraison » qui lui répondra 403. Absent pour
 	// tout le monde d'autre.
 	Scopes []string `json:"scopes,omitempty"`
+	// AgentApp est L'APPLICATION D'AGENT à laquelle ce compte appartient —
+	// `driver` (les courses) ou `courier` (la livraison). Absent pour tous les
+	// autres rôles.
+	//
+	// ⚠️⚠️ SERVI PARCE QUE LE JETON NE LE PORTE PAS, et que le RÔLE ne suffit
+	// pas : `driver` et `courier` PARTAGENT le rôle `driver` au socle. Tout
+	// service qui doit distinguer les deux métiers — l'assistant du chauffeur
+	// et du livreur, les seuils de détection du bouton d'alerte — n'avait
+	// jusqu'ici aucun moyen EXACT de le faire, et devait supposer.
+	//
+	// ⚠️ ET C'EST UN FAIT, PAS UNE PRÉFÉRENCE : les verticales le réclament à
+	// chaque ouverture d'application (`ClaimAgentApp`). Absent sur un compte né
+	// avant cette règle et qui n'a pas encore rouvert son application — un
+	// appelant doit donc savoir se passer de lui, pas s'y fier aveuglément.
+	AgentApp string `json:"agent_app,omitempty"`
 	// Preferences accompagne le compte : l'application les lit à chaque
 	// démarrage, et un appel séparé pour quatre interrupteurs serait un
 	// aller-retour de plus sur un réseau mobile.
@@ -259,6 +274,11 @@ func newUserResponse(u *User) UserResponse {
 		Status:      u.Status,
 		Country:     u.Country,
 		CreatedAt:   u.CreatedAt,
+		// ⚠️ SERVI SUR `GET /me` PARCE QUE LE JETON NE LE PORTE PAS, et que le
+		// rôle ne distingue pas un chauffeur d'un livreur — ils partagent
+		// `driver`. Vide pour tous les autres rôles, par construction :
+		// `AgentApp` n'est posé que sur un compte d'agent.
+		AgentApp: u.AgentApp,
 		// `anonymised_at` ne demande aucun réglage : c'est une date écrite sur
 		// la ligne. `erase_at`, lui, est CALCULÉ depuis le délai de grâce du
 		// déploiement — voir `Service.userResponse`.

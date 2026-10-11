@@ -297,3 +297,25 @@ func (f *fakeUserRepo) byPhoneForTest(t *testing.T, phone string) *User {
 	require.NotNil(t, u, "compte %s introuvable", phone)
 	return u
 }
+
+// ⚠️⚠️ `agent_app` EST SERVI SUR `GET /me`, et ce test dit pourquoi.
+//
+// Le jeton ne porte pas `app` : `pkg/auth.Claims` a l'utilisateur, le rôle, les
+// portées et le pays, rien de plus. Et le RÔLE ne suffit pas — `driver` et
+// `courier` le partagent. Tout service qui doit distinguer les deux métiers
+// (l'assistant du chauffeur et du livreur, les seuils de détection du bouton
+// d'alerte) n'avait donc AUCUN moyen exact de le faire, et devait supposer.
+func TestMeCarriesTheAgentApp(t *testing.T) {
+	courier := &User{Role: auth.RoleDriver, AgentApp: AgentAppCourier}
+	assert.Equal(t, AgentAppCourier, newUserResponse(courier).AgentApp)
+
+	driver := &User{Role: auth.RoleDriver, AgentApp: AgentAppDriver}
+	assert.Equal(t, AgentAppDriver, newUserResponse(driver).AgentApp)
+
+	// ⚠️ VIDE SUR UN COMPTE NÉ AVANT CETTE RÈGLE, et un appelant doit savoir
+	// s'en passer plutôt que s'y fier aveuglément : l'appartenance s'inscrit à
+	// la première ouverture de l'application, pas avant.
+	assert.Empty(t, newUserResponse(&User{Role: auth.RoleDriver}).AgentApp)
+	// Et vide pour tous les autres rôles, par construction.
+	assert.Empty(t, newUserResponse(&User{Role: auth.RoleClient}).AgentApp)
+}
