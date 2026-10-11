@@ -1,6 +1,6 @@
 # Specs frontend — par rôle
 
-> **Version 4.65.0** · 11 octobre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics`
+> **Version 4.66.0** · 11 octobre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics`
 
 **Cinq** documents, un par application. Chacun est **autonome** : tout ce qu'un frontend doit savoir pour son rôle, sans avoir à ouvrir les vingt specs de modules.
 
@@ -355,6 +355,34 @@ Chaque document porte la même version en en-tête, et son propre journal des ch
 - [ ] ⚠️ **`TRACKING_JWT_SECRET` renseigné dans chaque environnement déployé.** Vide, l'authentification du service de suivi est **désactivée** : n'importe qui connaissant un `delivery_id` suit la course. Le secret doit valoir **exactement** le `JWT_SECRET` de `dira-food-api`.
 
 ## Journal
+
+### 4.66.0 — 11 octobre 2026
+
+🐞 **UNE COURSE QUI NE SE TERMINE JAMAIS, ET DONT LE COMPTEUR TOURNE.**
+Trouvée en exploitation : une course de 2 193 m à 1 050 F restée **à bord
+depuis seize jours** — téléphone du chauffeur éteint pour de bon, personne
+n'ayant jamais signalé la descente. Le passager voyait son compteur tourner.
+`VTC-CLIENT.md` §4, `VTC-DRIVER.md` §4 ter.
+
+⚠️ **LA TERMINER TELLE QUELLE AURAIT FACTURÉ L'OUBLI** : 23 289 minutes à
+20 F = **466 830 F** pour deux kilomètres, et 84 000 F de dette de commission
+pour le chauffeur (course en espèces). Une course à bord ne s'annule pas (par
+conception : « le passager est dans la voiture »), et **seul son chauffeur
+pouvait la terminer** — l'exploitation n'avait aucun geste.
+
+- 🆕 **`closed_by`** (`platform` | `operation`) et **`closed_reason`** sur la
+  course : elle dit QUI l'a refermée quand ni le chauffeur ni le passager ne
+  l'ont fait, et POURQUOI. `operation` porte le **texte** d'une personne —
+  affichez-le tel quel ; `platform` porte un **code**.
+- ⚠️ **ON FERME À LA FIN DU TEMPS QUE LE DEVIS TOLÉRAIT**, jamais à l'heure où
+  l'on s'en aperçoit : personne n'a vu descendre ce passager, on ne facture
+  donc pas une minute qu'on n'a pas vue. Le prix reste celui annoncé, des deux
+  côtés.
+- ⚠️ **CE N'EST JAMAIS UNE ANNULATION.** La course a eu lieu, elle est
+  `completed`, elle a son reçu. Dire « annulée » enverrait chercher un
+  remboursement qui n'existe pas.
+- Côté chauffeur, le **rattrapage hors ligne** reste meilleur : l'étape envoyée
+  avec son instant réel facture ce qui a eu lieu, pas le temps toléré.
 
 ### 4.65.0 — 11 octobre 2026
 

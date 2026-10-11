@@ -1,6 +1,6 @@
 # App CLIENT — COURSES (VTC) — contrat d'API
 
-> **Version 4.65.0** · 11 octobre 2026
+> **Version 4.66.0** · 11 octobre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Courses : `https://api-staging.dira.llc/api/v1/vtc` · Suivi : `wss://tracking-staging.dira.llc`
 
 ---
@@ -1328,6 +1328,31 @@ montrez le montant à `completed`.
 ⚠️ **`auto_closed: true`** : la plateforme a fermé le compteur elle-même,
 parce qu'il tournait depuis plus longtemps que la borne du pays. La course est
 **terminée et facturée**. Dites-le, sans accuser le chauffeur.
+
+#### ⚠️ UNE COURSE PEUT SE TERMINER SANS QUE PERSONNE N'APPUIE — `closed_by` (v4.66.0)
+
+**Sur n'importe quelle course**, pas seulement un compteur. Deux valeurs, et
+elles ne veulent pas dire la même chose :
+
+| `closed_by` | ce qui s'est passé | `closed_reason` |
+|---|---|---|
+| `platform` | la course est restée **à bord plus d'un jour** : le téléphone du chauffeur s'est éteint pour de bon et personne n'a jamais signalé la descente. Le serveur l'a refermée. | un **code** (`stranded_in_transit`) — traduisez-le |
+| `operation` | **quelqu'un chez Dira** l'a refermée, à une heure qu'il a choisie — souvent après vous avoir appelé | le **texte** de cette personne — affichez-le **tel quel** |
+
+⚠️ **LE PRIX NE S'ENVOLE PAS, ET C'EST LE POINT.** Une course refermée par la
+plateforme est facturée **au prix du devis** : le serveur ferme à la fin du
+temps que le devis tolérait, jamais à l'heure où il s'en aperçoit. Autrement
+dit, un oubli de seize jours sur une course de 2 km ne facture **pas** seize
+jours de compteur. Vous n'avez donc **rien à expliquer ni à contester** à
+l'écran — montrez le motif, et le reçu ordinaire.
+
+⚠️ **NE DITES JAMAIS « ANNULÉE ».** La course a eu lieu, elle est `completed`,
+et elle a son reçu. « Annulée » enverrait le passager chercher un
+remboursement qui n'existe pas.
+
+> 🧪 **Si vous voyez une course qui ne finit jamais** — compteur qui tourne
+> des heures à l'écran — ce n'est plus un état normal : signalez-la. Elle sera
+> refermée, et son prix restera celui annoncé.
 
 ---
 

@@ -1,6 +1,6 @@
 # App CHAUFFEUR — COURSES (VTC) — contrat d'API
 
-> **Version 4.65.0** · 11 octobre 2026
+> **Version 4.66.0** · 11 octobre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Courses : `https://api-staging.dira.llc/api/v1/vtc` · Suivi : `wss://tracking-staging.dira.llc` · SIG : `https://maps.dira.llc/api`
 
 ---
@@ -1734,6 +1734,35 @@ course est **terminée et facturée** — jamais annulée, elle a bien eu lieu �
 elle revient avec `auto_closed: true`. Dites-le clairement : « la plateforme a
 fermé ce compteur après 6 h ». Un compteur qui tourne la nuit facture la nuit,
 et c'est le passager du lendemain qui découvrirait le problème.
+
+#### ⚠️ ET TOUTE COURSE RESTÉE À BORD PLUS D'UN JOUR EST REFERMÉE — `closed_by` (v4.66.0)
+
+**Pas seulement un compteur : n'importe quelle course.** Si votre téléphone
+s'éteint pour de bon avec un passager à bord, la course restait `in_transit`
+**pour toujours** — vous restiez occupé, et le passager voyait un compteur
+tourner sur son écran. Le serveur la referme maintenant.
+
+| `closed_by` | qui | `closed_reason` |
+|---|---|---|
+| `platform` | le serveur, au-delà de 24 h à bord | un code (`stranded_in_transit`) |
+| `operation` | une personne chez Dira, **à une heure qu'elle a choisie** | son texte — affichez-le tel quel |
+
+⚠️ **CE N'EST PAS UNE SANCTION, ET LE PRIX NE VOUS PÉNALISE PAS.** La clôture
+facture **la fin du temps que le devis tolérait**, pas l'heure à laquelle on
+s'en aperçoit. Vous touchez donc votre part sur le prix annoncé, et **aucune
+dette de commission ne tombe** sur un supplément de durée fantôme. (Sans cette
+règle, une course de 2 km oubliée seize jours aurait facturé 466 830 F au
+passager et vous aurait mis 84 000 F de dette — c'est arrivé, et c'est ce que
+ce correctif empêche.)
+
+⚠️ **VOTRE ÉCRAN DOIT LE DIRE, PAS LE CACHER.** La course apparaît
+`completed` dans votre historique sans que vous ayez rien fait : affichez le
+motif, sinon vous croirez à une erreur de paie.
+
+⚠️ **ET LE VRAI REMÈDE EST ENTRE VOS MAINS : le rattrapage hors ligne** (§4
+quater). Si vous avez déposé le passager hors réseau, envoyez l'étape avec son
+**instant réel** — le serveur facture alors ce qui a eu lieu, et non le temps
+toléré. C'est toujours mieux pour vous qu'une clôture d'office.
 
 ---
 
