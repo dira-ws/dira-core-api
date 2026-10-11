@@ -92,3 +92,22 @@ other = "Cette pièce est celle d'un véhicule : dites lequel"
 
 [errors.document_refuses_vehicle]
 other = "Cette pièce est celle de la personne, pas d'un véhicule : retirez le véhicule"
+
+# LA MODÉRATION DU CHAT — paquet PARTAGÉ (`pkg/chat`), donc phrases de BASE :
+# les deux verticales servent ce refus, et une phrase écrite dans les locales
+# du socle n'aurait jamais atteint la livraison ni les courses.
+#
+# ⚠️⚠️ LA PHRASE DIT QUE C'EST UN REFUS, et elle ne nomme PAS le mot. Un
+# message bloqué en silence fait croire à une panne du réseau : on le renvoie
+# trois fois, puis on appelle le support. Et nommer le mot interdit
+# n'apprendrait qu'une chose — à l'écrire autrement.
+[errors.message_blocked]
+other = "Ce message n'a pas été envoyé : il contient une menace ou une insulte que nous ne relayons pas"
+
+# ⚠️ ON NE SIGNALE QUE CE QU'ON A REÇU : se signaler soi-même remplirait la
+# file de bruit, ou servirait à faire croire qu'on a été agressé.
+[errors.cannot_report_own_message]
+other = "Vous ne pouvez signaler qu'un message que vous avez reçu"
+
+[errors.message_not_found]
+other = "Ce message n'existe pas"

@@ -566,3 +566,4 @@ other = "Send at most 50 detection reports per call"
 
 [errors.detections_quota_reached]
 other = "Enough detection reports for today: the rest is dropped, and nothing else is affected"
+

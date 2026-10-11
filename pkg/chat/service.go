@@ -3,6 +3,7 @@ package chat
 import (
 	"context"
 	"log/slog"
+	"net/http"
 	"strings"
 	"time"
 
@@ -23,6 +24,16 @@ var (
 	errNoDriver = apperr.Conflict("no_driver_yet", "nobody has taken this yet")
 	errClosed   = apperr.Conflict("conversation_closed", "this conversation is closed")
 	errEmpty    = apperr.Validation("message body is required")
+	// ⚠️⚠️ UN REFUS QUI DIT CE QUI S'EST PASSÉ, et un code à lui.
+	//
+	// Un message bloqué en silence, ou refusé par un `validation_failed`
+	// traduit en « Requête invalide », fait croire à une panne du réseau : on
+	// le renvoie trois fois, puis on appelle le support. La phrase doit dire
+	// que c'est un REFUS et pourquoi — sans nommer le mot, ce qui apprendrait
+	// seulement à l'écrire autrement.
+	errBlockedByModeration = apperr.New("message_blocked",
+		"this message was not sent: it contains a threat or an insult that we do not relay",
+		http.StatusUnprocessableEntity)
 )
 
 // Conversation is who may speak on an order, and until when.
@@ -72,6 +83,13 @@ type Service struct {
 	refKind  string
 	notifier Notifier
 	pusher   Pusher
+	// lexicon est la liste surveillée. Vide = la modération automatique est
+	// ÉTEINTE, et le chat se comporte comme avant.
+	//
+	// ⚠️ ÉTEINTE PAR DÉFAUT DANS LE TYPE, ALLUMÉE AU CÂBLAGE : un service
+	// construit dans un test ne doit pas se mettre à refuser des messages
+	// parce qu'un lexique s'est invité tout seul.
+	lexicon Lexicon
 }
 
 // NewService builds the conversation service of ONE vertical.
@@ -86,6 +104,13 @@ func (s *Service) SetNotifier(n Notifier) { s.notifier = n }
 
 // SetPusher branche les notifications poussées (câblage).
 func (s *Service) SetPusher(p Pusher) { s.pusher = p }
+
+// SetLexicon allume la modération automatique (câblage).
+//
+// ⚠️ LA MODÉRATION SE COUPE EN VIDANT LA LISTE, pas en changeant le code : un
+// pays dont le lexique se révèle mauvais doit pouvoir l'éteindre en une
+// minute, sans déploiement.
+func (s *Service) SetLexicon(l Lexicon) { s.lexicon = l }
 
 // roleOf tells which side of the conversation a caller is on, or "" when they
 // are on neither.
@@ -163,6 +188,18 @@ func (s *Service) Send(ctx context.Context, userID, role, refID, body string) (*
 	if err != nil {
 		return nil, apperr.Validation("invalid user id").WithCause(err)
 	}
+	// LA MODÉRATION AUTOMATIQUE — voir `moderation.go`.
+	//
+	// ⚠️⚠️ ELLE S'EXÉCUTE AVANT L'ÉCRITURE POUR LES MENACES, ET APRÈS POUR LE
+	// RESTE. Une menace ne doit pas exister dans la conversation ; une insulte
+	// doit y être, avec sa marque — parce que la retirer empêcherait le
+	// modérateur de voir ce qui s'est réellement dit, et le destinataire l'a de
+	// toute façon déjà lue s'il était devant son écran.
+	verdict := Check(body, s.lexicon)
+	if verdict.Blocked() {
+		return nil, errBlockedByModeration
+	}
+
 	m := &Message{
 		RefID:      oid,
 		RefKind:    s.refKind,
@@ -170,6 +207,11 @@ func (s *Service) Send(ctx context.Context, userID, role, refID, body string) (*
 		SenderRole: party,
 		Body:       body,
 		CreatedAt:  time.Now().UTC(),
+	}
+	if verdict.Flagged() {
+		m.Flagged = true
+		m.FlagTerms = verdict.Terms
+		m.FlagSeverity = string(verdict.Severity)
 	}
 	if err := s.repo.Insert(ctx, m); err != nil {
 		return nil, err
@@ -279,4 +321,146 @@ func writable(c *Conversation) error {
 // trace à lui, et il peut en avoir besoin. Voir `Repository.PurgeOf`.
 func (s *Service) PurgeOf(ctx context.Context, userID primitive.ObjectID) (int64, error) {
 	return s.repo.PurgeOf(ctx, userID)
+}
+
+// --- LA MODÉRATION ---------------------------------------------------------
+
+var (
+	errMessageNotFound = apperr.NotFound("message_not_found", "this message does not exist")
+	// ⚠️ ON NE SIGNALE QUE CE QU'ON A REÇU. Se signaler soi-même remplirait la
+	// file de bruit — ou servirait à faire croire qu'on a été agressé.
+	errReportOwnMessage = apperr.New("cannot_report_own_message",
+		"you can only report a message you received", http.StatusUnprocessableEntity)
+)
+
+// Report : la personne qui a REÇU ce message le signale.
+//
+// ⚠️⚠️ C'EST LE GESTE LE PLUS IMPORTANT DE TOUTE CETTE MODÉRATION. Ce qu'un
+// automate rate — l'ironie, la menace polie, le sous-entendu, la langue qu'on
+// n'a pas mise au lexique — c'est exactement ce qu'un humain reconnaît. Sans
+// ce bouton, la file ne contient que ce que la machine a su voir, c'est-à-dire
+// le plus grossier.
+func (s *Service) Report(ctx context.Context, userID, role, refID, messageID string) (*MessageResponse, error) {
+	_, _, party, err := s.access(ctx, userID, role, refID)
+	if err != nil {
+		return nil, err
+	}
+	if party == "" {
+		return nil, errNotParty
+	}
+	mid, err := primitive.ObjectIDFromHex(messageID)
+	if err != nil {
+		return nil, errMessageNotFound
+	}
+	m, err := s.repo.One(ctx, mid)
+	if err != nil {
+		return nil, apperr.Internal(err)
+	}
+	if m == nil || m.RefID.Hex() != refIDOf(refID) {
+		return nil, errMessageNotFound
+	}
+	if m.SenderRole == party {
+		return nil, errReportOwnMessage
+	}
+	now := time.Now().UTC()
+	if err := s.repo.SetReported(ctx, mid, now); err != nil {
+		return nil, apperr.Internal(err)
+	}
+	m.Reported, m.ReportedAt = true, &now
+	out := toResponse(*m)
+	return &out, nil
+}
+
+// FlaggedResponse est la file de modération.
+type FlaggedResponse struct {
+	Items      []FlaggedMessage `json:"items"`
+	NextCursor string           `json:"next_cursor,omitempty"`
+}
+
+// FlaggedMessage est une ligne de la file.
+//
+// ⚠️ ELLE PORTE LE CORPS, contrairement à ce que la conversation rend d'un
+// message retiré : c'est précisément ce qu'un modérateur doit lire pour
+// décider. Ce qu'on cache à l'autre partie, on ne le cache pas à celui qui
+// juge.
+type FlaggedMessage struct {
+	ID      string `json:"id"`
+	RefID   string `json:"ref_id"`
+	RefKind string `json:"ref_kind"`
+	From    string `json:"from"`
+	Body    string `json:"body"`
+	// Reported : signalé par un HUMAIN. Ces lignes viennent en tête.
+	Reported bool `json:"reported,omitempty"`
+	// FlagTerms : les RÈGLES qui ont parlé, sous leur forme normalisée — pas
+	// le texte écrit. Voir `Verdict.Terms`.
+	FlagTerms    []string  `json:"flag_terms,omitempty"`
+	FlagSeverity string    `json:"flag_severity,omitempty"`
+	CreatedAt    time.Time `json:"created_at"`
+}
+
+// Flagged rend la file de modération.
+func (s *Service) Flagged(ctx context.Context, limit int, cursor string) (*FlaggedResponse, error) {
+	if limit <= 0 || limit > 100 {
+		limit = 30
+	}
+	var after *primitive.ObjectID
+	if cursor != "" {
+		id, err := primitive.ObjectIDFromHex(cursor)
+		if err != nil {
+			return nil, apperr.Validation("invalid cursor")
+		}
+		after = &id
+	}
+	rows, err := s.repo.ListFlagged(ctx, limit, after)
+	if err != nil {
+		return nil, apperr.Internal(err)
+	}
+	out := &FlaggedResponse{Items: make([]FlaggedMessage, 0, len(rows))}
+	for _, m := range rows {
+		out.Items = append(out.Items, FlaggedMessage{
+			ID: m.ID.Hex(), RefID: m.RefID.Hex(), RefKind: m.RefKind,
+			From: m.SenderRole, Body: m.Body,
+			Reported: m.Reported, FlagTerms: m.FlagTerms,
+			FlagSeverity: m.FlagSeverity, CreatedAt: m.CreatedAt,
+		})
+	}
+	if len(rows) == limit {
+		out.NextCursor = rows[len(rows)-1].ID.Hex()
+	}
+	return out, nil
+}
+
+// Hide retire un message de la conversation.
+func (s *Service) Hide(ctx context.Context, messageID, reason string) error {
+	mid, err := primitive.ObjectIDFromHex(messageID)
+	if err != nil {
+		return errMessageNotFound
+	}
+	actor, _ := auth.UserFromContext(ctx)
+	by, _ := primitive.ObjectIDFromHex(actor)
+	if err := s.repo.SetHidden(ctx, mid, by, strings.TrimSpace(reason), time.Now().UTC()); err != nil {
+		return apperr.Internal(err)
+	}
+	return nil
+}
+
+// Keep sort un message de la file sans le retirer.
+func (s *Service) Keep(ctx context.Context, messageID string) error {
+	mid, err := primitive.ObjectIDFromHex(messageID)
+	if err != nil {
+		return errMessageNotFound
+	}
+	if err := s.repo.SetKept(ctx, mid, time.Now().UTC()); err != nil {
+		return apperr.Internal(err)
+	}
+	return nil
+}
+
+// refIDOf rend l'identifiant tel qu'il est stocké — le message porte un
+// ObjectID, l'URL porte sa forme hexadécimale.
+func refIDOf(refID string) string {
+	if id, err := primitive.ObjectIDFromHex(strings.TrimSpace(refID)); err == nil {
+		return id.Hex()
+	}
+	return refID
 }

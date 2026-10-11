@@ -26,6 +26,12 @@ type MessageResponse struct {
 	// ReadAt dit que l'AUTRE l'a lu. Absent = pas encore.
 	ReadAt    *time.Time `json:"read_at,omitempty"`
 	CreatedAt time.Time  `json:"created_at"`
+	// Hidden : un modérateur a retiré ce message. `body` est alors VIDE.
+	//
+	// ⚠️ L'APPLICATION AFFICHE « message retiré », pas un blanc : la ligne
+	// garde sa place et son heure, parce que l'autre partie a vu qu'il y avait
+	// quelque chose là.
+	Hidden bool `json:"hidden,omitempty"`
 }
 
 // ConversationResponse is a page of the conversation.
@@ -40,13 +46,26 @@ type ConversationResponse struct {
 }
 
 func toResponse(m Message) MessageResponse {
-	return MessageResponse{
+	out := MessageResponse{
 		ID:        m.ID.Hex(),
 		From:      m.SenderRole,
 		Body:      m.Body,
 		ReadAt:    m.ReadAt,
 		CreatedAt: m.CreatedAt,
 	}
+	// ⚠️⚠️ UN MESSAGE RETIRÉ NE REND PAS SON CORPS, et c'est le seul endroit
+	// où cette règle peut tenir : toutes les lectures passent par ici.
+	//
+	// ⚠️ MAIS LA LIGNE RESTE, avec son heure et son auteur. L'effacer de la
+	// conversation ferait disparaître un trou que l'autre partie a vu se
+	// créer — « il m'a écrit quelque chose et ça a disparu » est pire que
+	// « message retiré par la modération ». L'application affiche la mention,
+	// elle n'invente pas un silence.
+	if m.Hidden {
+		out.Body = ""
+		out.Hidden = true
+	}
+	return out
 }
 
 func toResponses(items []Message) []MessageResponse {
