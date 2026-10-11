@@ -1,6 +1,6 @@
 # App CLIENT — COURSES (VTC) — contrat d'API
 
-> **Version 4.67.0** · 11 octobre 2026
+> **Version 4.68.0** · 12 octobre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Courses : `https://api-staging.dira.llc/api/v1/vtc` · Suivi : `wss://tracking-staging.dira.llc`
 
 ---
@@ -2766,6 +2766,224 @@ de vérité verrait, un jour, une course « en route » qu'un `GET` dit terminé
 
 ---
 
+## 6 bis. 🔗 PARTAGER SON TRAJET — « suis-moi jusqu'à ce que j'arrive » (v4.66.0)
+
+Un passager monte dans une voiture et envoie un lien à quelqu'un : sa mère, un
+collègue, un conjoint. Ce quelqu'un ouvre une page **sans compte Dira** et voit
+où la voiture est, qui conduit, et où elle va.
+
+C'est une fonction de **sécurité**, et elle ne sert qu'à une chose : qu'une
+personne de confiance puisse dire « la voiture ne va pas dans la bonne
+direction » **pendant** le trajet, pas après.
+
+```
+GET  /settings/share[?near=lng,lat]
+POST /rides/{id}/share                  { "minutes": 0, "label": "Maman" }
+POST /scheduled-rides/{id}/share        { "minutes": 0, "label": "Maman" }
+GET  /rides/{id}/shares
+GET  /scheduled-rides/{id}/shares
+POST /trip-shares/{id}/revoke
+```
+
+### CE QUE LE PAYS PERMET — relisez-le avant de dessiner le bouton
+
+```json
+{ "enabled": true, "choices_min": [60, 240, 720], "max_minutes": 1440,
+  "grace_minutes": 15, "stale_seconds": 120, "max_per_trip": 5 }
+```
+
+⚠️ **`enabled: false` → LE BOUTON N'EXISTE PAS.** Pas grisé, pas présent. Un
+pays peut fermer le partage, et un bouton qui échoue fait appeler le support.
+
+⚠️ **`choices_min` SONT LES BOUTONS À DESSINER, dans cet ordre.** N'écrivez
+aucune durée en dur : la liste change par décision d'exploitation, et elle est
+déjà rangée, dédoublonnée et bornée au plafond côté serveur.
+
+⚠️ **`?near=` ICI AUSSI.** La politique qui s'applique est celle du pays où
+l'on **roule**, pas celle du pays du compte. Sans ce paramètre, un passager
+togolais à Dakar lit les règles du Togo.
+
+### CRÉER UN LIEN — et le jeton qu'on ne reverra jamais
+
+```json
+{ "id": "…", "kind": "ride", "label": "Maman",
+  "token": "iO9Gq_p6hZ_4okL2Q-_XM94-IpriG0DHy4w1SC53JEE",
+  "url": "https://suivi.dira.llc/t/iO9Gq_p6hZ_4okL2Q-_XM94-IpriG0DHy4w1SC53JEE",
+  "expires_at": "2026-10-12T23:05:02Z", "live": true,
+  "created_at": "…", "views": 0 }
+```
+
+⚠️⚠️ **`token` N'APPARAÎT QUE DANS CETTE RÉPONSE, UNE SEULE FOIS.** Le serveur
+ne le garde que haché : il ne peut plus jamais le relire, pas même pour aider
+quelqu'un qui a perdu son lien. Cette impossibilité **est** la fonction — un
+jeton relisible, c'est la position en direct d'un passager à la portée de tout
+ce qui approche la base.
+
+**Ce que cela impose à l'application :**
+
+- **Partagez immédiatement** (feuille de partage du système, `navigator.share`,
+  intention Android). Ne stockez pas le jeton pour « plus tard ».
+- Si l'utilisateur ferme la feuille sans envoyer, **le lien existe mais il ne
+  l'a plus**. Proposez de le retirer et d'en créer un autre — c'est le geste
+  correct, et il est volontairement moins confortable que de relire.
+- `GET /rides/{id}/shares` **ne porte pas le jeton**. N'essayez pas de
+  reconstruire le lien à partir de l'identifiant : ce n'est pas le même objet.
+
+⚠️ **`url` EST COMPOSÉE PAR LE SERVEUR. NE LA FABRIQUEZ PAS.** Trois
+applications qui composeraient le lien chacune de leur côté sont trois endroits
+à corriger le jour où le domaine change, et deux seront oubliés. Quand `url`
+est absente (aucune adresse publique configurée), partagez le jeton brut et
+signalez-le — n'inventez pas un domaine.
+
+### LA DURÉE — `minutes`, et pourquoi `0` est le bon défaut
+
+⚠️⚠️ **`0` — OU LE CHAMP ABSENT — VEUT DIRE « JUSQU'À CE QUE J'ARRIVE », ET
+C'EST LE DÉFAUT À PROPOSER EN PREMIER.** La bonne réponse à « combien de
+temps ? » n'est presque jamais un nombre d'heures. Toute durée fixe est soit
+trop courte — le lien meurt alors que la voiture roule encore, exactement au
+moment où il servait — soit trop longue, et elle devient un traceur qui survit
+au trajet.
+
+⚠️ **`expires_at` EST TOUJOURS SERVI, même sur un lien « jusqu'à mon
+arrivée ».** C'est un **plafond**, pas une promesse : le lien meurt à la fin du
+trajet (plus `grace_minutes`) ou à cette date, **le premier des deux**.
+Affichez-le — « ce lien s'arrête à votre arrivée, et au plus tard demain à
+23 h 05 » — plutôt que de laisser croire à un lien éternel.
+
+⚠️ **UNE DURÉE AU-DELÀ DU PLAFOND EST BORNÉE, PAS REFUSÉE.** Le serveur répond
+`201` avec un `expires_at` plus proche que demandé. Lisez-le et affichez-le :
+c'est ainsi que l'écran apprend ce qui a été retenu. (Ce n'est pas une erreur
+du passager — c'est une application qui a proposé un bouton que le pays ne sert
+plus.)
+
+⚠️ **`label` EXISTE POUR RETIRER LE BON LIEN.** Cinq liens dans une liste ne se
+distinguent que par leur heure, et personne ne se souvient duquel il a envoyé à
+qui. Facultatif (40 caractères), mais proposez-le : « Maman », « Awa ».
+
+### PARTAGER UN TRAJET **PROGRAMMÉ** — le cas où ça sert le plus
+
+`POST /scheduled-rides/{id}/share` partage une course qui n'existe pas encore.
+On prévient quelqu'un **la veille au soir**, pas depuis la voiture.
+
+Le lien montre d'abord `status: "scheduled"` et `starts_at`, puis **devient
+vivant tout seul** quand la course naît : rien à renvoyer, rien à rafraîchir du
+côté du passager.
+
+⚠️ **LE PLAFOND COURT ALORS DEPUIS LE DÉPART PRÉVU**, pas depuis le partage —
+sinon un lien créé la veille serait mort avant que la voiture n'arrive.
+
+⚠️⚠️ **SUR UNE PROGRAMMATION RÉCURRENTE, LE LIEN SUIT LA PREMIÈRE COURSE ET
+MEURT AVEC ELLE.** Il ne suit pas le trajet de tous les matins. Dites-le au
+passager — « ce lien suit le trajet de demain » — parce que l'intuition est
+l'inverse, et que partager son trajet quotidien pour toujours serait partager
+son emploi du temps.
+
+### RETIRER UN LIEN
+
+`POST /trip-shares/{id}/revoke` l'éteint **immédiatement**. La réponse rend
+`live: false`.
+
+- **Mettez ce bouton sur l'écran de la course**, pas dans un réglage. On retire
+  un lien parce qu'on vient de changer d'avis.
+- Appuyer deux fois n'est pas une erreur : le serveur répond `200` et l'heure de
+  la première révocation ne bouge pas.
+- Retirer **libère une place** sur `max_per_trip`.
+
+### SAVOIR QU'ON A ÉTÉ LU — `views`, `last_view_at`
+
+`GET /rides/{id}/shares` rend, pour chaque lien, combien de fois il a été
+ouvert et quand.
+
+⚠️ **C'EST POUR LE PASSAGER, et c'est ce qui lui dit que son message est
+arrivé.** « Maman a ouvert votre lien » vaut mieux que de ne pas savoir s'il a
+prévenu quelqu'un ou parlé dans le vide. Affichez-le à côté du `label`.
+
+⚠️ **ON NE SAIT PAS QUI A OUVERT, NI D'OÙ.** Ce serait suivre celui qui
+regarde, et personne ne le lui a demandé. N'inventez pas « vu par Maman » — on
+sait seulement qu'un lien nommé « Maman » a été ouvert.
+
+### LES REFUS
+
+| `code` | HTTP | Ce que l'écran dit |
+|---|---|---|
+| `share_disabled` | 422 | le partage n'est pas ouvert dans ce pays — et le bouton n'aurait pas dû être là |
+| `share_not_yours` | 403 | ce n'est pas votre trajet |
+| `share_trip_over` | 422 | ce trajet est terminé, il n'y a plus rien à suivre |
+| `share_too_many` | 409 | déjà `max_per_trip` liens actifs — **`reason` porte le nombre** ; proposez d'en retirer un |
+
+---
+
+### 👁️ LA PAGE DU SUIVEUR — `GET /shared/{token}`
+
+**Aucune authentification.** Celui qui ouvre le lien n'a pas de compte Dira et
+n'en aura pas : lui en demander un viderait la fonction de son sens, parce que
+la personne qu'on veut prévenir est précisément celle qui n'a pas
+l'application.
+
+> **Cette section concerne la page web de suivi, pas l'application du
+> passager.** Elle est ici parce que c'est le même contrat, et qu'une
+> application qui propose un partage doit savoir ce que son destinataire verra.
+
+```json
+{ "kind": "ride", "status": "in_transit", "shared_by": "Nadège",
+  "driver": "Jean-Pierre", "vehicle": "Toyota Yaris", "plate": "GA-2451-A",
+  "stops": [ { "kind": "pickup", "label": "Hôtel du 2 Février", "geo": [1.22, 6.13] },
+             { "kind": "dest", "label": "Aéroport de Lomé", "geo": [1.25, 6.16] } ],
+  "stop_index": 1, "eta_stop_index": 1, "eta_at": "…",
+  "position": [1.235, 6.145], "position_at": "…", "position_silent": false,
+  "expires_at": "…", "over": false }
+```
+
+⚠️⚠️ **`position_silent: true` → NE DESSINEZ AUCUN POINT.** C'est la règle la
+plus importante de cette page.
+
+Un point qui n'a pas bougé depuis dix minutes ne dit pas « la voiture est
+arrêtée » : il dit **« nous ne savons pas où elle est »**. À l'écran les deux se
+ressemblent, et l'un rassure à tort. Écrivez « la voiture ne s'est pas signalée
+depuis quelques minutes » — surtout pas la dernière position connue.
+
+Le serveur retire la position au-delà de `stale_seconds` ; vous n'avez rien à
+calculer, mais vous devez **écrire la phrase**.
+
+⚠️ **ET « PAS ENCORE DE CHAUFFEUR » N'EST PAS « LE CHAUFFEUR SE TAIT ».**
+`status: "searching"` avec `driver` vide et `position_silent: false` veut dire
+qu'il n'y a pas encore de voiture. Les confondre inquiète dans un cas et
+rassure dans l'autre.
+
+⚠️ **`eta_at` EST UN INSTANT**, à décompter localement — jamais une durée à
+réinterroger. Absent = la plateforme ne sait pas : n'affichez **aucun** chiffre,
+surtout pas le dernier connu.
+
+⚠️ **`over: true` + la grâce** : le trajet est fini et le lien répond encore
+quelques minutes. C'est fait exprès — celui qui suivait veut lire « arrivé à
+destination », l'information qu'il attendait depuis le début. Il n'y a alors
+**plus de position**, et c'est voulu : la voiture continue de rouler avec son
+prochain passager.
+
+**Les trois refus, et ils ne se confondent pas :**
+
+| `code` | HTTP | Ce que la page dit |
+|---|---|---|
+| `share_unknown` | 404 | ce lien n'existe pas |
+| `share_expired` | 410 | ce lien a expiré, le trajet est terminé |
+| `share_revoked` | 410 | ce lien a été retiré par la personne qui l'a partagé |
+
+⚠️ **NE LES FONDEZ PAS EN « LIEN INVALIDE ».** « Expiré » dit au suiveur que le
+trajet s'est bien passé et qu'il n'a rien à faire ; « retiré » que la personne a
+repris la main. Un message générique lui ferait croire qu'il s'est trompé
+d'adresse — et il téléphonerait à celui qu'il voulait laisser tranquille.
+
+⚠️ **CE QUE LA PAGE NE SERT PAS, ET N'AURA JAMAIS :** le prix, l'identifiant du
+passager, un numéro de téléphone, le moyen de paiement, l'historique. Le prénom
+du chauffeur est servi, **pas son nom de famille** ; la plaque l'est **en
+entier**, parce que c'est elle qu'on donne à la police.
+
+⚠️ **LA RÉPONSE EST `no-store` ET `noindex`.** Ne la mettez pas en cache côté
+client, ne la préchargez pas : une page de suivi en cache montre une voiture là
+où elle n'est plus.
+
+---
+
 ## 🔒 CE QUE VOUS AVEZ LE DROIT D'AFFICHER DE L'AUTRE PARTIE (v4.49.0)
 
 **C'est l'exploitation qui décide, pays par pays et métier par métier** —
@@ -2877,6 +3095,53 @@ encore marqués lus. `body` : 1 à 1000 caractères.
 > `GET /rides/{id}/messages`. Sur l'écran de la course, sondez la
 > conversation toutes les 5 s tant qu'elle est ouverte ; une notification
 > reçue pendant ce temps ne s'affiche pas deux fois — c'est le même message.
+
+### 🛡️ LA MODÉRATION — l'automate d'abord, l'humain ensuite (v4.66.0)
+
+Chaque message passe par un filtre avant d'être relayé. Deux issues, et elles
+ne se ressemblent pas.
+
+| Gravité | Ce qui se passe | Ce que vous voyez |
+|---|---|---|
+| **insulte** | **le message part**, et il est signalé à l'exploitation | `201`, rien de particulier |
+| **menace** | **le message ne part pas** | `422 message_blocked` |
+
+⚠️⚠️ **UNE INSULTE PASSE, ET C'EST UNE DÉCISION, PAS UN TROU.** Deux personnes
+qui s'énervent sur un prix s'insultent ; les bloquer ne calme personne et fait
+croire à une panne de réseau — après quoi on réécrit la même chose autrement.
+Ce qui ne passe pas, c'est la **menace sur la personne** et l'**injure
+discriminatoire** : ce qui est en jeu n'est plus le confort de la conversation.
+
+⚠️ **N'ÉCRIVEZ AUCUNE LISTE DE MOTS DANS L'APPLICATION.** Les mots qui blessent
+changent d'un pays à l'autre et d'une année à l'autre ; l'exploitation ajoute et
+retire depuis la console, sans redéploiement. Une liste embarquée vieillirait
+dans votre binaire, et deux applications filtreraient différemment la même
+conversation.
+
+**Quand le message est refusé (`422`, `code: "message_blocked"`) :**
+
+⚠️⚠️ **GARDEZ LE TEXTE DANS LA ZONE DE SAISIE.** C'est le seul point de cette
+section qui change tout. Vider le champ sur un refus fait perdre ce qu'on
+venait d'écrire, et la personne recommence — en pire. Affichez la phrase du
+serveur **au-dessus** de sa saisie intacte, et laissez-la corriger.
+
+⚠️ **N'AFFICHEZ PAS LE MESSAGE DANS LE FIL.** Il n'a pas été envoyé : une bulle
+grise « non envoyé » laisse croire à un problème de réseau, et la personne
+retente dix fois. Le refus est définitif tant que le texte ne change pas.
+
+⚠️ **N'ESSAYEZ PAS DE DEVINER CE QUI A ÉTÉ REFUSÉ.** Le serveur ne dit pas quel
+mot a mordu, et c'est délibéré : le dire serait expliquer comment contourner le
+filtre.
+
+**`hidden: true` — un message retiré par un modérateur :**
+
+Le corps est **vide** et la ligne **reste** dans le fil, avec son heure et son
+auteur.
+
+⚠️ **AFFICHEZ « message retiré », PAS UN BLANC, ET NE SUPPRIMEZ PAS LA LIGNE.**
+L'autre partie a vu qu'il y avait quelque chose là ; faire disparaître le trou
+fabrique une conversation qui n'a jamais eu lieu, et c'est exactement ce qu'on
+ne veut pas dans un échange qui peut finir devant le support.
 
 ---
 
