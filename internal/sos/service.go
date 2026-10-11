@@ -10,7 +10,9 @@ import (
 	"go.mongodb.org/mongo-driver/bson/primitive"
 
 	"github.com/kgtech-org/dira-core-api/pkg/apperr"
+	"github.com/kgtech-org/dira-core-api/pkg/auth"
 	"github.com/kgtech-org/dira-core-api/pkg/country"
+	"github.com/kgtech-org/dira-core-api/pkg/sosdetect"
 )
 
 // Accounts résout un nom et un pays — juste de quoi écrire la ligne que
@@ -25,6 +27,14 @@ type Accounts interface {
 	// ajoute deux clics à un écran qui se compte en secondes — et c'est ce
 	// genre de détail qui décide si un protocole est suivi ou contourné.
 	Phones(ctx context.Context, ids []string) (map[string]string, error)
+	// AppOf nomme l'APPLICATION de ce compte — `client`, `driver`, `courier`.
+	//
+	// ⚠️ ELLE EXISTE PARCE QUE LE JETON NE PORTE PAS `app`. Le champ part à la
+	// connexion et décide qui entre, mais il n'est pas dans les claims. Et le
+	// RÔLE ne suffit pas : `driver` et `courier` le partagent, alors que ce
+	// sont précisément les deux applications dont les seuils diffèrent.
+	// Rend "" quand l'application ne se déduit pas.
+	AppOf(ctx context.Context, id string) string
 }
 
 // StaffAlerts prévient les membres du staff dont le périmètre couvre une
@@ -36,7 +46,12 @@ type StaffAlerts interface {
 // Policy rend la politique d'alerte d'un pays.
 type Policy interface {
 	// SOSSettings : ce que les APPLICATIONS reçoivent. ⚠️ Sans numéro.
-	SOSSettings(ctx context.Context, countryCode string) Settings
+	//
+	// `app` sert à résoudre les SEUILS : ils se règlent par pays ET par
+	// application, parce qu'une moto dans le vent et un passager à pied ne
+	// subissent ni les mêmes secousses ni le même bruit. Vide = les valeurs du
+	// pays, sans surcharge d'application.
+	SOSSettings(ctx context.Context, countryCode, app string) Settings
 	// EmergencyNumbers : ce que la CONSOLE compose, et si l'exploitation les a
 	// confirmés pour ce pays.
 	EmergencyNumbers(ctx context.Context, countryCode string) ([]Number, bool)
@@ -50,15 +65,31 @@ type Policy interface {
 // « au cas où » aurait fini par un bouton d'appel — un champ qui existe se
 // câble, quelle que soit la spec.
 type Settings struct {
-	Button           bool `json:"button"`
-	Shake            bool `json:"shake"`
-	Crash            bool `json:"crash"`
-	Voice            bool `json:"voice"`
+	Button bool `json:"button"`
+	Shake  bool `json:"shake"`
+	Crash  bool `json:"crash"`
+	Voice  bool `json:"voice"`
+	// Noise : le GRAND BRUIT — un niveau sonore, sans reconnaissance de mots.
+	//
+	// ⚠️ SA PRÉSENCE EST LE SIGNAL DE BASCULE POUR LES APPLICATIONS. Elles
+	// envoient `voice` pour le grand bruit depuis le 11 octobre 2026, faute
+	// d'un autre nom ; voir cette clé leur dit que ce serveur connaît `noise`
+	// et qu'elles peuvent l'envoyer. C'est pour ça qu'elle est servie même à
+	// `false`.
+	Noise            bool `json:"noise"`
 	CountdownSeconds int  `json:"countdown_seconds"`
 	// CallsBack : ce que l'application doit PROMETTRE — « le service client a
 	// été prévenu et va vous appeler ». C'est la seule chose que la personne
 	// cherche à savoir après avoir appuyé.
 	CallsBack bool `json:"calls_back"`
+	// Thresholds : À PARTIR DE QUAND chaque détection se déclenche.
+	//
+	// ⚠️⚠️ TOUJOURS COMPLET, bornes appliquées. L'application n'a pas à refaire
+	// la cascade, donc elle n'a aucune occasion de la refaire autrement que
+	// nous. ⚠️ Elle doit quand même raboter ce qu'elle reçoit et garder ses
+	// valeurs intégrées si le bloc manque : une détection ne se coupe JAMAIS
+	// parce qu'un seuil est illisible — seul son drapeau l'éteint.
+	Thresholds *sosdetect.Thresholds `json:"thresholds,omitempty"`
 }
 
 // Number est un numéro de secours à composer.
@@ -312,15 +343,52 @@ func (s *Service) Mine(ctx context.Context, userID string) (*Response, error) {
 	return &out, nil
 }
 
-// SettingsFor rend la politique du pays de la requête.
-func (s *Service) SettingsFor(ctx context.Context) Settings {
+// SettingsFor rend la politique du pays de la requête, pour UNE application.
+//
+// ⚠️ L'ORDRE DE RÉSOLUTION DE L'APPLICATION, et il est délibéré :
+//
+//  1. `?app=` s'il est donné. L'EXPLICITE GAGNE : c'est l'écran « tester la
+//     détection », et c'est aussi la seule façon pour une application d'être
+//     SÛRE de ce qu'elle reçoit.
+//  2. sinon, l'appartenance inscrite sur le COMPTE. Exacte pour un chauffeur
+//     comme pour un livreur — que le rôle, lui, ne distingue pas.
+//  3. sinon rien : les valeurs du pays, sans surcharge d'application.
+//
+// ⚠️ ET SURTOUT PAS « DEPUIS LE JETON » : il ne porte pas `app`.
+func (s *Service) SettingsFor(ctx context.Context, askedApp string) Settings {
+	app := sanitiseApp(askedApp)
+	if app == "" && s.accounts != nil {
+		if uid, ok := auth.UserFromContext(ctx); ok {
+			app = sanitiseApp(s.accounts.AppOf(ctx, uid))
+		}
+	}
 	if s.policy == nil {
 		// Sans politique branchée : le bouton existe, les détections aussi, et
 		// la promesse du rappel tient — c'est l'exploitation qui appelle, pas
-		// un réglage.
-		return Settings{Button: true, Shake: true, Crash: true, CountdownSeconds: 10, CallsBack: true}
+		// un réglage. ⚠️ Les seuils, eux, partent quand même : ce sont les
+		// valeurs que les applications appliquent déjà, et les taire les
+		// laisserait sans repli au premier démarrage d'un serveur nu.
+		t := sosdetect.Defaults(app)
+		return Settings{
+			Button: true, Shake: true, Crash: true,
+			CountdownSeconds: 10, CallsBack: true, Thresholds: &t,
+		}
 	}
-	return s.policy.SOSSettings(ctx, country.FromContext(ctx))
+	return s.policy.SOSSettings(ctx, country.FromContext(ctx), app)
+}
+
+// sanitiseApp ne garde qu'une application qui détecte.
+//
+// ⚠️ UN MOT INCONNU EST IGNORÉ, PAS REFUSÉ. `?app=drivers` au pluriel doit
+// rendre les valeurs du pays, pas un `422` : cette route est lue au démarrage
+// de chaque application, et la faire échouer sur une faute de frappe
+// couperait l'écran d'urgence entier pour un réglage.
+func sanitiseApp(a string) string {
+	a = strings.ToLower(strings.TrimSpace(a))
+	if !sosdetect.ValidApp(a) {
+		return ""
+	}
+	return a
 }
 
 // --- L'EXPLOITATION ------------------------------------------------------

@@ -27,7 +27,14 @@ func TestNothingAnAppCanSendThrowsTheAlarmAway(t *testing.T) {
 		"source en majuscules": {Source: "  CRASH  "},
 	} {
 		Normalise(a)
-		assert.True(t, ValidSource(a.Source), "%s : la source doit rester utilisable", name)
+		// ⚠️ « UTILISABLE » N'EST PLUS « CONNUE ». Une source inventée est
+		// gardée telle quelle — voir `SanitiseSource` : la remplacer par
+		// `button` mentait à l'opérateur et déclassait l'alerte. Ce qu'on
+		// exige, c'est qu'elle soit non vide et déjà mise en forme, donc sûre
+		// à écrire en base et à afficher.
+		assert.NotEmpty(t, a.Source, "%s : la source doit rester utilisable", name)
+		assert.Equal(t, a.Source, SanitiseSource(a.Source), "%s : mise en forme", name)
+		assert.NotEmpty(t, TriggerLabel(a.Source, a.Confirmed), "%s : lisible", name)
 		assert.LessOrEqual(t, len(a.Note), 1000, name)
 		assert.True(t, a.Battery >= 0 && a.Battery <= 100, name)
 		assert.Contains(t, []string{"", "vtc", "food"}, a.Vertical, name)
@@ -50,15 +57,66 @@ func TestAnUnfixedSensorLosesItsPositionAndKeepsTheAlarm(t *testing.T) {
 	assert.NotNil(t, ok.RaisedPos)
 }
 
-// ⚠️ UNE SOURCE INCONNUE DEVIENT `button`, et ne reste PAS telle quelle. Garder
-// le mot inconnu aurait fait passer l'alerte à travers tous les comptages par
-// source sans qu'on le voie : elle serait traitée, mais invisible dans « combien
-// de chocs détectés ce mois-ci ».
-func TestAnUnknownTriggerBecomesAPlainButtonPress(t *testing.T) {
-	a := &Alert{Source: "secoué_trois_fois"}
+// ⚠️⚠️ UNE SOURCE INCONNUE EST GARDÉE, ET TRAITÉE COMME UNE DÉTECTION.
+//
+// Elle devenait `button`, et c'était un défaut grave que ce test fige
+// désormais à l'envers. Le raisonnement d'alors se tenait — garder un mot
+// inconnu le rend invisible dans les comptages par source — mais il coûtait
+// deux choses bien pires :
+//
+//  1. ON MENTAIT À L'OPÉRATEUR : l'écran affichait « bouton pressé » alors que
+//     personne n'avait rien pressé, et il traitait comme un geste délibéré ce
+//     qui venait d'une mesure — donc, éventuellement, de quelqu'un
+//     d'inconscient.
+//  2. ON DÉCLASSAIT L'ALERTE : `button` n'étant pas une détection,
+//     `Normalise` forçait `confirmed = true`, et `Grave` ne la faisait plus
+//     passer devant. Une détection que PERSONNE N'AVAIT ANNULÉE se rangeait
+//     derrière les autres.
+//
+// Ce n'est pas une hypothèse : `noise` était un mot inconnu de ce serveur
+// hier, et les trois applications l'envoient depuis le 11 octobre.
+func TestAnUnknownTriggerIsKeptAndTreatedAsADetection(t *testing.T) {
+	a := &Alert{Source: "secoué_trois_fois", Confirmed: false}
 	Normalise(a)
-	assert.Equal(t, SourceButton, a.Source)
-	assert.True(t, a.Confirmed, "un bouton EST la confirmation")
+	// Gardée — seulement mise en forme : ce qui vient d'un réseau n'est jamais
+	// écrit tel quel.
+	assert.Equal(t, "secou_trois_fois", a.Source)
+	// ⚠️ LES DEUX LIGNES QUI COMPTENT.
+	assert.False(t, a.Confirmed, "personne n'a annulé, et ça doit se voir")
+	assert.True(t, Grave(a.Source, a.Confirmed),
+		"une détection non confirmée passe DEVANT, quelle que soit sa source")
+}
+
+// ⚠️ ET ELLE EST MISE EN FORME AVANT D'ÊTRE ÉCRITE. Une source sortie d'un
+// réseau ne va pas telle quelle dans une base ni sur un écran.
+func TestAnUnknownSourceIsSanitisedBeforeItIsStored(t *testing.T) {
+	assert.Equal(t, "cri", SanitiseSource("  CRI  "))
+	assert.Equal(t, "bruit-fort_2", SanitiseSource("Bruit-Fort_2"))
+	assert.Equal(t, "scriptalert1script", SanitiseSource("<script>alert(1)</script>"))
+	assert.Len(t, SanitiseSource(strings.Repeat("a", 200)), 24)
+	// Vide reste le seul remplacement, et il est sûr : une application qui
+	// n'envoie rien a presque toujours un bouton sous le doigt de quelqu'un.
+	assert.Equal(t, SourceButton, SanitiseSource("   "))
+	assert.Equal(t, SourceButton, SanitiseSource("!!!"))
+}
+
+// ⚠️ LE GRAND BRUIT N'EST PAS LE MOT-CLÉ, et les deux restent deux sources.
+// `voice` reconnaît des MOTS, `noise` mesure un NIVEAU : ce sont deux promesses
+// différentes faites à qui allume son micro, et un pays doit pouvoir dire oui
+// à l'une sans l'autre.
+func TestLoudNoiseIsItsOwnSource(t *testing.T) {
+	assert.True(t, ValidSource(SourceNoise))
+	assert.NotEqual(t, SourceVoice, SourceNoise)
+	assert.True(t, Detected(SourceNoise), "c'est une mesure, pas un geste")
+
+	a := &Alert{Source: SourceNoise, Confirmed: false}
+	Normalise(a)
+	assert.Equal(t, SourceNoise, a.Source)
+	assert.False(t, a.Confirmed)
+	// ⚠️ NON CONFIRMÉ EST PLUS GRAVE, pas moins : le compte à rebours s'est
+	// écoulé sans que personne n'annule.
+	assert.True(t, Grave(a.Source, a.Confirmed))
+	assert.Contains(t, TriggerLabel(SourceNoise, false), "PERSONNE N'A ANNULÉ")
 }
 
 // ⚠️ UN GESTE EST TOUJOURS CONFIRMÉ, quoi que dise l'application. Accepter

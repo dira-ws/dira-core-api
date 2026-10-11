@@ -4,6 +4,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kgtech-org/dira-core-api/pkg/apperr"
+	"github.com/kgtech-org/dira-core-api/pkg/sosdetect"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -238,3 +240,120 @@ func TestChangingANumberDropsTheConfirmation(t *testing.T) {
 		{Kind: EmergencyPolice, Label: "Police secours", Number: "17"},
 	}))
 }
+
+// --- LES SEUILS : À PARTIR DE QUAND UNE DÉTECTION SE DÉCLENCHE --------------
+
+// ⚠️ LE GRAND BRUIT EST ÉTEINT D'OFFICE, comme le mot-clé — et pour la même
+// raison : il écoute le micro, et on n'allume pas un micro à l'insu de
+// quelqu'un. Il reste SERVI à `false`, parce que sa présence est ce qui dit aux
+// applications que ce serveur connaît la source `noise`.
+func TestLoudNoiseIsOffByDefaultButAlwaysServed(t *testing.T) {
+	out := sosResponse(SOS{})
+	assert.False(t, out.Noise)
+	on := true
+	assert.True(t, sosResponse(SOS{Noise: &on}).Noise)
+	// ⚠️ ET IL NE SUIT PAS `voice`. Les confondre ferait allumer une
+	// transcription à qui ne voulait qu'un sonomètre.
+	assert.False(t, sosResponse(SOS{Voice: &on}).Noise)
+	assert.False(t, sosResponse(SOS{Noise: &on}).Voice)
+}
+
+// La cascade, sur le vrai objet stocké : défauts → pays → pays × application.
+func TestThresholdsCascadeFromCountryToApp(t *testing.T) {
+	three, nine := 3.4, 9.0
+	cur := SOS{
+		Thresholds: sosdetect.Patch{ShakeMinG: &three},
+		AppThresholds: map[string]sosdetect.Patch{
+			sosdetect.AppDriver: {CrashMinG: &nine},
+		},
+	}
+	// Le pays secoue plus fort pour tout le monde…
+	cli, _ := thresholdsOf(cur, sosdetect.AppClient)
+	assert.Equal(t, 3.4, cli.Shake.MinG)
+	assert.Nil(t, cli.Crash, "le passager n'a pas de choc")
+
+	// …et le chauffeur a SON choc.
+	drv, _ := thresholdsOf(cur, sosdetect.AppDriver)
+	assert.Equal(t, 3.4, drv.Shake.MinG)
+	require.NotNil(t, drv.Crash)
+	assert.Equal(t, 9.0, drv.Crash.MinG)
+
+	// Le livreur garde le sien, que personne n'a touché.
+	crr, _ := thresholdsOf(cur, sosdetect.AppCourier)
+	require.NotNil(t, crr.Crash)
+	assert.Equal(t, 6.0, crr.Crash.MinG)
+}
+
+// ⚠️⚠️ UNE VALEUR HORS BORNES EN BASE N'EST JAMAIS SERVIE — et le remplacement
+// est NOMMÉ. Un seuil silencieusement remplacé est ce qu'on cherche pendant
+// trois jours le soir où une alerte n'est pas partie.
+func TestAThresholdWrittenStraightIntoTheDatabaseIsNeverServed(t *testing.T) {
+	zero := 0.0
+	eff, fixed := thresholdsOf(SOS{Thresholds: sosdetect.Patch{NoiseLoud: &zero}}, sosdetect.AppClient)
+	assert.Equal(t, -12.0, eff.Noise.LoudDBFS, "le défaut remplace")
+	assert.Contains(t, fixed, sosdetect.KeyNoiseLoud)
+}
+
+// ⚠️ LA RÉVISION N'AUGMENTE QUE SI UNE VALEUR CHANGE. Réenregistrer deux fois
+// le même écran couperait sinon la série de mesures en deux, et on ne pourrait
+// plus comparer un taux d'annulation à celui d'avant le réglage.
+func TestTheRevisionOnlyMovesWhenAValueDoes(t *testing.T) {
+	a := SOS{Thresholds: sosdetect.Patch{ShakeMinG: ptr(3.0)}}
+	b := SOS{Thresholds: sosdetect.Patch{ShakeMinG: ptr(3.0)}}
+	assert.Equal(t, thresholdSnapshot(a), thresholdSnapshot(b), "le même réglage, deux fois")
+
+	c := SOS{Thresholds: sosdetect.Patch{ShakeMinG: ptr(3.1)}}
+	assert.NotEqual(t, thresholdSnapshot(a), thresholdSnapshot(c))
+
+	// ⚠️ L'ORDRE DES CLÉS D'UNE CARTE NE DOIT RIEN CHANGER : deux réglages
+	// identiques donnent la même empreinte, quel que soit l'ordre d'itération.
+	d := SOS{AppThresholds: map[string]sosdetect.Patch{
+		"driver": {CrashMinG: ptr(7)}, "courier": {CrashMinG: ptr(5)},
+	}}
+	e := SOS{AppThresholds: map[string]sosdetect.Patch{
+		"courier": {CrashMinG: ptr(5)}, "driver": {CrashMinG: ptr(7)},
+	}}
+	assert.Equal(t, thresholdSnapshot(d), thresholdSnapshot(e))
+}
+
+// ⚠️⚠️ LA CONSOLE VALIDE SUR LE RÉSULTAT, POUR CHAQUE APPLICATION. Une
+// surcharge de pays parfaitement valide peut rendre impossible la colonne d'une
+// application précise : c'est la COMBINAISON qui éteint une détection, jamais
+// un champ tout seul.
+func TestACountryWideValueCanBreakOneAppsColumn(t *testing.T) {
+	// Chaque champ est dans ses bornes, pris isolément.
+	country := sosdetect.Patch{NoiseMinLoud: ptrI(2500)}
+	_, ok := sosdetect.Check(country)
+	assert.True(t, ok)
+
+	// Mais la fenêtre, restée à son défaut de 1 500 ms, ne peut plus se
+	// remplir : la détection serait éteinte sans que rien ne le dise.
+	err := checkThresholds(sosdetect.AppClient, country, sosdetect.Patch{})
+	require.Error(t, err)
+	assert.Equal(t, "sos_noise_window_too_short", apperr.From(err).Code)
+}
+
+// La console voit les trois colonnes résolues, les surcharges telles quelles,
+// et les bornes — les trois questions de l'écran, en une réponse.
+func TestTheConsoleSeesEffectiveValuesOverridesAndBounds(t *testing.T) {
+	out := sosAdminResponse("TG", SOS{
+		AppThresholds: map[string]sosdetect.Patch{"driver": {CrashMinG: ptr(7)}},
+	})
+	assert.Len(t, out.Effective, 3, "trois colonnes, toujours")
+	require.NotNil(t, out.Effective["driver"].Crash)
+	assert.Equal(t, 7.0, out.Effective["driver"].Crash.MinG)
+	assert.Equal(t, 7.0, *out.AppThresholds["driver"].CrashMinG, "et on voit que c'est SURCHARGÉ")
+	// ⚠️ Ce qui n'est pas surchargé ne figure dans AUCUNE surcharge : c'est ce
+	// qui rend « revenir au défaut » possible, et « hérité » distinguable de
+	// « réglé à la même valeur ».
+	assert.True(t, out.AppThresholds["courier"].Empty())
+	assert.True(t, out.Thresholds.Empty())
+	assert.NotEmpty(t, out.Bounds, "les bornes sont SERVIES, pas recopiées dans la console")
+	// ⚠️ Des cartes vides, jamais `nil` : `app_thresholds: null` fait planter
+	// une console qui boucle dessus — le piège de `numbers: null`, déjà payé.
+	assert.NotNil(t, out.AppThresholds)
+	assert.NotNil(t, out.Effective)
+}
+
+func ptr(v float64) *float64 { return &v }
+func ptrI(v int) *int        { return &v }

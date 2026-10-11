@@ -74,8 +74,20 @@ func (h *Handler) raise(w http.ResponseWriter, r *http.Request) {
 }
 
 // GET /sos/settings — ce que ce pays décide des détections et des numéros.
+// GET /sos/settings[?app=client|driver|courier]
+//
+// ⚠️ `?app=` EST UNE PRÉCISION, PAS UNE OBLIGATION. Sans lui, l'application se
+// déduit du compte — exactement pour un chauffeur comme pour un livreur, que
+// le rôle ne distingue pas. Avec lui, elle est certaine : c'est ce que demande
+// l'écran « tester la détection », et c'est ce qu'une application prudente
+// envoie.
+//
+// ⚠️ ET LA ROUTE EXIGE UN JETON, aujourd'hui comme avant. C'était une question
+// ouverte côté applications : la réponse est oui, elle est montée dans le
+// groupe authentifié. Le pays vient donc du compte, et `?app=` ne sert qu'à
+// lever l'ambiguïté chauffeur/livreur.
 func (h *Handler) settings(w http.ResponseWriter, r *http.Request) {
-	httpx.JSON(w, http.StatusOK, h.svc.SettingsFor(r.Context()))
+	httpx.JSON(w, http.StatusOK, h.svc.SettingsFor(r.Context(), r.URL.Query().Get("app")))
 }
 
 // GET /sos/me — mon alerte vivante, pour retrouver l'écran.

@@ -63,7 +63,6 @@ other = "Ce compte se connecte avec un mot de passe."
 [errors.otp_delivery_failed]
 other = "Le code n'a pas pu être envoyé. Réessayez."
 
-
 # UN SEUL APPAREIL PAR CHAUFFEUR. ⚠️ La phrase ne nomme PAS l'appareil : le
 # libellé voyage dans `error.reason`, et un gabarit qui l'insérerait ici
 # afficherait « <no value> » les fois où l'application ne l'a pas envoyé.
@@ -599,3 +598,20 @@ other = "Un mot de passe fait au moins 8 caractères : choisissez-en un plus lon
 
 [errors.password_too_long]
 other = "Un mot de passe ne peut pas dépasser 120 caractères"
+# LES SEUILS DE DÉTECTION DU BOUTON D'ALERTE — à partir de QUAND ça déclenche.
+#
+# ⚠️ LA PHRASE PORTE LES BORNES (`reason`), parce qu'une borne qu'on ne dit pas
+# se devine au hasard — sur un réglage qui décide si une alerte part.
+[errors.sos_threshold_out_of_range]
+other = "Ce seuil de détection est hors des bornes admises"
+
+# ⚠️⚠️ LA RÈGLE QUI ÉTEINT UNE DÉTECTION SANS LE DIRE. Une fenêtre plus courte
+# que la durée forte qu'elle doit contenir ne peut JAMAIS se remplir : la
+# détection est éteinte, et rien ne le signale. Son refus est à part parce que
+# sa cause n'est pas dans le champ qu'on vient de taper — on règle la durée, et
+# c'est la FENÊTRE qui devient impossible.
+[errors.sos_noise_window_too_short]
+other = "La fenêtre du bruit ne peut pas être plus courte que la durée forte qu'elle doit contenir : élargissez la fenêtre, ou raccourcissez la durée"
+
+[errors.sos_unknown_app]
+other = "Les seuils de détection se règlent par application : utilisez client, driver ou courier"
