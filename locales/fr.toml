@@ -685,3 +685,20 @@ other = "Dites pourquoi vous refusez : l'agent lit cette phrase"
 # distingue l'agrégateur de n'importe qui.
 [errors.bad_signature]
 other = "Cette notification n'est pas signée par l'agrégateur"
+# LE LEXIQUE DE MODÉRATION — ce que l'exploitation règle depuis la console.
+#
+# ⚠️ CES PHRASES S'ADRESSENT À UN OPÉRATEUR, pas à un utilisateur : il peut
+# corriger ce qu'il vient de saisir, et la phrase lui dit quoi.
+[errors.lexicon_term_too_long]
+other = "Ce terme est trop long pour être un mot : la comparaison porte sur des mots entiers, pas sur des phrases"
+
+[errors.lexicon_bad_severity]
+other = "La gravité doit être « insulte » ou « menace » — ou vide, pour retirer le terme"
+
+[errors.lexicon_empty_term]
+other = "Ce terme ne contient aucune lettre une fois normalisé"
+
+# ⚠️ UN TERME EST UN MOT : la comparaison porte sur des mots ENTIERS, et un
+# terme avec une espace ne peut jamais correspondre à rien.
+[errors.lexicon_not_a_word]
+other = "Un terme du lexique doit être UN SEUL mot : la comparaison porte sur des mots entiers, jamais sur une phrase"

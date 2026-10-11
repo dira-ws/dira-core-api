@@ -74,6 +74,14 @@ var declaredSurface = []string{
 	// le chemin des cautions de matériel, et pour la même raison.
 	"/internal/challenges/owed",
 	"/internal/challenges/report",
+	// LE LEXIQUE DE MODÉRATION, effectif pour un pays — liste embarquée
+	// comprise, fond commun et termes du pays fusionnés. Une verticale n'a
+	// donc aucune fusion à refaire, et deux verticales ne peuvent pas la
+	// refaire différemment.
+	//
+	// ⚠️ INTERNE ET JAMAIS PUBLIQUE : la liste des mots surveillés dit
+	// comment contourner le filtre.
+	"/internal/chat/lexicon",
 	"/internal/countries",
 	// Le MATÉRIEL loué ou vendu aux agents : ce qu'un gain doit rendre au
 	// contrat, et si la personne est bloquée par un retard.

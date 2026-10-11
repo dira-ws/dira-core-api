@@ -613,3 +613,14 @@ other = "Say why you are refusing: the agent sees this phrase"
 
 [errors.bad_signature]
 other = "This notification is not signed by the aggregator"
+[errors.lexicon_term_too_long]
+other = "This term is too long to be a word: matching is on whole words, not sentences"
+
+[errors.lexicon_bad_severity]
+other = "Severity must be insult or threat — or empty, to remove the term"
+
+[errors.lexicon_empty_term]
+other = "This term holds no letters once normalised"
+
+[errors.lexicon_not_a_word]
+other = "A lexicon term must be ONE word: matching is on whole words, never on a sentence"

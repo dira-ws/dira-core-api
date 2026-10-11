@@ -31,6 +31,7 @@ import (
 	"github.com/kgtech-org/dira-core-api/internal/auditlog"
 	"github.com/kgtech-org/dira-core-api/internal/callback"
 	"github.com/kgtech-org/dira-core-api/internal/challenge"
+	"github.com/kgtech-org/dira-core-api/internal/chatlexicon"
 	"github.com/kgtech-org/dira-core-api/internal/config"
 	"github.com/kgtech-org/dira-core-api/internal/country"
 	"github.com/kgtech-org/dira-core-api/internal/equipment"
@@ -708,6 +709,19 @@ func run(logger *slog.Logger) error {
 		promoH := promocode.NewHandler(promoSvc)
 		promoH.Mount(r, authMW)
 		promoH.MountService(r, middleware.Service(cfg.ServiceToken))
+		// LE LEXIQUE DE MODÉRATION — les mots que la plateforme ne relaie pas.
+		//
+		// ⚠️ AU SOCLE, ET UN SEUL POUR TOUTE LA PLATEFORME : il n'y a aucune
+		// raison qu'un mot soit inacceptable dans une course et tolérable dans
+		// une livraison. Le ranger dans chaque verticale aurait obligé à le
+		// saisir deux fois — et une règle écrite deux fois est une règle
+		// perdue une fois. Les verticales viennent le lire par
+		// `/internal/chat/lexicon`.
+		lexiconSvc := chatlexicon.NewService(mongo)
+		lexiconSvc.SetAuditor(auditRec)
+		lexiconH := chatlexicon.NewHandler(lexiconSvc)
+		lexiconH.Mount(r, authMW)
+		lexiconH.MountService(r, middleware.Service(cfg.ServiceToken))
 		// L'ENVOI DE FICHIERS, pour tout rôle connecté : avatar, véhicule,
 		// document de conformité, et les objets des verticales (plat, point de
 		// vente, enseigne, vidéo de feed, bannière). Une porte, une règle.
