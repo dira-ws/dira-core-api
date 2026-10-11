@@ -1237,3 +1237,18 @@ func canonPhone(raw string) (string, error) {
 	}
 	return p, nil
 }
+
+// PhoneOf rend le numéro d'un compte, en E.164.
+//
+// ⚠️⚠️ IL SERT À ENVOYER DE L'ARGENT (voir `internal/payout`), et c'est pour ça
+// qu'il existe : le module de retrait ne doit PAS accepter un numéro de
+// l'appelant. Un champ libre serait la porte ouverte au détournement — quelqu'un
+// qui obtient une session n'aurait qu'à changer le numéro pour vider le compte.
+// En le lisant ici, le serveur reste seul à décider où l'argent va.
+func (s *Service) PhoneOf(ctx context.Context, userID string) (string, error) {
+	u, err := s.findUser(ctx, userID)
+	if err != nil {
+		return "", err
+	}
+	return u.Phone, nil
+}

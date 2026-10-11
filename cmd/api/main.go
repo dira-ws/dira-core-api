@@ -41,6 +41,7 @@ import (
 	"github.com/kgtech-org/dira-core-api/internal/marker"
 	"github.com/kgtech-org/dira-core-api/internal/notify"
 	"github.com/kgtech-org/dira-core-api/internal/payment"
+	"github.com/kgtech-org/dira-core-api/internal/payout"
 	"github.com/kgtech-org/dira-core-api/internal/promocode"
 	"github.com/kgtech-org/dira-core-api/internal/rating"
 	"github.com/kgtech-org/dira-core-api/internal/serviceapi"
@@ -564,6 +565,27 @@ func run(logger *slog.Logger) error {
 	}
 	sosSvc.SetDetections(sosDetections)
 
+	// LE RETRAIT MOBILE MONEY — voir `internal/payout`.
+	//
+	// ⚠️⚠️ ÉTEINT TANT QU'UN PAYS NE L'OUVRE PAS, et le défaut d'un pays est
+	// `off`. Verser demande un contrat d'agrégateur, un flottant
+	// approvisionné et quelqu'un pour le surveiller : un bouton « retirer »
+	// qui échoue fait appeler le support par tout le monde le même jour.
+	payoutRepo := payout.NewRepository(mongo)
+	if err := payoutRepo.EnsureIndexes(ctx); err != nil {
+		logger.Error("payout: index non posé — les écrans seront lents", "error", err)
+	}
+	payoutSvc := payout.NewService(payoutRepo,
+		payoutWallet{tokens: tokenSvc}, payoutAccounts{users: userSvc})
+	payoutSvc.SetPolicy(payoutPolicy{countries: countrySvc})
+	payoutSvc.SetAuditor(auditRec)
+	// ⚠️ UN SEUL AGRÉGATEUR, pas six opérateurs : il route lui-même d'après le
+	// préfixe du numéro et porte le flottant. Sans clé câblée, c'est le
+	// bouchon — qui échoue exprès sur certains numéros, pour que le chemin
+	// d'échec soit exécuté ailleurs qu'en production.
+	payoutSvc.SetProvider(payout.NewMockProvider(cfg.MockPayoutSecret))
+	payoutHandler := payout.NewHandler(payoutSvc)
+
 	// LES OBJECTIFS À ATTEINDRE — voir `internal/challenge`.
 	//
 	// ⚠️ AU SOCLE, parce que les trois publics y sont : un chauffeur
@@ -706,6 +728,10 @@ func run(logger *slog.Logger) error {
 		// LE JOURNAL D'AUDIT de toute la plateforme, lu ici et nulle part
 		// ailleurs : les verticales y écrivent par la surface de service.
 		auditlog.NewHandler(auditRec).Mount(r, authMW)
+		// ⚠️ LE RETRAIT MOBILE MONEY : routes d'agent (rôle `driver`), file de
+		// validation (portée `core`), et le rappel PUBLIC de l'agrégateur —
+		// authentifié par sa signature, pas par un jeton.
+		payoutHandler.Mount(r, authMW)
 		faults.NewHandler(faultRepo).Mount(r, authMW)
 		equipHandler := equipment.NewHandler(equipmentSvc)
 		equipHandler.Mount(r, authMW)
@@ -1238,5 +1264,47 @@ func otpSender(logger *slog.Logger, kind string) user.OTPSender {
 	default:
 		logger.Error("auth: OTP_SENDER non implémenté, la porte par code reste FERMÉE", "sender", kind)
 		return nil
+	}
+}
+
+// payoutWallet branche le portefeuille sur le module de retrait.
+//
+// ⚠️⚠️ TROIS MÉTHODES, PAS UN ACCÈS AU PORTEFEUILLE. Le module de retrait doit
+// pouvoir retenir, remettre et lire le retirable — rien d'autre. Lui passer le
+// service de jetons entier lui donnerait de quoi créditer, et un écran de
+// retrait qui peut créditer finit par servir à « corriger » un solde.
+type payoutWallet struct{ tokens *token.Service }
+
+func (w payoutWallet) HoldForWithdrawal(ctx context.Context, ownerID string, amount int) (bool, error) {
+	return w.tokens.HoldForWithdrawal(ctx, ownerID, amount)
+}
+
+func (w payoutWallet) ReleaseWithdrawal(ctx context.Context, ownerID string, amount int, reason, payoutID string) error {
+	return w.tokens.ReleaseWithdrawal(ctx, ownerID, amount, reason, payoutID)
+}
+
+func (w payoutWallet) Withdrawable(ctx context.Context, ownerID string) (int, error) {
+	return w.tokens.Withdrawable(ctx, ownerID)
+}
+
+// payoutAccounts donne le NUMÉRO DU COMPTE au module de retrait.
+//
+// ⚠️ C'EST LE SERVEUR QUI LE DONNE, jamais l'appelant : un numéro saisi
+// librement serait la porte ouverte au détournement.
+type payoutAccounts struct{ users *user.Service }
+
+func (a payoutAccounts) PhoneOf(ctx context.Context, userID string) (string, error) {
+	return a.users.PhoneOf(ctx, userID)
+}
+
+// payoutPolicy traduit les règles d'un pays pour le module de retrait.
+type payoutPolicy struct{ countries *country.Service }
+
+func (p payoutPolicy) PayoutRules(ctx context.Context, code string) payout.Rules {
+	r := p.countries.PayoutOf(ctx, code)
+	return payout.Rules{
+		Mode: r.Mode, MinXOF: r.MinXOF, MaxXOF: r.MaxXOF,
+		DailyCapXOF: r.DailyCapXOF, Currency: r.Currency,
+		PeriodicWeekday: r.PeriodicWeekday, PeriodicMinXOF: r.PeriodicMinXOF,
 	}
 }

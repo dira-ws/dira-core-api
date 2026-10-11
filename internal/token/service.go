@@ -35,6 +35,15 @@ type Repo interface {
 	Credit(ctx context.Context, walletID primitive.ObjectID, amount int) error
 	CreditField(ctx context.Context, walletID primitive.ObjectID, field string, amount int) error
 	InsertTransaction(ctx context.Context, t *Transaction) error
+	// LE SENS SORTANT — voir `withdraw.go`.
+	//
+	// ⚠️ TROIS MÉTHODES À PART DE `SpendMoney`, et ce n'est pas une
+	// duplication : `SpendMoney` prend le promotionnel EN PREMIER, ce qui est
+	// juste pour payer une course et faux pour retirer de l'argent. Un crédit
+	// offert ne se retire pas.
+	HoldForWithdrawal(ctx context.Context, walletID primitive.ObjectID, amount int) (bool, error)
+	ReleaseWithdrawal(ctx context.Context, walletID primitive.ObjectID, amount int) error
+	WithdrawableOf(ctx context.Context, walletID primitive.ObjectID) (int, error)
 	// SpendMoney débite l'argent d'un portefeuille, le promotionnel d'abord,
 	// en UNE opération atomique.
 	SpendMoney(ctx context.Context, walletID primitive.ObjectID, amount int) (fromPromo, fromCash int, err error)
