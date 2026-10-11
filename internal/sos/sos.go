@@ -58,12 +58,23 @@ const (
 	SourceShake = "shake"
 	// SourceCrash : l'appareil a mesuré un choc violent.
 	SourceCrash = "crash"
-	// SourceVoice : un mot-clé prononcé.
+	// SourceVoice : un mot-clé PRONONCÉ — une reconnaissance de mots.
 	SourceVoice = "voice"
+	// SourceNoise : un GRAND BRUIT. Un niveau sonore, et rien d'autre.
+	//
+	// ⚠️⚠️ CE N'EST PAS `voice`, ET LES CONFONDRE SERAIT UNE ERREUR DE
+	// CONSENTEMENT. `voice` reconnaît des mots ; `noise` ne mesure qu'un
+	// niveau — rien n'est reconnu, rien n'est transcrit, rien ne sort du
+	// téléphone. Ce sont deux promesses différentes faites à la personne qui
+	// allume le micro, et un pays doit pouvoir dire oui à l'une sans l'autre.
+	//
+	// Il existe aussi parce que crier ou frapper est parfois le seul geste
+	// possible à l'arrière d'une voiture.
+	SourceNoise = "noise"
 )
 
 // Sources est la liste admise, dans l'ordre où la console les montre.
-var Sources = []string{SourceButton, SourceShake, SourceCrash, SourceVoice}
+var Sources = []string{SourceButton, SourceShake, SourceCrash, SourceNoise, SourceVoice}
 
 // ValidSource dit si la source est connue. Vide = `button` (voir Normalise).
 func ValidSource(s string) bool {
@@ -75,11 +86,63 @@ func ValidSource(s string) bool {
 	return false
 }
 
+// SanitiseSource met une source en forme SANS LA REMPLACER.
+//
+// ⚠️⚠️ ELLE RENDAIT `button` POUR TOUT MOT INCONNU, ET C'ÉTAIT UN DÉFAUT GRAVE.
+// Le raisonnement d'alors se tenait — « garder le mot inconnu ferait passer
+// l'alerte à travers tous les comptages par source sans qu'on le voie » — mais
+// il coûtait deux choses bien pires :
+//
+//  1. ON MENTAIT À L'OPÉRATEUR. L'écran affichait « bouton pressé » alors que
+//     personne n'avait rien pressé. Il traitait comme un geste délibéré ce qui
+//     venait d'une mesure — donc, éventuellement, de quelqu'un d'inconscient.
+//  2. ON DÉCLASSAIT L'ALERTE. `button` n'est pas une détection, donc
+//     `Normalise` forçait `confirmed = true`, donc `Grave` ne la faisait plus
+//     passer devant. Une détection que PERSONNE N'AVAIT ANNULÉE se rangeait
+//     derrière les autres.
+//
+// Le mot inconnu est donc gardé, seulement MIS EN FORME : minuscules, sans
+// espaces, caractères prévisibles, longueur bornée. Ce qui vient d'un réseau
+// n'est jamais écrit tel quel dans une base ni rendu à un écran.
+//
+// ⚠️ ET LA PEUR D'ORIGINE SE RÈGLE AILLEURS, MIEUX : `Sources` reste la liste
+// des sources CONNUES, et un comptage qui itère dessus voit une source absente
+// — ce qui se répare en ajoutant une ligne, pas en falsifiant la donnée.
+func SanitiseSource(s string) string {
+	s = strings.ToLower(strings.TrimSpace(s))
+	var b strings.Builder
+	for _, r := range s {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '_' || r == '-' {
+			b.WriteRune(r)
+		}
+		if b.Len() >= 24 {
+			break
+		}
+	}
+	out := b.String()
+	if out == "" {
+		// Vide = le bouton. C'est le seul remplacement qui reste, et il est
+		// sûr : une application qui n'envoie rien a presque toujours un bouton
+		// sous le doigt de quelqu'un.
+		return SourceButton
+	}
+	return out
+}
+
 // Detected dit si la source est une MESURE et non un geste — ce qui décide
 // qu'une confirmation humaine était attendue.
-func Detected(s string) bool {
-	return s == SourceShake || s == SourceCrash || s == SourceVoice
-}
+//
+// ⚠️⚠️ « TOUT CE QUI N'EST PAS LE BOUTON », ET NON UNE LISTE. C'était une liste,
+// et c'était un défaut qui attendait : une source que ce serveur ne connaît pas
+// encore — `noise` l'était hier, et il y en aura d'autres — n'y figurait pas,
+// donc `Normalise` lui imposait `confirmed = true`, donc `Grave` la déclassait.
+// Autrement dit : une détection NON CONFIRMÉE arrivée d'une application plus
+// récente que le serveur se présentait à l'opérateur comme une alerte
+// ORDINAIRE, au moment précis où « personne n'a annulé » est le signal le plus
+// grave qu'on puisse recevoir.
+//
+// Le bouton est le seul geste, et il se reconnaît en un mot.
+func Detected(s string) bool { return s != SourceButton }
 
 // L'ÉTAT D'UNE ALERTE. Trois, pas plus : qui est seul, qui est pris, qui est
 // fini.
@@ -260,14 +323,7 @@ const RecentlyCancelledFor = 15 * time.Minute
 // impossibles, batterie à 300, note de dix mille signes — est corrigé ici, pas
 // rejeté. Un appel au secours mal formé reste un appel au secours.
 func Normalise(a *Alert) {
-	a.Source = strings.ToLower(strings.TrimSpace(a.Source))
-	if !ValidSource(a.Source) {
-		// Une source inconnue devient `button` : c'est le cas le moins
-		// interprétable, donc celui qui ne fait aucune promesse. L'inverse —
-		// garder le mot inconnu — aurait fait passer l'alerte à travers tous
-		// les comptages par source sans qu'on le voie.
-		a.Source = SourceButton
-	}
+	a.Source = SanitiseSource(a.Source)
 	// ⚠️ UN GESTE EST TOUJOURS CONFIRMÉ, quoi que dise l'application. Un bouton
 	// pressé EST la confirmation ; accepter `confirmed: false` dessus aurait
 	// laissé un client mal câblé faire passer de vraies alertes pour des

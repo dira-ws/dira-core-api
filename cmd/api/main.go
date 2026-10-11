@@ -519,6 +519,15 @@ func run(logger *slog.Logger) error {
 	sosSvc.SetStaffAlerts(staffAlerts{staff: staffSvc, notify: notifySvc})
 	sosSvc.SetPolicy(sosPolicy{countries: countrySvc})
 	sosSvc.SetAuditor(auditRec)
+	// LA MESURE DES FAUSSES ALERTES — ce que le serveur ne voyait pas.
+	//
+	// ⚠️ UN INDEX QUI RATE N'ÉTEINT PAS LES ALERTES. Les comptes rendus sont
+	// une statistique ; le bouton d'alerte, non. On journalise et on continue.
+	sosDetections := sos.NewDetectionRepository(mongo)
+	if err := sosDetections.EnsureIndexes(ctx); err != nil {
+		logger.Error("sos: index des mesures non posé — la mesure est dégradée", "error", err)
+	}
+	sosSvc.SetDetections(sosDetections)
 
 	// LES OBJECTIFS À ATTEINDRE — voir `internal/challenge`.
 	//
@@ -1118,16 +1127,30 @@ func onlyUnder(prefix string, mw func(http.Handler) http.Handler) func(http.Hand
 // recopie de six champs, qu'un test de forme garde honnête.
 type sosPolicy struct{ countries *country.Service }
 
-func (p sosPolicy) SOSSettings(ctx context.Context, code string) sos.Settings {
+func (p sosPolicy) SOSSettings(ctx context.Context, code, app string) sos.Settings {
 	s := p.countries.SOSOf(ctx, code)
 	// ⚠️ AUCUN NUMÉRO NE PASSE PAR ICI, et c'est le point. Ce que cette
 	// fonction sert part vers les APPLICATIONS : leur donner des numéros
 	// finirait par un bouton d'appel, alors que le protocole veut que ce soit
 	// le service client qui appelle. Les numéros vont à la console par
 	// `EmergencyNumbers`, un chemin séparé.
+	// LES SEUILS, résolus pour ce pays ET cette application.
+	//
+	// ⚠️ LES REMPLACEMENTS SONT JOURNALISÉS. Une valeur hors bornes écrite en
+	// base n'est jamais servie : le défaut prend sa place. Sans cette ligne, le
+	// remplacement serait parfaitement silencieux — et c'est précisément ce
+	// qu'on chercherait pendant trois jours le soir où une alerte n'est pas
+	// partie.
+	t, fixed := p.countries.ThresholdsOf(ctx, code, app)
+	if len(fixed) > 0 {
+		slog.WarnContext(ctx, "sos: seuils hors bornes remplacés par le défaut",
+			"country", code, "app", app, "fields", fixed)
+	}
 	return sos.Settings{
 		Button: s.Button, Shake: s.Shake, Crash: s.Crash, Voice: s.Voice,
+		Noise:            s.Noise,
 		CountdownSeconds: s.CountdownSeconds, CallsBack: s.CallsBack,
+		Thresholds: &t,
 	}
 }
 

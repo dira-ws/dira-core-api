@@ -43,6 +43,9 @@ package country
 
 import (
 	"context"
+	"encoding/json"
+	"net/http"
+	"sort"
 	"strings"
 	"time"
 
@@ -50,6 +53,7 @@ import (
 
 	"github.com/kgtech-org/dira-core-api/pkg/apperr"
 	"github.com/kgtech-org/dira-core-api/pkg/country"
+	"github.com/kgtech-org/dira-core-api/pkg/sosdetect"
 )
 
 // Défauts des détections, quand le pays n'a rien réglé.
@@ -73,6 +77,16 @@ const (
 	// quelqu'un. Un pays qui le veut l'allume — explicitement, et en l'ayant
 	// expliqué dans son application.
 	defaultSOSVoice = false
+	// defaultSOSNoise : le GRAND BRUIT est ÉTEINT d'office, comme le mot-clé.
+	//
+	// ⚠️ CE N'EST PAS LE MOT-CLÉ, ET LES CONFONDRE SERAIT UNE ERREUR DE
+	// CONSENTEMENT. `voice` reconnaît des MOTS — il faut comprendre ce qu'on
+	// allume. `noise` ne mesure qu'un NIVEAU SONORE : rien n'est reconnu, rien
+	// n'est transcrit, rien ne sort du téléphone. C'est beaucoup moins
+	// intrusif, et pourtant il reste éteint d'office pour la même raison que
+	// l'autre : il écoute le micro, et on n'allume pas un micro à l'insu de
+	// quelqu'un. Un pays qui le veut l'allume, explicitement.
+	defaultSOSNoise = false
 	// defaultSOSCountdown : dix secondes pour annuler.
 	//
 	// ⚠️ LE RÉGLAGE LE PLUS DÉLICAT DU FICHIER, parce qu'il se trompe dans les
@@ -131,9 +145,30 @@ type SOS struct {
 	Shake *bool `bson:"shake,omitempty"`
 	Crash *bool `bson:"crash,omitempty"`
 	Voice *bool `bson:"voice,omitempty"`
+	Noise *bool `bson:"noise,omitempty"`
 	// CountdownSeconds : le délai d'annulation d'une détection. Zéro = le défaut.
 	CountdownSeconds int               `bson:"countdown_seconds,omitempty"`
 	Numbers          []EmergencyNumber `bson:"numbers,omitempty"`
+	// Thresholds : À PARTIR DE QUAND une détection se déclenche, pour tout le
+	// pays. AppThresholds raffine par application.
+	//
+	// ⚠️⚠️ DEUX ÉTAGES, ET LE SECOND EXISTE POUR UNE RAISON MESURABLE : une
+	// moto dans le vent, une voiture avec la radio et un passager à pied
+	// n'entendent pas le même bruit et ne subissent pas les mêmes secousses.
+	// Le pays règle ce qui tient à la ROUTE (elle secoue tout le monde pareil),
+	// l'application ce qui tient au VÉHICULE.
+	Thresholds    sosdetect.Patch            `bson:"thresholds,omitempty"`
+	AppThresholds map[string]sosdetect.Patch `bson:"app_thresholds,omitempty"`
+	// ThresholdsRevision augmente à chaque enregistrement QUI CHANGE une
+	// valeur.
+	//
+	// ⚠️ ELLE VOYAGE JUSQUE DANS LA MESURE DES FAUSSES ALERTES. Sans elle, on
+	// lirait « 12 % de ces propositions sont annulées » sans savoir sous quel
+	// seuil — c'est-à-dire qu'on ne pourrait rien conclure après avoir réglé
+	// quoi que ce soit. ⚠️ Et elle n'augmente QUE si une valeur change :
+	// réenregistrer deux fois le même écran ne doit pas couper une série de
+	// mesures en deux.
+	ThresholdsRevision int `bson:"thresholds_revision,omitempty"`
 	// VerifiedAt, VerifiedBy : QUELQU'UN A COMPOSÉ CES NUMÉROS, et ça a répondu.
 	//
 	// ⚠️ C'EST UN FAIT DISTINCT DE « DES NUMÉROS SONT ENREGISTRÉS », et les
@@ -168,6 +203,10 @@ type SOSResponse struct {
 	Shake  bool `json:"shake"`
 	Crash  bool `json:"crash"`
 	Voice  bool `json:"voice"`
+	// Noise : le GRAND BRUIT — un niveau sonore, sans reconnaissance de mots.
+	// ⚠️ DISTINCT DE `voice`, qui reconnaît des MOTS. Les fondre aurait fait
+	// allumer une transcription à qui ne voulait qu'un sonomètre.
+	Noise bool `json:"noise"`
 	// CountdownSeconds : le délai AVANT envoi d'une détection. ⚠️ Il ne
 	// s'applique PAS au bouton : appuyer, c'est avoir déjà décidé.
 	CountdownSeconds int `json:"countdown_seconds"`
@@ -206,6 +245,33 @@ type SOSAdminResponse struct {
 	// ⚠️ ET IL NE SE DÉDUIT PAS DE LA PRÉSENCE DE NUMÉROS. Enregistrer une
 	// liste n'est pas l'avoir appelée ; un jeu de données rejoué non plus.
 	Confirmed bool `json:"confirmed"`
+
+	// LES SEUILS, tels que la console les ÉDITE et les MONTRE.
+	//
+	// ⚠️⚠️ TROIS CHAMPS ET NON UN, parce que l'écran a trois questions à
+	// répondre d'un coup : « qu'est-ce que l'application reçoit ? »
+	// (`effective`), « qu'est-ce qui a été surchargé ici ? » (`thresholds` et
+	// `app_thresholds`, vides quand rien ne l'est), et « qu'ai-je le droit de
+	// taper ? » (`bounds`). Servir seulement les valeurs effectives aurait
+	// rendu impossible de distinguer « réglé à 2,7 » d'« hérité à 2,7 » — donc
+	// impossible de proposer « revenir au défaut », et impossible de savoir si
+	// quelqu'un a décidé ce nombre ou s'il traîne depuis l'origine.
+	Thresholds    sosdetect.Patch            `json:"thresholds"`
+	AppThresholds map[string]sosdetect.Patch `json:"app_thresholds"`
+	// Effective : ce que CHAQUE application reçoit, cascade faite et bornes
+	// appliquées. Les trois colonnes de l'écran.
+	Effective map[string]sosdetect.Thresholds `json:"effective"`
+	// Bounds : les bornes des champs de saisie. ⚠️ SERVIES PLUTÔT QUE
+	// RECOPIÉES DANS LA CONSOLE : la table vit dans `pkg/sosdetect`, et une
+	// console qui porterait la sienne refuserait un jour ce que le serveur
+	// accepte, ou l'inverse.
+	Bounds map[string]sosdetect.Bound `json:"bounds"`
+	// Fixed nomme les seuils que le serveur a dû REMPLACER parce qu'ils
+	// étaient hors bornes en base. ⚠️ Vide presque toujours — et quand il ne
+	// l'est pas, la console doit le dire : c'est une valeur que quelqu'un croit
+	// avoir réglée et qui ne s'applique pas.
+	Fixed              []string `json:"fixed,omitempty"`
+	ThresholdsRevision int      `json:"thresholds_revision"`
 }
 
 // SOSUpdateRequest règle la politique depuis la console. Tout est facultatif.
@@ -213,6 +279,21 @@ type SOSUpdateRequest struct {
 	Shake *bool `json:"shake"`
 	Crash *bool `json:"crash"`
 	Voice *bool `json:"voice"`
+	Noise *bool `json:"noise"`
+	// Thresholds, AppThresholds : les seuils, par pays et par application.
+	//
+	// ⚠️⚠️ PRÉSENT = REMPLACE TOUT CE NIVEAU, exactement comme `Numbers` juste
+	// en dessous, et pour la même raison : en JSON, « champ absent » et
+	// « champ à null » ne se distinguent pas une fois décodés dans un
+	// pointeur. Avec une fusion champ par champ, « revenir au défaut pour
+	// `crash.min_g` » aurait été INEXPRIMABLE — on aurait pu tout régler, et
+	// jamais rien dérégler.
+	//
+	// La console envoie donc l'écran entier : ce qu'elle omet redevient le
+	// défaut, un objet vide remet toute la colonne par défaut. « Revenir aux
+	// valeurs par défaut », par champ ou par colonne, est le MÊME geste.
+	Thresholds    *sosdetect.Patch           `json:"thresholds"`
+	AppThresholds map[string]sosdetect.Patch `json:"app_thresholds"`
 	// CountdownSeconds : de 3 à 60 secondes.
 	//
 	// ⚠️ LES DEUX BORNES SONT DES GARDE-FOUS, pas des préférences. En dessous de
@@ -251,6 +332,7 @@ func sosResponse(s SOS) SOSResponse {
 		Shake:            defaultSOSShake,
 		Crash:            defaultSOSCrash,
 		Voice:            defaultSOSVoice,
+		Noise:            defaultSOSNoise,
 		CountdownSeconds: s.CountdownSeconds,
 		CallsBack:        true,
 	}
@@ -262,6 +344,9 @@ func sosResponse(s SOS) SOSResponse {
 	}
 	if s.Voice != nil {
 		out.Voice = *s.Voice
+	}
+	if s.Noise != nil {
+		out.Noise = *s.Noise
 	}
 	if out.CountdownSeconds == 0 {
 		out.CountdownSeconds = defaultSOSCountdown
@@ -304,6 +389,29 @@ func sosAdminResponse(code string, s SOS) SOSAdminResponse {
 			}
 		}
 	}
+	// LES SEUILS — les surcharges telles quelles, et ce que chaque application
+	// reçoit vraiment.
+	out.Thresholds = s.Thresholds
+	// ⚠️ UNE CARTE VIDE, JAMAIS `nil` : `app_thresholds: null` en JSON fait
+	// planter une console qui boucle dessus sans vérifier — le même piège que
+	// `numbers: null`, déjà payé une fois dans ce fichier.
+	out.AppThresholds = map[string]sosdetect.Patch{}
+	for app, p := range s.AppThresholds {
+		out.AppThresholds[app] = p
+	}
+	out.Effective = map[string]sosdetect.Thresholds{}
+	seenFixed := map[string]bool{}
+	for _, app := range sosdetect.Apps {
+		eff, fixed := thresholdsOf(s, app)
+		out.Effective[app] = eff
+		for _, k := range fixed {
+			if !seenFixed[k] {
+				seenFixed[k], out.Fixed = true, append(out.Fixed, k)
+			}
+		}
+	}
+	out.Bounds = sosdetect.Bounds
+	out.ThresholdsRevision = s.ThresholdsRevision
 	return out
 }
 
@@ -415,15 +523,34 @@ func (s *Service) UpdateSOS(ctx context.Context, code string, req SOSUpdateReque
 	if !ok {
 		return nil, errUnknownCountry
 	}
-	if req.Shake == nil && req.Crash == nil && req.Voice == nil &&
-		req.CountdownSeconds == nil && req.Numbers == nil {
+	if req.Shake == nil && req.Crash == nil && req.Voice == nil && req.Noise == nil &&
+		req.CountdownSeconds == nil && req.Numbers == nil &&
+		req.Thresholds == nil && req.AppThresholds == nil {
 		return nil, errNoSOSUpdate
+	}
+	// ⚠️ UNE APPLICATION INCONNUE EST REFUSÉE, alors que presque tout le reste
+	// de ce module est tolérant. Un seuil rangé sous `"drivers"` au pluriel ne
+	// s'appliquerait à personne, et l'écran afficherait quand même la valeur
+	// saisie : on croirait avoir réglé le choc des chauffeurs pendant des mois.
+	for app := range req.AppThresholds {
+		if !sosdetect.ValidApp(app) {
+			return nil, errSOSUnknownApp.WithMeta(map[string]any{
+				"fields": []string{"app_thresholds"}, "reason": app,
+			})
+		}
 	}
 	inst, _, err := s.repo.One(ctx, info.Code)
 	if err != nil {
 		return nil, apperr.Internal(err)
 	}
 	cur := inst.Security.SOS
+	// ⚠️⚠️ L'ÉTAT D'AVANT, PRIS ICI ET PAS AILLEURS. Un seuil SOS se modifie
+	// comme un tarif : le jour où une alerte n'est pas partie, la première
+	// question est « qu'est-ce qui était réglé ce soir-là, et qui l'avait
+	// réglé ». Sans cette photo prise avant d'écrire, le journal ne saurait
+	// dire que « quelqu'un a touché au SOS du Togo » — ce qui ne répond à
+	// aucune question.
+	auditBefore := sosAdminResponse(info.Code, cur)
 	if req.Shake != nil {
 		cur.Shake = req.Shake
 	}
@@ -432,6 +559,42 @@ func (s *Service) UpdateSOS(ctx context.Context, code string, req SOSUpdateReque
 	}
 	if req.Voice != nil {
 		cur.Voice = req.Voice
+	}
+	if req.Noise != nil {
+		cur.Noise = req.Noise
+	}
+	// LES SEUILS. ⚠️ PRÉSENT = REMPLACE CE NIVEAU : c'est ce qui rend « revenir
+	// au défaut » exprimable (voir `SOSUpdateRequest`).
+	before := thresholdSnapshot(cur)
+	if req.Thresholds != nil {
+		cur.Thresholds = *req.Thresholds
+	}
+	if req.AppThresholds != nil {
+		cur.AppThresholds = map[string]sosdetect.Patch{}
+		for app, p := range req.AppThresholds {
+			// ⚠️ UNE SURCHARGE VIDE N'EST PAS STOCKÉE. La garder laisserait
+			// dans la base des colonnes « réglées à rien », que la console
+			// montrerait comme des surcharges — et on chercherait quelle
+			// valeur elles portent.
+			if !p.Empty() {
+				cur.AppThresholds[app] = p
+			}
+		}
+	}
+	// ⚠️⚠️ ON VALIDE SUR LE RÉSULTAT, PAS SUR LA SAISIE, et pour CHAQUE
+	// application. Une surcharge de pays parfaitement valide peut rendre
+	// impossible la colonne d'une application précise : c'est la combinaison
+	// qui éteint une détection, jamais un champ tout seul.
+	for _, app := range sosdetect.Apps {
+		if err := checkThresholds(app, cur.Thresholds, cur.AppThresholds[app]); err != nil {
+			return nil, err
+		}
+	}
+	// ⚠️ LA RÉVISION N'AUGMENTE QUE SI UNE VALEUR A CHANGÉ. Réenregistrer deux
+	// fois le même écran couperait sinon la série de mesures en deux, et on ne
+	// saurait plus comparer un taux d'annulation à celui d'avant le réglage.
+	if thresholdSnapshot(cur) != before {
+		cur.ThresholdsRevision++
 	}
 	if req.CountdownSeconds != nil {
 		cur.CountdownSeconds = *req.CountdownSeconds
@@ -456,6 +619,13 @@ func (s *Service) UpdateSOS(ctx context.Context, code string, req SOSUpdateReque
 		return nil, apperr.Internal(err)
 	}
 	out := sosAdminResponse(info.Code, cur)
+	// ⚠️ AU JOURNAL D'AUDIT DE LA PLATEFORME, pas dans un registre à part.
+	// La console a déjà un écran qui le lit (`/audit`) : un second journal,
+	// propre au SOS, aurait obligé à chercher à deux endroits le jour où l'on
+	// reconstitue une soirée.
+	if s.audit != nil {
+		s.audit.Record(ctx, "country.sos", "country", info.Code, auditBefore, out)
+	}
 	return &out, nil
 }
 
@@ -548,4 +718,97 @@ func sameNumbers(a, b []EmergencyNumber) bool {
 		}
 	}
 	return true
+}
+
+// --- LES SEUILS : À PARTIR DE QUAND UNE DÉTECTION SE DÉCLENCHE --------------
+
+var (
+	// ⚠️ LE REFUS PORTE LE CHAMP ET SES BORNES. « Valeur invalide » renverrait
+	// quelqu'un essayer au hasard sur un réglage qui décide si une alerte part.
+	errSOSThresholdRange = apperr.New("sos_threshold_out_of_range",
+		"this detection threshold is outside the range we accept",
+		http.StatusUnprocessableEntity)
+	// ⚠️⚠️ LA RÈGLE QUI ÉTEINT UNE DÉTECTION SANS LE DIRE : une fenêtre plus
+	// courte que la durée forte qu'elle doit contenir ne peut JAMAIS se
+	// remplir. Elle a son propre refus parce que sa cause n'est pas dans le
+	// champ qu'on vient de taper — on règle la durée, et c'est la FENÊTRE qui
+	// devient impossible.
+	errSOSNoiseWindow = apperr.New("sos_noise_window_too_short",
+		"the noise window cannot be shorter than the loud duration it must contain: widen the window, or shorten the duration",
+		http.StatusUnprocessableEntity)
+	errSOSUnknownApp = apperr.New("sos_unknown_app",
+		"detection thresholds are set per app: use client, driver or courier",
+		http.StatusUnprocessableEntity)
+)
+
+// ThresholdsOf rend les seuils EFFECTIFS d'un pays pour une application.
+//
+// ⚠️ AU MIEUX, comme tout ce fichier : un pays inconnu ou une base muette
+// rendent les défauts. Faire échouer l'écran d'urgence parce qu'un réglage est
+// illisible serait exactement la mauvaise façon d'échouer.
+//
+// ⚠️ ET LE SECOND RETOUR N'EST PAS DÉCORATIF : il nomme les seuils qu'il a
+// fallu REMPLACER parce qu'ils étaient hors bornes en base. Un seuil
+// silencieusement remplacé est ce qu'on cherche pendant trois jours le soir où
+// une alerte n'est pas partie.
+func (s *Service) ThresholdsOf(ctx context.Context, code, app string) (sosdetect.Thresholds, []string) {
+	cur := SOS{}
+	if info, ok := country.Lookup(code); ok {
+		if inst, _, err := s.repo.One(ctx, info.Code); err == nil {
+			cur = inst.Security.SOS
+		}
+	}
+	return thresholdsOf(cur, app)
+}
+
+func thresholdsOf(cur SOS, app string) (sosdetect.Thresholds, []string) {
+	out, fixed := sosdetect.Resolve(app, cur.Thresholds, cur.AppThresholds[app])
+	out.Revision = cur.ThresholdsRevision
+	return out, fixed
+}
+
+// checkThresholds refuse une saisie de console hors bornes.
+//
+// ⚠️ DEUX VÉRIFICATIONS, ET ELLES NE SE REMPLACENT PAS. La première regarde
+// chaque champ SEUL ; la seconde regarde les valeurs EFFECTIVES, parce que la
+// règle qui lie la fenêtre à la durée ne peut pas se voir sur une saisie
+// isolée — régler la seule durée à 2 000 ms est irréprochable champ par champ,
+// et éteint pourtant la détection.
+func checkThresholds(app string, countryPatch, appPatch sosdetect.Patch) error {
+	for _, p := range []sosdetect.Patch{countryPatch, appPatch} {
+		if key, ok := sosdetect.Check(p); !ok {
+			return errSOSThresholdRange.WithMeta(map[string]any{
+				"fields": []string{key},
+				"reason": sosdetect.Describe(key),
+			})
+		}
+	}
+	effective := sosdetect.Defaults(app).Apply(countryPatch).Apply(appPatch)
+	if key, ok := sosdetect.CheckPair(effective); !ok {
+		return errSOSNoiseWindow.WithMeta(map[string]any{"fields": []string{key}})
+	}
+	return nil
+}
+
+// thresholdSnapshot rend une empreinte comparable des seuils d'un pays.
+//
+// ⚠️ UNE CHAÎNE ET NON UN `reflect.DeepEqual` : la carte des surcharges
+// d'application n'a pas d'ordre, et deux cartes identiques se comparent mal.
+// L'encodage trie ses clés, donc deux réglages identiques donnent la même
+// chaîne — ce qui est exactement ce que « rien n'a changé » veut dire.
+func thresholdSnapshot(s SOS) string {
+	keys := make([]string, 0, len(s.AppThresholds))
+	for k := range s.AppThresholds {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	var b strings.Builder
+	enc := json.NewEncoder(&b)
+	_ = enc.Encode(s.Thresholds)
+	for _, k := range keys {
+		b.WriteString(k)
+		p := s.AppThresholds[k]
+		_ = enc.Encode(p)
+	}
+	return b.String()
 }

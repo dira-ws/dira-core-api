@@ -21,7 +21,7 @@ import (
 // ⚠️ IL ÉCHOUE À LA COMPILATION si quelqu'un remet `Numbers` dans `Settings` —
 // et c'est exactement l'effet voulu : une spec se contourne, un type non.
 func TestNothingDialableReachesTheApplications(t *testing.T) {
-	s := (&Service{}).SettingsFor(testCtx())
+	s := (&Service{}).SettingsFor(testCtx(), "")
 	assert.True(t, s.Button, "le bouton existe partout")
 	// ⚠️ CE QUE L'APPLICATION PROMET À LA PLACE : « on vous rappelle ». C'est
 	// la seule chose que la personne cherche à savoir après avoir appuyé, et

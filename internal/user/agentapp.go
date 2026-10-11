@@ -209,3 +209,42 @@ func (s *Service) ReleaseAgentApp(ctx context.Context, id string) (string, error
 	}
 	return released, nil
 }
+
+// AppOf nomme L'APPLICATION de ce compte — celle dont il reçoit les réglages.
+//
+// ⚠️⚠️ ELLE EXISTE PARCE QUE LE JETON NE PORTE PAS `app`, contrairement à ce
+// qu'on croit souvent ici. Le champ `app` part bien à la CONNEXION et décide si
+// le compte a le droit d'entrer (`403 wrong_app`), mais il n'est pas inscrit
+// dans les claims : `pkg/auth.Claims` porte l'utilisateur, le rôle, les portées
+// et le pays, rien de plus. Une résolution « depuis le jeton » aurait donc lu
+// un champ vide à chaque requête.
+//
+// ⚠️ ET LE RÔLE NE SUFFIT PAS. `driver` et `courier` PARTAGENT le rôle
+// `driver` : un chauffeur et un livreur sont indiscernables par le rôle seul,
+// alors que ce sont précisément les deux applications dont les seuils de
+// détection diffèrent (8 g contre 6 g pour le choc). C'est l'APPARTENANCE
+// inscrite sur le compte qui les sépare, et elle est exacte — les verticales la
+// réclament à chaque ouverture d'application.
+//
+// Rend "" quand l'application ne se déduit pas : un marchand, un partenaire, un
+// administrateur. L'appelant sert alors les valeurs du pays, sans surcharge.
+func (s *Service) AppOf(ctx context.Context, userID string) string {
+	oid, err := primitive.ObjectIDFromHex(userID)
+	if err != nil {
+		return ""
+	}
+	u, err := s.repo.FindByID(ctx, oid)
+	if err != nil || u == nil {
+		return ""
+	}
+	if u.Role == auth.RoleDriver {
+		if agentApps[u.AgentApp] {
+			return u.AgentApp
+		}
+		// ⚠️ LA SUPPOSITION DOCUMENTÉE, et la seule disponible tant que le
+		// compte ne porte pas d'appartenance — exactement comme `appOfRole`.
+		// Une application qui veut être sûre envoie `?app=`.
+		return AgentAppDriver
+	}
+	return appOfRole[u.Role]
+}

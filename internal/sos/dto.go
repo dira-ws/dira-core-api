@@ -107,13 +107,36 @@ func TriggerLabel(source string, confirmed bool) string {
 			return "choc détecté, confirmé"
 		}
 		return "choc détecté, PERSONNE N'A ANNULÉ"
-	case SourceVoice:
+	case SourceNoise:
 		if confirmed {
-			return "mot-clé vocal, confirmé"
+			return "bruit fort détecté, confirmé"
 		}
-		return "mot-clé vocal, SANS confirmation"
+		return "bruit fort détecté, PERSONNE N'A ANNULÉ"
+	case SourceVoice:
+		// ⚠️⚠️ LIBELLÉ DE TRANSITION, ET IL A UNE DATE DE PÉREMPTION.
+		//
+		// Depuis le 11 octobre 2026, les trois applications Android envoient
+		// `voice` pour un GRAND BRUIT — c'était le seul nom prévu pour le micro
+		// quand elles ont été écrites. Dire « mot-clé vocal » à l'opérateur
+		// serait donc faux aujourd'hui : personne n'a prononcé de mot, un
+		// sonomètre a franchi un seuil.
+		//
+		// ⚠️ À REMETTRE À « mot-clé vocal » quand les trois applications auront
+		// livré la source `noise` — et PAS AVANT : d'ici là, cette phrase est
+		// la seule qui décrive ce qui s'est réellement passé.
+		if confirmed {
+			return "bruit fort ou mot-clé détecté, confirmé"
+		}
+		return "bruit fort ou mot-clé détecté, PERSONNE N'A ANNULÉ"
 	default:
-		return source
+		// ⚠️ UNE SOURCE QUE CE SERVEUR NE CONNAÎT PAS RESTE LISIBLE, et elle
+		// dit ce qu'elle est : une détection. Rendre le mot nu laissait
+		// l'opérateur devant « cri » sans savoir si quelqu'un avait décidé ou
+		// si une mesure avait parlé — et c'est toute la différence.
+		if confirmed {
+			return "détection « " + source + " », confirmée"
+		}
+		return "détection « " + source + " », PERSONNE N'A ANNULÉ"
 	}
 }
 

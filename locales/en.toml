@@ -61,7 +61,6 @@ other = "This account signs in with a password."
 [errors.otp_delivery_failed]
 other = "The code could not be sent. Try again."
 
-
 # ONE DEVICE PER DRIVER. ⚠️ The sentence does NOT name the device: the label
 # travels in `error.reason`, and a template inserting it here would print
 # "<no value>" whenever the app did not send one.
@@ -549,3 +548,21 @@ other = "A password needs at least 8 characters: pick a longer one"
 
 [errors.password_too_long]
 other = "A password cannot be longer than 120 characters"
+# SOS detection thresholds — when a detection fires.
+[errors.sos_threshold_out_of_range]
+other = "This detection threshold is outside the range we accept"
+
+# A window shorter than the loud duration it must contain can never fill: the
+# detection is off, and nothing says so.
+[errors.sos_noise_window_too_short]
+other = "The noise window cannot be shorter than the loud duration it must contain: widen the window, or shorten the duration"
+
+[errors.sos_unknown_app]
+other = "Detection thresholds are set per app: use client, driver or courier"
+
+# Measuring false alarms. Neither refusal ever blocks POST /sos.
+[errors.detections_batch_too_large]
+other = "Send at most 50 detection reports per call"
+
+[errors.detections_quota_reached]
+other = "Enough detection reports for today: the rest is dropped, and nothing else is affected"
