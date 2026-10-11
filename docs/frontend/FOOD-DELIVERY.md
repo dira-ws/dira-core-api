@@ -1,6 +1,6 @@
 # App LIVREUR — LIVRAISON — contrat d'API
 
-> **Version 4.65.0** · 11 octobre 2026
+> **Version 4.66.0** · 11 octobre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Livraison : `https://api-staging.dira.llc/api/v1/food` · Suivi : `wss://tracking-staging.dira.llc` · SIG : `https://maps.dira.llc/api`
 
 
@@ -1631,6 +1631,53 @@ client, le marchand ou l'exploitation a annulé sous vous — §11). Gardez-le
 ouvert pendant toute la course, pas seulement quand la conversation est
 affichée.
 
+### 🛡️ LA MODÉRATION — l'automate d'abord, l'humain ensuite (v4.66.0)
+
+Chaque message passe par un filtre avant d'être relayé. Deux issues, et elles
+ne se ressemblent pas.
+
+| Gravité | Ce qui se passe | Ce que vous voyez |
+|---|---|---|
+| **insulte** | **le message part**, et il est signalé à l'exploitation | `201`, rien de particulier |
+| **menace** | **le message ne part pas** | `422 message_blocked` |
+
+⚠️⚠️ **UNE INSULTE PASSE, ET C'EST UNE DÉCISION, PAS UN TROU.** Deux personnes
+qui s'énervent sur un prix s'insultent ; les bloquer ne calme personne et fait
+croire à une panne de réseau — après quoi on réécrit la même chose autrement.
+Ce qui ne passe pas, c'est la **menace sur la personne** et l'**injure
+discriminatoire** : ce qui est en jeu n'est plus le confort de la conversation.
+
+⚠️ **N'ÉCRIVEZ AUCUNE LISTE DE MOTS DANS L'APPLICATION.** Les mots qui blessent
+changent d'un pays à l'autre et d'une année à l'autre ; l'exploitation ajoute et
+retire depuis la console, sans redéploiement. Une liste embarquée vieillirait
+dans votre binaire, et deux applications filtreraient différemment la même
+conversation.
+
+**Quand le message est refusé (`422`, `code: "message_blocked"`) :**
+
+⚠️⚠️ **GARDEZ LE TEXTE DANS LA ZONE DE SAISIE.** C'est le seul point de cette
+section qui change tout. Vider le champ sur un refus fait perdre ce qu'on
+venait d'écrire, et la personne recommence — en pire. Affichez la phrase du
+serveur **au-dessus** de sa saisie intacte, et laissez-la corriger.
+
+⚠️ **N'AFFICHEZ PAS LE MESSAGE DANS LE FIL.** Il n'a pas été envoyé : une bulle
+grise « non envoyé » laisse croire à un problème de réseau, et la personne
+retente dix fois. Le refus est définitif tant que le texte ne change pas.
+
+⚠️ **N'ESSAYEZ PAS DE DEVINER CE QUI A ÉTÉ REFUSÉ.** Le serveur ne dit pas quel
+mot a mordu, et c'est délibéré : le dire serait expliquer comment contourner le
+filtre.
+
+**`hidden: true` — un message retiré par un modérateur :**
+
+Le corps est **vide** et la ligne **reste** dans le fil, avec son heure et son
+auteur.
+
+⚠️ **AFFICHEZ « message retiré », PAS UN BLANC, ET NE SUPPRIMEZ PAS LA LIGNE.**
+L'autre partie a vu qu'il y avait quelque chose là ; faire disparaître le trou
+fabrique une conversation qui n'a jamais eu lieu, et c'est exactement ce qu'on
+ne veut pas dans un échange qui peut finir devant le support.
+
 ---
 
 ## 8. Portefeuille — **SOCLE** (sans `/food`)
@@ -1649,6 +1696,185 @@ POST /wallet/purchase   { tokens }
 - `balance_xof` reçoit les **frais de livraison** des courses **prépayées**. En espèces, rien n'y transite : le livreur a l'argent en main.
 - Un mouvement **`reason: "equipment"`** (`unit: "xof"`, `ref_kind: "equipment"`, v4.11.0) est une retenue — ou, positif, un remboursement de caution — pour le **matériel** vendu ou loué par Dira (§8 bis).
 - La recharge ne crédite qu'**après confirmation** du prestataire : suivez `GET /payments/{id}`.
+
+---
+
+## 8 ter. 💸 RETIRER SON ARGENT — mobile money (v4.66.0) — **SOCLE** (sans `/food`)
+
+Ce que vous avez gagné doit pouvoir sortir. Trois routes, et un écran.
+
+```
+GET  /payouts/available
+POST /payouts            { "amount_xof": 10000 }
+GET  /payouts?limit=20
+```
+
+```json
+{ "rules": { "mode": "request", "min_xof": 1000, "max_xof": 0,
+             "daily_cap_xof": 20000, "currency": "XOF",
+             "periodic_weekday": 0, "periodic_min_xof": 0 },
+  "withdrawable_xof": 25000,
+  "phone_masked": "••••0101",
+  "pending": { "id": "…", "mode": "request", "amount_xof": 10000,
+               "phone_masked": "••••0101", "state": "pending",
+               "created_at": "…" } }
+```
+
+### ⚠️⚠️ `withdrawable_xof` N'EST PAS VOTRE SOLDE
+
+C'est le point à comprendre avant d'écrire une ligne de cet écran.
+
+Votre solde peut afficher 42 000 et votre **retirable** 25 000 : ce que vous
+devez à la plateforme passe avant, et **un crédit offert ne se retire pas**.
+Un bonus de 12 000 F sert à rouler, pas à être transformé en espèces — sans
+cela, offrir un crédit reviendrait à distribuer de l'argent.
+
+⚠️ **N'écrivez jamais « solde insuffisant ».** Vous n'avez pas à refaire ce
+calcul, et le serveur ne vous envoie pas ses termes. Affichez
+`withdrawable_xof` sous un libellé qui dit ce que c'est — « Disponible pour
+retrait » — à côté du solde, pas à sa place. Un livreur qui lit « solde
+insuffisant » devant 42 000 F appelle le support, et le support met dix
+minutes à lui expliquer la dette.
+
+### LES QUATRE MODES — `rules.mode` décide de TOUT l'écran
+
+| `mode` | Ce que l'écran montre |
+|---|---|
+| `off` | **Pas de bouton.** Les retraits ne sont pas ouverts dans ce pays : dites-le en une phrase, ne grisez pas un bouton. |
+| `direct` | « Retirer » — l'argent part tout de suite. |
+| `request` | « Demander un retrait » — l'exploitation valide, puis l'argent part. **Dites-le avant**, pas après. |
+| `periodic` | **Aucun bouton, et une phrase qui rassure** : « Vos gains vous sont versés automatiquement. » |
+
+⚠️ **UN BOUTON GRISÉ FAIT CHERCHER CE QUI NE VA PAS.** En `off` et en
+`periodic`, il n'y a rien à demander : un bouton inactif envoie l'agent
+tapoter, puis appeler. Une phrase lui dit en trois secondes ce qu'un bouton
+gris lui cache.
+
+⚠️ **EN `periodic`, LA PHRASE A BESOIN DES CHIFFRES.**
+`rules.periodic_weekday` vaut `0` (tous les jours) ou `1`…`7`
+(lundi…dimanche) ; `rules.periodic_min_xof` est le minimum en dessous duquel
+le versement attend la semaine suivante. Écrivez « vos gains partent chaque
+**lundi**, à partir de **2 000 F** » — pas « automatiquement », qui ne dit ni
+quand ni combien.
+
+⚠️ **N'ÉCRIVEZ AUCUN MODE EN DUR, ET N'EN DEVINEZ AUCUN.** Le mode change par
+décision d'exploitation, sans redéploiement : un pays passe de `request` à
+`direct` le jour où son flottant est approvisionné. Relisez `rules` à chaque
+ouverture de l'écran.
+
+### LE NUMÉRO N'EST PAS DANS LA DEMANDE
+
+`POST /payouts` prend **le montant, et rien d'autre**. L'argent part sur le
+numéro **du compte**, lu côté serveur.
+
+⚠️ **N'AJOUTEZ PAS DE CHAMP `phone` : la requête sera refusée** (le serveur
+rejette les champs inconnus). Et ce n'est pas une rigidité : un champ libre
+serait la porte ouverte au détournement. Quelqu'un qui obtient une session —
+un téléphone prêté, un mot de passe donné de vive voix, ce qui arrive souvent
+— n'aurait qu'à changer le numéro pour vider le compte.
+
+`phone_masked` (`••••0101`) est là pour que l'agent **vérifie que c'est bien
+le sien** avant de confirmer. Quatre chiffres suffisent pour ça ; un numéro
+complet dans une réponse finit dans une capture d'écran envoyée au support.
+
+Pour changer le numéro qui reçoit, on change **le numéro du compte** — et
+c'est le bon chemin, parce qu'il est vérifié.
+
+### L'ARGENT EST RETENU DÈS LA DEMANDE
+
+Dès que `POST /payouts` répond `201`, le montant **a quitté votre retirable**,
+même en mode `request` où personne n'a encore validé.
+
+⚠️ **DITES-LE SUR L'ÉCRAN DE CONFIRMATION.** Un livreur qui demande 10 000, voit
+son retirable tomber à 15 000 et attend une validation pendant trois heures
+croit que l'argent a disparu. « 10 000 F mis de côté pour ce retrait » est la
+phrase ; « en attente » toute seule ne l'est pas.
+
+Et c'est la seule construction correcte : sans retenue, une validation donnée
+trois heures plus tard trouverait un solde déjà dépensé en commissions.
+
+⚠️ **UNE SEULE DEMANDE À LA FOIS.** Tant que `pending` est servi par
+`/payouts/available`, une seconde demande est refusée (`409`,
+`payout_already_pending`). Montrez la demande en cours **sur l'écran de
+retrait**, pas dans un historique — c'est la première chose que le livreur vient
+y chercher.
+
+### LES ÉTATS — et les deux qu'il ne faut pas confondre
+
+| `state` | Ce que ça veut dire |
+|---|---|
+| `pending` | demandé, l'exploitation n'a pas encore décidé |
+| `sending` | l'ordre est parti chez l'agrégateur |
+| `paid` | le bénéficiaire a reçu |
+| `rejected` | **l'exploitation a refusé** — `reject_reason` dit pourquoi |
+| `failed` | **l'agrégateur n'a pas pu verser** — `failure_reason` dit pourquoi |
+
+⚠️⚠️ **`failed` ET `rejected` NE SE DISENT PAS DE LA MÊME FAÇON.** Les fondre
+en « échec » ferait croire à un livreur qu'on lui a refusé son argent alors que
+c'est son numéro qui n'est pas enregistré chez l'opérateur — et il appellerait
+le support pour contester une décision que personne n'a prise.
+
+- `rejected` → « Votre demande a été refusée : **{reject_reason}** ». Le motif
+  est **toujours** présent, le serveur l'exige.
+- `failed` → « Le versement n'a pas pu aboutir : **{failure_reason}** ». La
+  phrase vient de l'agrégateur, telle quelle — « numéro non enregistré chez
+  l'opérateur » et « compte bénéficiaire plafonné » demandent deux gestes
+  différents.
+
+Dans les deux cas **l'argent est revenu** à votre retirable. Dites-le : c'est
+la question suivante du livreur, et sans la réponse il la pose au support.
+
+`provider_ref` est l'identifiant chez l'agrégateur. **Affichez-le** sur un
+retrait `sending`, `paid` ou `failed` : c'est ce que le support cite quand
+l'argent n'arrive pas, et le faire recopier d'un écran vaut mieux que de le
+faire chercher.
+
+### LES REFUS — et le chiffre qu'ils portent
+
+| `code` | HTTP | Ce que l'écran dit |
+|---|---|---|
+| `payout_unavailable` | 422 | les retraits ne sont pas ouverts dans ce pays |
+| `payout_is_periodic` | 422 | vos gains partent tout seuls, il n'y a rien à demander |
+| `payout_below_minimum` | 422 | le montant est sous le minimum — **`reason` porte le seuil** |
+| `payout_above_maximum` | 422 | au-delà de ce qu'on envoie en une fois — **`reason` porte le plafond** |
+| `payout_daily_cap` | 422 | limite du jour atteinte — **`reason` porte ce qui reste** |
+| `not_withdrawable` | 422 | plus que ce que vous pouvez retirer |
+| `payout_no_phone` | 422 | le compte n'a pas de numéro vers lequel envoyer |
+| `payout_already_pending` | 409 | un retrait est déjà en cours |
+
+⚠️⚠️ **LE CHIFFRE EST DANS `error.reason`, PAS DANS `error.message`.** C'est le
+piège de cet écran :
+
+```json
+{ "error": { "code": "payout_below_minimum",
+             "message": "Ce montant est inférieur au minimum que nous pouvons envoyer",
+             "reason": "1 000 F" } }
+```
+
+La phrase est **générique et traduite** ; le nombre arrive à côté, déjà
+formaté dans la monnaie du pays. Affichez les deux — « Ce montant est
+inférieur au minimum que nous pouvons envoyer (**1 000 F**) ». La phrase
+seule renvoie le livreur essayer au hasard.
+
+⚠️ **ET `reason` EST DÉJÀ ÉCRIT POUR ÊTRE LU** : espaces insécables comprises,
+monnaie comprise. Ne le reformatez pas, ne le réanalysez pas comme un nombre.
+
+### CE QU'IL NE FAUT PAS FAIRE
+
+⚠️ **NE LAISSEZ PAS SAISIR UN MONTANT LIBRE SANS BORNES À L'ÉCRAN.**
+`rules.min_xof`, `rules.max_xof` (`0` = pas de maximum) et
+`rules.daily_cap_xof` (`0` = pas de plafond) sont là pour que le clavier
+refuse avant le serveur. Un refus au bout de trois secondes de réseau, sur un
+écran d'argent, se vit comme une panne.
+
+⚠️ **NE RÉESSAYEZ PAS UN `POST /payouts` DONT VOUS N'AVEZ PAS VU LA RÉPONSE.**
+Relisez `/payouts/available` : si `pending` est là, la demande est passée.
+Renvoyer la demande ne créera pas de double retrait — le serveur refuse — mais
+un `409` affiché comme une erreur ferait croire à un échec.
+
+⚠️ **NE DEVINEZ PAS LA MONNAIE.** `rules.currency` la donne. Les montants sont
+en **unité entière** de cette monnaie — jamais de centimes, jamais de
+division par 100.
 
 ---
 
