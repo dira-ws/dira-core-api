@@ -1,6 +1,6 @@
 # Specs frontend — par rôle
 
-> **Version 4.66.0** · 11 octobre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics`
+> **Version 4.67.0** · 11 octobre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics`
 
 **Cinq** documents, un par application. Chacun est **autonome** : tout ce qu'un frontend doit savoir pour son rôle, sans avoir à ouvrir les vingt specs de modules.
 
@@ -355,6 +355,34 @@ Chaque document porte la même version en en-tête, et son propre journal des ch
 - [ ] ⚠️ **`TRACKING_JWT_SECRET` renseigné dans chaque environnement déployé.** Vide, l'authentification du service de suivi est **désactivée** : n'importe qui connaissant un `delivery_id` suit la course. Le secret doit valoir **exactement** le `JWT_SECRET` de `dira-food-api`.
 
 ## Journal
+
+### 4.67.0 — 11 octobre 2026
+
+🆕 **LE TRICYCLE (TUK-TUK) ENTRE AU CATALOGUE, DANS TOUS LES PAYS** —
+`VTC-CLIENT.md` §3, `VTC-DRIVER.md` §2. Deuxième du catalogue, entre la moto
+et l'éco : trois places, un toit, des bagages, et un prix à peu près à
+mi-chemin.
+
+- 🛺 `key: "tricycle"`, **`seats: 3`**, `map_icon: "tricycle"`. ⚠️ C'est le cas
+  que la 4.48.0 annonçait (« le jour où un tricycle arrive, il en portera
+  trois ») : **lisez `seats`**, ne le déduisez pas de la `key`.
+- ⚠️ **Il ne se substitue à rien, dans aucun sens** — comme la moto, il est en
+  dehors de la hiérarchie du catalogue. Ne promettez pas « une voiture si
+  aucun tuk-tuk n'est libre ».
+- ⚠️ **Pas de `pool` dans ses `modes`** — mais pas pour la raison de la moto :
+  la place existe, c'est la décision de produit qui n'est pas prise. Elle peut
+  s'inverser **sans une ligne de code chez vous** le jour où la clé apparaît.
+  N'écrivez jamais « si key == tricycle alors pas de partage ».
+- ⚠️ **Aucune illustration embarquée** : `icon_url` et `map_icon_url` sont
+  `null` au départ. Dessinez la silhouette `tricycle`, jamais une voiture de
+  repli — le marqueur partagé de la plateforme est une berline vue de dessus,
+  et la poser là serait **pire** que la silhouette sobre.
+- 🐞 **Le barème d'annulation voyageait en PascalCase** sur la route
+  d'exploitation (`{"GraceS":…}`) : la console ne pouvait ni le lire ni
+  l'écrire, et un formulaire enregistré repartait avec un barème à **zéro**.
+  Sans effet sur les applications, qui lisent le bloc `cancellation` **calculé
+  sur la course** (`fee_xof`, `pct`, `step`, `why`, `grace_left_s`) — celui-là
+  n'a jamais changé.
 
 ### 4.66.0 — 11 octobre 2026
 

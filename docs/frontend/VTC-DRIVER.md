@@ -1,6 +1,6 @@
 # App CHAUFFEUR — COURSES (VTC) — contrat d'API
 
-> **Version 4.66.0** · 11 octobre 2026
+> **Version 4.67.0** · 11 octobre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Courses : `https://api-staging.dira.llc/api/v1/vtc` · Suivi : `wss://tracking-staging.dira.llc` · SIG : `https://maps.dira.llc/api`
 
 ---
@@ -774,6 +774,19 @@ remonter un mode pour le mettre en avant sans changer qui sonne.
 À la déclaration, une moto se déclare avec `class_key: "moto"` et
 **`seats: 1`** : c'est ce nombre qui dit au passager qu'il voyage seul, et un
 `seats: 4` sur une moto le ferait commander pour quatre.
+
+⚠️ **ET LE TRICYCLE EST DEHORS AUSSI, AVEC TROIS PLACES (v4.67.0).** Un
+tuk-tuk se déclare `class_key: "tricycle"` et **`seats: 3`**. Mêmes deux
+raisons que la moto, dans les deux sens : votre tricycle ne sera **jamais**
+appelé pour une course de voiture (vous rouleriez au tarif d'un tricycle sur
+une course que vous n'auriez pas pu refuser de voir), et **aucune voiture** ne
+sera appelée pour une course de tricycle.
+
+⚠️ **NE DÉCLAREZ PAS UN TUK-TUK COMME UNE MOTO.** Ce serait `seats: 1` : le
+passager commanderait pour une personne alors que trois tiennent, et vous
+feriez deux courses là où une suffisait. L'inverse — une moto déclarée
+tricycle — promettrait trois places sur un engin qui en a une, et le troisième
+passager resterait sur le trottoir.
 
 Les classes proposées à la déclaration viennent de `GET /classes` (public) :
 `key`, `name`, `icon_url` (image), `map_icon_url`, `nav_icon_url` /
