@@ -76,4 +76,31 @@ type Message struct {
 	// non par un compteur sur la conversation : un compteur se désynchronise,
 	// et personne ne sait plus lequel des deux dit vrai.
 	ReadAt *time.Time `bson:"read_at,omitempty"`
+
+	// LA MODÉRATION — voir `moderation.go`.
+	//
+	// ⚠️ UN MESSAGE SIGNALÉ EST UN MESSAGE ENVOYÉ. Le drapeau ne retient rien :
+	// il pose le message dans une file que des humains relisent. Ce qui ne
+	// devait pas partir n'est jamais arrivé jusqu'ici.
+	Flagged      bool     `bson:"flagged,omitempty"`
+	FlagTerms    []string `bson:"flag_terms,omitempty"`
+	FlagSeverity string   `bson:"flag_severity,omitempty"`
+	// Reported : signalé par la PERSONNE qui l'a reçu.
+	//
+	// ⚠️ DISTINCT DU DRAPEAU AUTOMATIQUE, et plus important que lui : ce que
+	// l'automate rate — l'ironie, la menace polie, le sous-entendu — c'est
+	// exactement ce qu'un humain signale. Un signalement passe donc devant
+	// dans la file.
+	Reported   bool       `bson:"reported,omitempty"`
+	ReportedAt *time.Time `bson:"reported_at,omitempty"`
+	// Hidden : un modérateur l'a retiré de la conversation.
+	//
+	// ⚠️⚠️ RETIRÉ, PAS SUPPRIMÉ, et c'est une décision. L'autre partie l'a déjà
+	// lu si elle était devant son écran : l'effacer réécrirait une histoire que
+	// quelqu'un a vécue, et priverait l'enquête de la seule pièce qui compte.
+	// Le corps reste en base, l'écran affiche « message retiré ».
+	Hidden       bool                `bson:"hidden,omitempty"`
+	HiddenAt     *time.Time          `bson:"hidden_at,omitempty"`
+	HiddenBy     *primitive.ObjectID `bson:"hidden_by,omitempty"`
+	HiddenReason string              `bson:"hidden_reason,omitempty"`
 }

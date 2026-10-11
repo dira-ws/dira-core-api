@@ -626,3 +626,4 @@ other = "Envoyez au plus 50 comptes rendus de détection par appel"
 
 [errors.detections_quota_reached]
 other = "Assez de comptes rendus pour aujourd'hui : le reste est abandonné, et rien d'autre n'est affecté"
+

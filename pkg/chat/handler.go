@@ -2,6 +2,7 @@ package chat
 
 import (
 	"net/http"
+	"strconv"
 
 	"github.com/go-chi/chi/v5"
 
@@ -45,7 +46,81 @@ func (h *Handler) Mount(r chi.Router, authMW func(http.Handler) http.Handler) {
 		// un message de la plateforme passerait pour celui d'un livreur.
 		g.With(middleware.RequireRole(auth.RoleAdmin)).
 			Post("/admin"+messages, h.sendAs)
+
+		// ⚠️⚠️ SIGNALER UN MESSAGE — et c'est le geste le plus important de
+		// toute cette modération. Ce qu'un automate rate — l'ironie, la menace
+		// polie, le sous-entendu, la langue qu'on n'a pas mise au lexique —
+		// c'est exactement ce qu'un humain reconnaît. Sans ce bouton, la file
+		// ne contient que ce que la machine a su voir.
+		g.Post(messages+"/{messageID}/report", h.report)
+
+		// LA FILE DE MODÉRATION, et le geste qui retire un message.
+		admin := middleware.RequireRole(auth.RoleAdmin)
+		g.With(admin).Get("/admin/"+h.base+"/messages/flagged", h.flagged)
+		g.With(admin).Post("/admin/"+h.base+"/messages/{messageID}/hide", h.hide)
+		g.With(admin).Post("/admin/"+h.base+"/messages/{messageID}/keep", h.keep)
 	})
+}
+
+// POST /{orders|rides}/{id}/messages/{messageID}/report
+//
+// ⚠️ ON NE SIGNALE QUE CE QU'ON A REÇU, jamais ce qu'on a écrit. Se signaler
+// soi-même n'a aucun sens et remplirait la file de bruit — ou servirait à
+// faire croire qu'on a été agressé.
+func (h *Handler) report(w http.ResponseWriter, r *http.Request) {
+	userID, role, ok := caller(r)
+	if !ok {
+		httpx.Error(w, r, apperr.Unauthorized("missing_token", "missing bearer token"))
+		return
+	}
+	out, err := h.svc.Report(r.Context(), userID, role,
+		chi.URLParam(r, "id"), chi.URLParam(r, "messageID"))
+	if err != nil {
+		httpx.Error(w, r, err)
+		return
+	}
+	httpx.JSON(w, http.StatusOK, out)
+}
+
+// GET /admin/{orders|rides}/messages/flagged[?limit=&cursor=]
+//
+// ⚠️ LES SIGNALEMENTS HUMAINS D'ABORD, puis les drapeaux de l'automate. Une
+// file triée par date noie les trois messages qu'une personne a pris la peine
+// de signaler sous les quatre cents que la machine a marqués.
+func (h *Handler) flagged(w http.ResponseWriter, r *http.Request) {
+	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+	out, err := h.svc.Flagged(r.Context(), limit, r.URL.Query().Get("cursor"))
+	if err != nil {
+		httpx.Error(w, r, err)
+		return
+	}
+	httpx.JSON(w, http.StatusOK, out)
+}
+
+// POST /admin/{orders|rides}/messages/{messageID}/hide — retirer un message.
+func (h *Handler) hide(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Reason string `json:"reason"`
+	}
+	_ = httpx.Decode(r, &req)
+	if err := h.svc.Hide(r.Context(), chi.URLParam(r, "messageID"), req.Reason); err != nil {
+		httpx.Error(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// POST /admin/{orders|rides}/messages/{messageID}/keep — « rien à redire ».
+//
+// ⚠️ UN GESTE EXPLICITE, ET PAS SEULEMENT « RETIRER DE LA FILE ». Un lexique
+// trop large se corrige en regardant ce qui a été gardé : si la même règle
+// produit vingt « gardés » d'affilée, c'est la règle qu'il faut retirer.
+func (h *Handler) keep(w http.ResponseWriter, r *http.Request) {
+	if err := h.svc.Keep(r.Context(), chi.URLParam(r, "messageID")); err != nil {
+		httpx.Error(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // GET /{orders|rides}/{id}/messages

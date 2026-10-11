@@ -107,3 +107,75 @@ func (r *Repository) PurgeOf(ctx context.Context, senderID primitive.ObjectID) (
 	}
 	return res.DeletedCount, nil
 }
+
+// --- LA MODÉRATION ---------------------------------------------------------
+
+// One rend un message par son identifiant.
+func (r *Repository) One(ctx context.Context, id primitive.ObjectID) (*Message, error) {
+	var m Message
+	switch err := r.col.FindOne(ctx, bson.M{"_id": id}).Decode(&m); {
+	case err == mongo.ErrNoDocuments:
+		return nil, nil
+	case err != nil:
+		return nil, err
+	}
+	return &m, nil
+}
+
+// ListFlagged rend la file de modération.
+//
+// ⚠️⚠️ LES SIGNALEMENTS HUMAINS D'ABORD (`reported: -1`), puis les plus
+// récents. Une file triée par date seule noie les trois messages qu'une
+// personne a pris la peine de signaler sous les quatre cents que l'automate a
+// marqués — et ce sont précisément les trois qui méritent un humain.
+//
+// ⚠️ ET LES MESSAGES DÉJÀ TRAITÉS SORTENT DE LA FILE : un modérateur qui
+// revoit cent fois les mêmes lignes cesse de la regarder.
+func (r *Repository) ListFlagged(ctx context.Context, limit int, after *primitive.ObjectID) ([]Message, error) {
+	q := bson.M{
+		"$or":       []bson.M{{"flagged": true}, {"reported": true}},
+		"moderated": bson.M{"$ne": true},
+	}
+	if after != nil {
+		q["_id"] = bson.M{"$lt": *after}
+	}
+	cur, err := r.col.Find(ctx, q, options.Find().
+		SetSort(bson.D{{Key: "reported", Value: -1}, {Key: "_id", Value: -1}}).
+		SetLimit(int64(limit)))
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = cur.Close(ctx) }()
+	var out []Message
+	return out, cur.All(ctx, &out)
+}
+
+// SetReported marque un message comme signalé par son destinataire.
+func (r *Repository) SetReported(ctx context.Context, id primitive.ObjectID, at time.Time) error {
+	_, err := r.col.UpdateOne(ctx, bson.M{"_id": id},
+		bson.M{"$set": bson.M{"reported": true, "reported_at": at}})
+	return err
+}
+
+// SetHidden retire un message de la conversation.
+//
+// ⚠️ IL RESTE EN BASE. Voir `Message.Hidden` : effacer réécrirait une histoire
+// que l'autre partie a vécue, et priverait l'enquête de la seule pièce.
+func (r *Repository) SetHidden(ctx context.Context, id, by primitive.ObjectID, reason string, at time.Time) error {
+	set := bson.M{"hidden": true, "hidden_at": at, "moderated": true}
+	if !by.IsZero() {
+		set["hidden_by"] = by
+	}
+	if reason != "" {
+		set["hidden_reason"] = reason
+	}
+	_, err := r.col.UpdateOne(ctx, bson.M{"_id": id}, bson.M{"$set": set})
+	return err
+}
+
+// SetKept sort un message de la file sans le retirer de la conversation.
+func (r *Repository) SetKept(ctx context.Context, id primitive.ObjectID, at time.Time) error {
+	_, err := r.col.UpdateOne(ctx, bson.M{"_id": id},
+		bson.M{"$set": bson.M{"moderated": true, "moderated_at": at}})
+	return err
+}

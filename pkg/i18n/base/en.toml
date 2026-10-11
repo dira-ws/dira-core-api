@@ -72,3 +72,17 @@ other = "This document belongs to a vehicle: say which one"
 
 [errors.document_refuses_vehicle]
 other = "This document belongs to the person, not to a vehicle: remove the vehicle"
+
+# Chat moderation — SHARED package (`pkg/chat`), so these belong to the base
+# pack: both verticals serve this refusal.
+#
+# The phrase says it is a refusal, and never names the word: naming it only
+# teaches people to spell it differently.
+[errors.message_blocked]
+other = "This message was not sent: it contains a threat or an insult that we do not relay"
+
+[errors.cannot_report_own_message]
+other = "You can only report a message you received"
+
+[errors.message_not_found]
+other = "This message does not exist"
