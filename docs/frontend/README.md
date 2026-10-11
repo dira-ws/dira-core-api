@@ -1,6 +1,6 @@
 # Specs frontend — par rôle
 
-> **Version 4.62.3** · 10 octobre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics`
+> **Version 4.63.0** · 11 octobre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics`
 
 **Cinq** documents, un par application. Chacun est **autonome** : tout ce qu'un frontend doit savoir pour son rôle, sans avoir à ouvrir les vingt specs de modules.
 
@@ -355,6 +355,35 @@ Chaque document porte la même version en en-tête, et son propre journal des ch
 - [ ] ⚠️ **`TRACKING_JWT_SECRET` renseigné dans chaque environnement déployé.** Vide, l'authentification du service de suivi est **désactivée** : n'importe qui connaissant un `delivery_id` suit la course. Le secret doit valoir **exactement** le `JWT_SECRET` de `dira-food-api`.
 
 ## Journal
+
+### 4.63.0 — 11 octobre 2026
+
+🆕 **LE GRAND LIVRE D'UNE SOCIÉTÉ AVEC SES CHAUFFEURS** — `PARTNER-FLEET.md`
+§13 bis. Trois routes, et quatre règles qui décident de tout l'écran :
+
+- ⚠️ **Dira n'encaisse et ne verse rien** : le livre *enregistre* ce que la
+  société déclare avoir versé et encaissé. La plateforme tient le compte, pas la
+  caisse — et la phrase va **en haut de l'écran**, pas dans une aide.
+- ⚠️ **Un livre par chauffeur**, jamais un solde global : `driver` est
+  obligatoire. Un total toutes personnes confondues additionne des créances sur
+  des gens différents.
+- ⚠️ **Le signe se dit en mots** : « −11 000 » sous « solde » ne dit pas **qui
+  doit à qui**. Et un **versement** comme une **remise d'espèces** réduisent
+  tous deux ce que le chauffeur doit — assez contre-intuitif pour devoir être
+  écrit avant le bouton.
+- ⚠️ **On ne modifie ni ne supprime jamais** : la correction est une écriture de
+  plus, et l'écriture annulée reste visible, barrée.
+
+**Et les courses se filtrent** (`vehicle`, `driver`, `payment`) — ⚠️ ces filtres
+**resserrent, ils n'élargissent jamais** : la borne du parc reste posée. Une
+voiture qui n'est pas la vôtre est **refusée**, pas rendue vide.
+
+⚠️ **Au passage, un défaut d'argent corrigé** : le relevé appliquait les termes
+**d'aujourd'hui** à des courses d'**hier**. Changer un pourcentage réévaluait le
+mois écoulé, semaines déjà payées comprises. Le partage est désormais **figé au
+règlement**, et le relevé dit ce qu'il a dû recalculer (`recomputed_rides`).
+
+---
 
 ### 4.62.3 — 10 octobre 2026
 
