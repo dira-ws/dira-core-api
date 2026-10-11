@@ -1,6 +1,6 @@
 # Console PARTENAIRE — PROPRIÉTAIRE DE FLOTTE PRIVÉE — contrat d'API
 
-> **Version 4.62.3** · 10 octobre 2026
+> **Version 4.63.0** · 11 octobre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Courses : `https://api-staging.dira.llc/api/v1/vtc`
 > Console en service : `https://partner-staging.dira.llc`
 
@@ -689,6 +689,23 @@ le lien.
 ⚠️ **`distance_source` CHANGE CE QU'ON PEUT DIRE DU CHIFFRE.** `estimate` n'est
 pas une mesure : ne le présentez pas comme un relevé de compteur.
 
+### ⚠️ Filtrer : `vehicle`, `driver`, `payment` (v4.63.0)
+
+| | |
+|---|---|
+| `vehicle` | une voiture **de votre parc**. Une autre est **refusée** (`403 vehicle_not_in_your_fleet`), pas rendue vide : « ce n'est pas votre voiture » se corrige, « aucune course » fait appeler le support |
+| `driver` | le **compte** du chauffeur (`user_id` de `/vtc/partner/drivers`, `driver_user_id` d'une ligne) — **pas** son `driver_id`, qui est son profil |
+| `payment` | `cash`, `wallet`, `online`. ⚠️ `cash` répond à la question qui amène le plus souvent sur cet écran : **ce que mes chauffeurs ont en main** |
+
+⚠️⚠️ **CES FILTRES RESSERRENT, ILS N'ÉLARGISSENT JAMAIS** : la borne du parc
+reste posée quoi qu'il arrive. Si une réponse contient une course d'une voiture
+qui n'est pas la vôtre, c'est un défaut côté serveur — signalez-le.
+
+⚠️ **UN TOTAL CALCULÉ SUR LA PAGE AFFICHÉE N'EST PAS LE TOTAL DE LA PÉRIODE.**
+La liste est paginée : si vous additionnez les lignes à l'écran, **dites-le**
+(« totaux des courses affichées »). Les totaux de la période sont sur
+`/vtc/partner/dashboard`, et eux seuls font foi.
+
 ⚠️ **LES COURSES ANNULÉES SONT COMPTÉES À PART** (`totals.cancelled_rides`), pas
 mêlées au nombre de courses. Un propriétaire qui additionne les deux croit avoir
 perdu de l'argent sur des courses qui n'ont jamais eu lieu.
@@ -1110,16 +1127,143 @@ met la base à genoux pour tout le monde.
 | `GET /vtc/partner/dashboard` | `from` `to` `tz` |
 | `GET /vtc/partner/vehicles` | `limit` `cursor` |
 | `GET /vtc/partner/drivers` | *aucun* |
-| `GET /vtc/partner/rides` | `from` `to` `tz` `limit` `cursor` |
+| `GET /vtc/partner/rides` | `from` `to` `tz` `limit` `cursor` `vehicle` `driver` `payment` |
 | `GET /vtc/partner/payroll` | `from` `to` `tz` |
 | `GET /vtc/partner/earnings` | `from` `to` `tz` |
 | `GET /vtc/partner/compliance` | *aucun* |
+| `GET /vtc/partner/ledger` | **`driver` (obligatoire)** `from` `to` `tz` |
 | `GET /vtc/tickets` | `status` `category` `limit` `cursor` |
 | `GET /partner/me` · `/partner/members` · `/partner/equipment` · `/partner/equipment/catalogue` | *aucun* |
 
 ⚠️ **UN PARAMÈTRE QU'ON INVENTE EST UN PARAMÈTRE TOUJOURS IGNORÉ** — la réponse
 reste `200`, et le filtre ne filtre rien sans que personne le voie. Tout ce qui
 n'est pas dans cette table se filtre **dans la page**.
+
+---
+
+## 13 bis. LE GRAND LIVRE — ce qu'un chauffeur doit, ce qu'on lui doit (v4.63.0)
+
+```
+GET  /vtc/partner/ledger?driver=<compte>&from=&to=&tz=
+POST /vtc/partner/ledger                 { driver_user_id, kind, amount_xof, reason?, at? }
+POST /vtc/partner/ledger/{id}/reverse    { reason? }
+```
+
+> ## ⚠️⚠️ DIRA N'ENCAISSE ET NE VERSE RIEN ICI
+>
+> Ce livre **enregistre** ce que la société déclare avoir versé à son chauffeur
+> et encaissé de lui. L'argent ne passe pas par la plateforme : elle tient le
+> compte, pas la caisse.
+>
+> **Écrivez-le en haut de l'écran**, pas dans une aide. Sans cette phrase, un
+> propriétaire attend un virement et un chauffeur attend d'être payé par Dira —
+> les deux appellent le support la même semaine.
+
+### ⚠️⚠️ UN LIVRE PAR CHAUFFEUR, JAMAIS UN SOLDE GLOBAL
+
+`driver` est **obligatoire**, et ce n'est pas une limitation : une société a
+autant de comptes que de conducteurs. « Mon chauffeur me doit 42 000 » se
+règle ; « ma flotte est à +180 000 » ne se règle avec personne — c'est
+l'addition de créances sur des gens différents, et le nombre a l'air de vouloir
+dire quelque chose. Sans `driver`, la route refuse (`ledger_driver_required`).
+
+⚠️ **C'est le COMPTE (`user_id` de `/vtc/partner/drivers`), pas le profil
+(`driver_id`).** Les deux sortent de la même liste et ont la même forme : se
+tromper rend un livre vide, qui se lit « ce chauffeur ne doit rien ».
+
+### La réponse
+
+```json
+{
+  "driver_user_id": "…", "driver_name": "Astou Diouf",
+  "from": "2026-09-11", "to": "2026-10-10",
+  "opening_xof": 12500,
+  "closing_xof": -7000,
+  "items": [
+    { "at": "2026-09-28T14:39:02Z", "kind": "ride", "amount_xof": 2460,
+      "balance_xof": 14960, "ride_id": "…", "plate": "DK-6528-CC", "payment": "cash" },
+    { "id": "…", "at": "2026-10-02T12:00:00Z", "kind": "payout", "amount_xof": -15000,
+      "balance_xof": -40, "reason": "Part de la semaine", "recorded_by": "Kodjo Mensah" },
+    { "id": "…", "at": "2026-10-05T12:00:00Z", "kind": "reversal", "amount_xof": 15000,
+      "balance_xof": 14960, "reverses_id": "…", "reason": "Montant erroné" }
+  ]
+}
+```
+
+### ⚠️⚠️ LE SENS DU SIGNE, UNE FOIS POUR TOUTES
+
+```
+POSITIF → le chauffeur DOIT à la société
+NÉGATIF → la société DOIT au chauffeur
+```
+
+⚠️ **ET LE SIGNE SE DIT EN MOTS, JAMAIS EN « − ».** « −11 000 » sous le mot
+« solde » ne dit pas **qui doit à qui**, et c'est la seule chose qu'on vient
+lire. Écrivez « il vous doit » / « vous lui devez ».
+
+| `kind` | Qui l'écrit | Effet sur le solde |
+|---|---|---|
+| `ride` | **la plateforme**, au règlement de la course | **+** la part de la société |
+| `payout` | la société | **−** elle a donné de l'argent |
+| `cash_in` | la société | **−** il a rendu les espèces qu'il détenait |
+| `adjustment` | la société | **+ ou −**, le seul genre qui va dans les deux sens |
+| `reversal` | la société, par `/reverse` | l'inverse exact de l'écriture annulée |
+
+⚠️⚠️ **UN VERSEMENT ET UNE REMISE D'ESPÈCES VONT DANS LE MÊME SENS**, et c'est
+contre-intuitif assez longtemps pour devoir être écrit à l'écran : le premier
+réduit ce qu'il doit parce qu'on lui a donné de l'argent, le second parce qu'il
+a rendu celui qu'il détenait.
+
+⚠️ **LE MONTANT S'ENVOIE POSITIF ET LE SENS VIENT DU GENRE.** Un `-15000` envoyé
+« par prudence » sur un `payout` est ramené à `-15000` par le serveur, jamais
+inversé. Seule une correction porte son signe, et l'écran doit alors le demander
+explicitement (« il me doit » / « je lui dois »).
+
+### ⚠️ ON NE MODIFIE NI NE SUPPRIME JAMAIS
+
+Il n'y a ni `PATCH` ni `DELETE`, et il n'y en aura pas : **un livre qu'on peut
+récrire ne prouve rien**, et c'est précisément quand il y a litige qu'on vient
+le lire. La correction est une **écriture de plus** (`/reverse`), qui dit ce
+qu'elle annule.
+
+- l'écriture annulée porte `reversed: true` et `reversed_by_id` ;
+- **gardez-la visible, barrée** : la faire disparaître laisserait un trou dans
+  un livre dont tout l'intérêt est d'être continu ;
+- une annulation ne s'annule pas (`ledger_not_reversible`), et deux fois la même
+  écriture non plus (`ledger_already_reversed`).
+
+### ⚠️ LE REPORT À NOUVEAU — `opening_xof`
+
+**Affichez-le à côté du solde.** Montrer les écritures d'octobre sans dire ce
+qui restait au 30 septembre donne un solde de fin de mois que personne ne peut
+rapprocher.
+
+### ⚠️ LA DATE EST CELLE DE L'ÉVÉNEMENT
+
+`at` est facultatif et vaut « maintenant ». Un versement fait lundi et noté
+jeudi appartient à **lundi** : sans ce champ, le livre raconte l'ordre dans
+lequel on a tapé, pas celui dans lequel les choses sont arrivées.
+
+### Les refus
+
+| Code | |
+|---|---|
+| `ledger_driver_required` | « Le grand livre se tient par chauffeur : dites lequel » |
+| `ledger_kind_unknown` | une ligne de **course** ne s'écrit pas à la main — ce serait fabriquer une dette qu'aucune course ne justifie |
+| `ledger_amount_zero` | « Une écriture de zéro n'enregistre rien » |
+| `ledger_reason_required` | une **correction** doit dire pourquoi ; un versement se comprend tout seul |
+| `driver_not_in_your_fleet` | `403` — on n'écrit pas sur le compte de quelqu'un qui ne conduit aucune de vos voitures |
+| `partner_read_only` | un lecteur lit le livre, il n'y écrit pas |
+
+### ⚠️ CE QUE LE LIVRE NE CONTIENT PAS, ET QU'IL FAUT DIRE
+
+**Les courses d'avant la mise en place du livre n'y figurent pas.** Leur part
+n'a pas été figée au règlement, et la recalculer aux termes d'aujourd'hui
+donnerait une écriture dont le montant change le jour où les termes changent.
+Un livre qui tait son point de départ se lit comme complet.
+
+(Le **relevé** de Finance, lui, sait recalculer — et dit combien de courses il a
+dû recalculer, via `recomputed_rides`.)
 
 ---
 
@@ -1229,6 +1373,38 @@ réponse a l'air.
 ---
 
 ## 17. Journal
+
+### 4.63.0 — 11 octobre 2026
+
+🆕 **LE GRAND LIVRE D'UNE SOCIÉTÉ AVEC SES CHAUFFEURS** (§13 bis) — et les
+**filtres** des courses (§8).
+
+⚠️ **Dira n'encaisse et ne verse rien** : le livre enregistre ce que la société
+déclare avoir versé et encaissé. La phrase va **en haut de l'écran**.
+
+⚠️ **Un livre par chauffeur**, jamais un solde global : `driver` est obligatoire.
+« Mon chauffeur me doit 42 000 » se règle ; un total toutes personnes confondues
+ne se règle avec personne.
+
+⚠️ **Le signe se dit en mots.** « −11 000 » sous « solde » ne dit pas qui doit à
+qui — et c'est la seule chose qu'on vient lire. Un **versement** et une **remise
+d'espèces** vont dans le **même sens**, ce qui est assez contre-intuitif pour
+devoir être écrit à l'écran.
+
+⚠️ **On ne modifie ni ne supprime jamais** : ni `PATCH`, ni `DELETE`. La
+correction est une écriture de plus, et l'écriture annulée **reste visible**.
+
+⚠️ **Le livre ne contient pas les courses d'avant sa mise en place** — leur part
+n'a pas été figée, et la recalculer donnerait une écriture dont le montant
+change. **Dites-le** : un livre qui tait son point de départ se lit comme
+complet.
+
+**Au passage**, le relevé de Finance porte `recomputed_rides` : les courses
+qu'il a dû partager aux termes **d'aujourd'hui**, faute de part figée. Avant
+cela, changer un pourcentage réévaluait le mois écoulé — y compris les semaines
+déjà payées.
+
+---
 
 ### 4.62.3 — 10 octobre 2026
 
