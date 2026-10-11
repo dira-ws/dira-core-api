@@ -855,3 +855,171 @@ func TestCommissionAndDebt(t *testing.T) {
 	_, err = svc.SettleDebt(ctx, "admin", owner, 1, "trop")
 	assert.Error(t, err, "on ne rembourse pas plus que la dette")
 }
+
+// setMoney écrit sur le portefeuille STOCKÉ.
+//
+// ⚠️⚠️ `FindWalletByOwner` REND UN CLONE, et c'est volontaire côté doublure :
+// le vrai dépôt rend un document décodé, pas une référence vivante. Un test
+// qui mute ce que la lecture lui a rendu ne mute donc RIEN — et il passe ou
+// échoue pour une raison qui n'a aucun rapport avec ce qu'il croit vérifier.
+// Mes trois premiers tests de retrait sont tombés exactement là.
+func (f *fakeRepo) setMoney(ownerID primitive.ObjectID, balance, promo, debt int) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	w := f.wallets[f.byOwner[ownerID]]
+	w.BalanceXOF, w.PromoXOF, w.DebtXOF = balance, promo, debt
+}
+
+// moneyOf relit le portefeuille STOCKÉ.
+func (f *fakeRepo) moneyOf(ownerID primitive.ObjectID) Wallet {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return *f.wallets[f.byOwner[ownerID]]
+}
+
+// --- LE SENS SORTANT, dans la doublure ------------------------------------
+//
+// ⚠️⚠️ ÉCRITES AUSSI FIDÈLEMENT QUE LA VRAIE BASE, et c'est une leçon déjà
+// payée dans ce dépôt : une doublure plus PERMISSIVE que le dépôt réel laisse
+// passer des tests verts sur du code cassé ; une doublure plus FIDÈLE que le
+// dépôt (le cas du 10 octobre) cache un défaut d'écriture. Les deux coûtent la
+// même chose — on croit avoir testé.
+//
+// Ici, les trois règles du retrait sont reproduites telles quelles :
+// le promotionnel n'est JAMAIS touché, la dette passe avant, et la condition
+// est vérifiée au moment du débit.
+
+func (f *fakeRepo) HoldForWithdrawal(_ context.Context, walletID primitive.ObjectID, amount int) (bool, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	w, ok := f.wallets[walletID]
+	if !ok {
+		return false, errors.New("wallet not found")
+	}
+	if amount <= 0 {
+		return false, errors.New("amount must be positive")
+	}
+	// ⚠️ LE RETIRABLE, pas le solde : l'argent réel moins la dette, et JAMAIS
+	// le promotionnel.
+	if w.BalanceXOF-w.DebtXOF < amount {
+		return false, nil
+	}
+	w.BalanceXOF -= amount
+	return true, nil
+}
+
+func (f *fakeRepo) ReleaseWithdrawal(_ context.Context, walletID primitive.ObjectID, amount int) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	w, ok := f.wallets[walletID]
+	if !ok {
+		return errors.New("wallet not found")
+	}
+	w.BalanceXOF += amount
+	return nil
+}
+
+func (f *fakeRepo) WithdrawableOf(_ context.Context, walletID primitive.ObjectID) (int, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	w, ok := f.wallets[walletID]
+	if !ok {
+		return 0, errors.New("wallet not found")
+	}
+	v := w.BalanceXOF - w.DebtXOF
+	if v < 0 {
+		return 0, nil
+	}
+	return v, nil
+}
+
+// ⚠️⚠️ ON NE RETIRE PAS UN CRÉDIT OFFERT. C'est la règle qui sépare le retrait
+// du paiement : `SpendMoney` prend le promotionnel EN PREMIER — juste pour
+// payer une course, faux pour sortir de l'argent. Sans ce test, le budget
+// promotionnel deviendrait un distributeur de billets, et la première campagne
+// un peu large viderait la caisse en une nuit.
+func TestPromotionalCreditCannotBeCashedOut(t *testing.T) {
+	repo := newFakeRepo()
+	svc := NewService(repo, nil, nil, nil, nil, 100, 5, nil)
+	ctx := context.Background()
+	owner := primitive.NewObjectID()
+	require.NoError(t, svc.CreateClientWallet(ctx, owner.Hex()))
+	repo.setMoney(owner, 2000, 8000, 0)
+
+	// 10 000 au total dont 8 000 offerts : on ne peut en sortir que 2 000.
+	got, err := svc.Withdrawable(ctx, owner.Hex())
+	require.NoError(t, err)
+	assert.Equal(t, 2000, got, "le promotionnel ne compte pas")
+
+	ok, err := svc.HoldForWithdrawal(ctx, owner.Hex(), 5000)
+	require.NoError(t, err)
+	assert.False(t, ok, "on ne retire pas ce qui a été offert")
+	after := repo.moneyOf(owner)
+	assert.Equal(t, 8000, after.PromoXOF, "le promotionnel n'est pas touché")
+	assert.Equal(t, 2000, after.BalanceXOF)
+}
+
+// ⚠️ LA DETTE PASSE AVANT. Ce qu'on doit à la plateforme n'est pas à soi :
+// sans cette borne, un chauffeur endetté retire tout et la dette ne se
+// rembourse jamais.
+func TestWhatYouOweComesBeforeWhatYouWithdraw(t *testing.T) {
+	repo := newFakeRepo()
+	svc := NewService(repo, nil, nil, nil, nil, 100, 5, nil)
+	ctx := context.Background()
+	owner := primitive.NewObjectID()
+	require.NoError(t, svc.CreateClientWallet(ctx, owner.Hex()))
+	repo.setMoney(owner, 10000, 0, 7000)
+
+	got, err := svc.Withdrawable(ctx, owner.Hex())
+	require.NoError(t, err)
+	assert.Equal(t, 3000, got)
+
+	ok, err := svc.HoldForWithdrawal(ctx, owner.Hex(), 5000)
+	require.NoError(t, err)
+	assert.False(t, ok)
+
+	ok, err = svc.HoldForWithdrawal(ctx, owner.Hex(), 3000)
+	require.NoError(t, err)
+	assert.True(t, ok)
+	assert.Equal(t, 7000, repo.moneyOf(owner).BalanceXOF)
+
+	// ⚠️ ET UNE DETTE PLUS GRANDE QUE LE SOLDE DONNE ZÉRO, jamais un négatif :
+	// « retirable : −4 000 F » se lit comme un bug.
+	repo.setMoney(owner, 3000, 0, 7000)
+	got, err = svc.Withdrawable(ctx, owner.Hex())
+	require.NoError(t, err)
+	assert.Zero(t, got)
+}
+
+// ⚠️ LA RETENUE ET LA REMISE LAISSENT CHACUNE UNE LIGNE AU RELEVÉ, avec DEUX
+// raisons distinctes. Un relevé où l'argent disparaît puis réapparaît sans
+// trace est un relevé qu'un chauffeur conteste — et il a raison.
+func TestAWithdrawalLeavesATrailBothWays(t *testing.T) {
+	repo := newFakeRepo()
+	svc := NewService(repo, nil, nil, nil, nil, 100, 5, nil)
+	ctx := context.Background()
+	owner := primitive.NewObjectID()
+	require.NoError(t, svc.CreateClientWallet(ctx, owner.Hex()))
+	repo.setMoney(owner, 10000, 0, 0)
+
+	ok, err := svc.HoldForWithdrawal(ctx, owner.Hex(), 4000)
+	require.NoError(t, err)
+	require.True(t, ok)
+	require.NoError(t, svc.ReleaseWithdrawal(ctx, owner.Hex(), 4000, "payout_failed", "p1"))
+
+	var held, returned *Transaction
+	for i := range repo.transactions {
+		switch repo.transactions[i].Reason {
+		case ReasonPayout:
+			held = &repo.transactions[i]
+		case ReasonPayoutReturn:
+			returned = &repo.transactions[i]
+		}
+	}
+	require.NotNil(t, held, "la retenue laisse une ligne")
+	require.NotNil(t, returned, "la remise aussi")
+	assert.Equal(t, -4000, held.Amount, "sortie")
+	assert.Equal(t, 4000, returned.Amount, "entrée")
+	assert.Equal(t, 10000, repo.moneyOf(owner).BalanceXOF,
+		"et le solde est revenu à l'identique")
+}

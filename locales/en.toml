@@ -567,3 +567,49 @@ other = "Send at most 50 detection reports per call"
 [errors.detections_quota_reached]
 other = "Enough detection reports for today: the rest is dropped, and nothing else is affected"
 
+
+# Mobile-money withdrawals — money LEAVING the platform. Every refusal says
+# what to do: this is the screen where someone comes for the money they earned.
+[errors.payout_unavailable]
+other = "Withdrawals are not open in this country yet"
+
+[errors.payout_is_periodic]
+other = "Your earnings are paid out automatically: there is nothing to ask for"
+
+[errors.payout_below_minimum]
+other = "This amount is below the minimum we can send"
+
+[errors.payout_above_maximum]
+other = "This amount is above what we send in one go"
+
+[errors.payout_max_under_min]
+other = "The per-withdrawal maximum is below the minimum: no amount could ever go through"
+
+[errors.payout_cap_under_min]
+other = "The daily cap is below the per-withdrawal minimum: no amount could ever go through"
+
+[errors.payout_daily_cap]
+other = "You have reached today's withdrawal limit: the rest can go out tomorrow"
+
+# We never say "insufficient balance": the balance can be large and the
+# WITHDRAWABLE nil — debt comes first, and promotional credit cannot be cashed.
+[errors.not_withdrawable]
+other = "This is more than you can withdraw: promotional credit cannot be cashed out, and what you owe comes first"
+
+[errors.payout_no_phone]
+other = "Your account has no phone number to send money to"
+
+[errors.payout_already_pending]
+other = "You already have a withdrawal in progress: wait for it to finish"
+
+[errors.payout_not_found]
+other = "This withdrawal does not exist"
+
+[errors.payout_already_decided]
+other = "This withdrawal has already been decided"
+
+[errors.reject_reason_required]
+other = "Say why you are refusing: the agent sees this phrase"
+
+[errors.bad_signature]
+other = "This notification is not signed by the aggregator"
