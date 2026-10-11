@@ -36,6 +36,10 @@ func (h *Handler) Mount(r chi.Router, authMW func(http.Handler) http.Handler) {
 		g.Get("/me", h.me)
 		g.Patch("/me", h.updateMe)
 		g.Patch("/me/preferences", h.updatePreferences)
+		// ⚠️⚠️ CHANGER SON MOT DE PASSE. Les comptes à mot de passe sont créés
+		// PAR QUELQU'UN D'AUTRE, qui le choisit et le transmet de vive voix :
+		// sans ce geste, celui qui a ouvert l'accès le connaît pour toujours.
+		g.Post("/me/password", h.changePassword)
 		// SUPPRIMER SON COMPTE — voir `erasure.go`. Deux temps : la fermeture
 		// maintenant, l'effacement après le délai de grâce.
 		g.Delete("/me", h.deleteMe)

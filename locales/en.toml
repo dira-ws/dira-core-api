@@ -531,3 +531,21 @@ other = "Your role on this fleet is read-only: ask its owner for manager access"
 
 [errors.partner_unavailable]
 other = "The partner console is not available on this server"
+
+# Changing one's own password. Password accounts are created by someone else,
+# who picks the password and hands it over in person.
+[errors.current_password_wrong]
+other = "The current password is not right: check it, or ask whoever opened your access"
+
+[errors.password_unchanged]
+other = "The new password is the same as the old one: choose a different one"
+
+[errors.account_has_no_password]
+other = "This account signs in with a code, not a password"
+
+# The phrase carries the number: "too short" sends people guessing.
+[errors.password_too_short]
+other = "A password needs at least 8 characters: pick a longer one"
+
+[errors.password_too_long]
+other = "A password cannot be longer than 120 characters"
