@@ -9,10 +9,12 @@ package auditlog
 
 import (
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/kgtech-org/dira-core-api/pkg/apperr"
 	"github.com/kgtech-org/dira-core-api/pkg/audit"
 	"github.com/kgtech-org/dira-core-api/pkg/auth"
 	"github.com/kgtech-org/dira-core-api/pkg/httpx"
@@ -28,6 +30,33 @@ func NewHandler(rec *audit.Recorder) *Handler { return &Handler{rec: rec} }
 // moment où elle a été faite.
 func (h *Handler) Mount(r chi.Router, authMW func(http.Handler) http.Handler) {
 	r.With(authMW, middleware.RequireRole(auth.RoleAdmin)).Get("/admin/audit", h.search)
+	// ⚠️ LA VÉRIFICATION DEMANDE LA PORTÉE DU SOCLE, là où la lecture du
+	// journal est ouverte à tout administrateur. Ce n'est pas la même
+	// question : lire une entrée, c'est de l'exploitation ; demander « la
+	// chaîne tient-elle ? » est une conclusion d'audit sur la plateforme
+	// entière, et le journal est un objet du socle.
+	//
+	// ⚠️ ET ON N'INVENTE PAS DE PALIER POUR AUTANT. `ScopeCore` existe déjà et
+	// garde les mêmes écrans sensibles (le SOS, par exemple) : un troisième
+	// niveau de permission pour une seule route aurait ajouté un concept que
+	// personne d'autre n'utilise.
+	r.With(authMW, middleware.RequireRole(auth.RoleAdmin), middleware.RequireScope(auth.ScopeCore)).
+		Get("/admin/audit/verify", h.verify)
+}
+
+// GET /admin/audit/verify[?limit=] — la chaîne tient-elle ?
+//
+// ⚠️ ELLE NE RÉPARE RIEN, ET C'EST VOULU. Une rupture est un FAIT : la
+// « réparer » en re-scellant effacerait la preuve qu'on vient d'obtenir. La
+// route constate, nomme l'entrée, et s'arrête là.
+func (h *Handler) verify(w http.ResponseWriter, r *http.Request) {
+	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+	out, err := h.rec.Verify(r.Context(), limit)
+	if err != nil {
+		httpx.Error(w, r, apperr.Internal(err))
+		return
+	}
+	httpx.JSON(w, http.StatusOK, out)
 }
 
 // GET /admin/audit?service=&actor_id=&action=&resource_id=&from=&to=&limit=&cursor=

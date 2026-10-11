@@ -48,6 +48,22 @@ var global = map[string]string{
 	// qui se connecte en voyage.
 	"fleet.ByMember":   "la flotte du compte connecté, désignée par son identifiant : plus étroit qu'un pays",
 	"user.FindByEmail": "la connexion cherche un compte avant de connaître son pays",
+	// ⚠️⚠️ LE CHAÎNAGE DU JOURNAL EST MONDIAL PAR CONSTRUCTION, et c'est une
+	// décision, pas un oubli.
+	//
+	// Une chaîne d'empreintes bornée par pays ferait QUATORZE chaînes. Chacune
+	// serait vérifiable séparément — et il deviendrait possible d'effacer une
+	// entrée dans l'une sans que rien ne le signale dans les autres, alors que
+	// la promesse tenue à un groupe de crédit-bail est « le journal de la
+	// plateforme ». Un journal unique demande une chaîne unique.
+	//
+	// ⚠️ ET CE N'EST PAS UNE FUITE DE DONNÉES : le scellement ne LIT que des
+	// empreintes et des numéros d'ordre pour les recalculer — il ne rend rien
+	// à personne. La LECTURE du journal, elle (`GET /admin/audit`), reste
+	// bornée au pays : c'est `auditlog`, pas ce paquet.
+	"audit.head":   "le bout de la chaîne est unique : une chaîne par pays se couperait sans que rien ne le signale",
+	"audit.Seal":   "sceller suit l'ordre d'écriture de TOUTE la plateforme — quatorze chaînes seraient quatorze trous possibles",
+	"audit.Verify": "vérifier une chaîne mondiale : la borner par pays reviendrait à ne vérifier qu'un quatorzième du journal",
 	// Le rappel d'un prestataire de paiement arrive SANS requête de console :
 	// il porte une référence, pas un pays.
 	"payment.FindByProviderRef": "un rappel de prestataire n'a que sa référence",

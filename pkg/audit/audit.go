@@ -47,6 +47,21 @@ type Entry struct {
 	After     any       `bson:"after,omitempty" json:"after,omitempty"`
 	IP        string    `bson:"ip,omitempty" json:"ip,omitempty"`
 	CreatedAt time.Time `bson:"created_at" json:"created_at"`
+
+	// LE CHAÎNAGE — voir `chain.go`. Absents tant que l'entrée n'est pas
+	// scellée : une entrée sans `seq` est RÉCENTE, pas suspecte.
+	//
+	// ⚠️ `Seq` EST LE NUMÉRO D'ORDRE, et il fait partie de l'empreinte : sans
+	// lui, réordonner deux entrées ne casserait rien — or l'ordre EST
+	// l'information dans un journal d'audit. « Il a suspendu le compte PUIS
+	// viré l'argent » ne dit pas la même chose que l'inverse.
+	Seq      int64  `bson:"seq,omitempty" json:"seq,omitempty"`
+	PrevHash string `bson:"prev_hash,omitempty" json:"prev_hash,omitempty"`
+	Hash     string `bson:"hash,omitempty" json:"hash,omitempty"`
+	// SealedAt : quand l'entrée est entrée dans la chaîne. ⚠️ DISTINCT de
+	// `CreatedAt` — l'écart entre les deux est le retard du scellement, et
+	// c'est une mesure utile le jour où il s'arrête.
+	SealedAt *time.Time `bson:"sealed_at,omitempty" json:"sealed_at,omitempty"`
 }
 
 type Resource struct {
