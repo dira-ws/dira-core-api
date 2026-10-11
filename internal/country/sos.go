@@ -544,6 +544,13 @@ func (s *Service) UpdateSOS(ctx context.Context, code string, req SOSUpdateReque
 		return nil, apperr.Internal(err)
 	}
 	cur := inst.Security.SOS
+	// ⚠️⚠️ L'ÉTAT D'AVANT, PRIS ICI ET PAS AILLEURS. Un seuil SOS se modifie
+	// comme un tarif : le jour où une alerte n'est pas partie, la première
+	// question est « qu'est-ce qui était réglé ce soir-là, et qui l'avait
+	// réglé ». Sans cette photo prise avant d'écrire, le journal ne saurait
+	// dire que « quelqu'un a touché au SOS du Togo » — ce qui ne répond à
+	// aucune question.
+	auditBefore := sosAdminResponse(info.Code, cur)
 	if req.Shake != nil {
 		cur.Shake = req.Shake
 	}
@@ -612,6 +619,13 @@ func (s *Service) UpdateSOS(ctx context.Context, code string, req SOSUpdateReque
 		return nil, apperr.Internal(err)
 	}
 	out := sosAdminResponse(info.Code, cur)
+	// ⚠️ AU JOURNAL D'AUDIT DE LA PLATEFORME, pas dans un registre à part.
+	// La console a déjà un écran qui le lit (`/audit`) : un second journal,
+	// propre au SOS, aurait obligé à chercher à deux endroits le jour où l'on
+	// reconstitue une soirée.
+	if s.audit != nil {
+		s.audit.Record(ctx, "country.sos", "country", info.Code, auditBefore, out)
+	}
 	return &out, nil
 }
 
