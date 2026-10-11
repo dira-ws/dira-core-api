@@ -445,6 +445,41 @@ func run(logger *slog.Logger) error {
 	// comptes ne laissaient aucune trace. Une interface prévue et jamais
 	// câblée se lit, à la relecture, comme une garantie qui existe.
 	auditRec := audit.NewRecorder(mongo.DB)
+	// LE CHAÎNAGE DU JOURNAL — voir `pkg/audit/chain.go`.
+	//
+	// ⚠️ UN INDEX QUI RATE N'ÉTEINT PAS LE JOURNAL. Sans index, le scellement
+	// est lent ; sans journal, une action sensible ne laisse aucune trace. On
+	// journalise et on continue.
+	if err := auditRec.EnsureChainIndexes(ctx); err != nil {
+		logger.Error("audit: index de chaîne non posé — le scellement sera lent", "error", err)
+	}
+	// ⚠️⚠️ LE SCELLEMENT EST ASYNCHRONE, ET C'EST STRUCTUREL. Une chaîne
+	// demande un ORDRE : la calculer à l'écriture sérialiserait toutes les
+	// écritures du journal derrière un verrou — exactement ce que `pkg/audit`
+	// interdit en toutes lettres (« une écriture d'audit ne doit pas casser
+	// l'opération qu'elle documente »). Les entrées sont donc scellées par
+	// passes, et une entrée non scellée est RÉCENTE, pas suspecte.
+	go func() {
+		t := time.NewTicker(30 * time.Second)
+		defer t.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-t.C:
+				sctx, cancel := context.WithTimeout(ctx, 25*time.Second)
+				res, err := auditRec.Seal(sctx, 1000)
+				cancel()
+				switch {
+				case err != nil:
+					logger.Error("audit: scellement interrompu", "error", err)
+				case res.Sealed > 0:
+					logger.Info("audit: entrées scellées",
+						"n", res.Sealed, "from_seq", res.From, "to_seq", res.To)
+				}
+			}
+		}
+	}()
 
 	fleetSvc := fleet.NewService(fleet.NewRepository(mongo))
 	fleetSvc.SetAuditor(auditRec)
