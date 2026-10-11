@@ -1,6 +1,6 @@
 # Specs frontend — par rôle
 
-> **Version 4.64.0** · 11 octobre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics`
+> **Version 4.65.0** · 11 octobre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics`
 
 **Cinq** documents, un par application. Chacun est **autonome** : tout ce qu'un frontend doit savoir pour son rôle, sans avoir à ouvrir les vingt specs de modules.
 
@@ -355,6 +355,33 @@ Chaque document porte la même version en en-tête, et son propre journal des ch
 - [ ] ⚠️ **`TRACKING_JWT_SECRET` renseigné dans chaque environnement déployé.** Vide, l'authentification du service de suivi est **désactivée** : n'importe qui connaissant un `delivery_id` suit la course. Le secret doit valoir **exactement** le `JWT_SECRET` de `dira-food-api`.
 
 ## Journal
+
+### 4.65.0 — 11 octobre 2026
+
+🐞 **LE SECOND PASSAGER D'UNE COURSE PARTAGÉE NE VOYAIT RIEN** — et une course
+se disait « terminée » quand le chauffeur se garait devant la porte. Deux
+défauts serveur, signalés en recette, corrigés. `VTC-CLIENT.md` §6,
+`VTC-DRIVER.md` §4 ter, `DIRA-CLIENT.md` §11.
+
+- ⚠️ **Une trame de position ne porte qu'UN `mission_id`.** Vrai depuis
+  toujours, sans conséquence tant qu'une voiture faisait une course à la fois.
+  Le chauffeur pousse sous **une** des deux courses d'un partage : l'autre
+  passager était abonné à un canal où personne ne publiait jamais — accueil
+  **nu**, **carte vide du départ à l'arrivée**, course en apparence figée, et
+  distance « prévue » sur son reçu. Le serveur recopie maintenant chaque
+  position aux deux courses, chacune gardant son propre parcours.
+- ⚠️ **`status: "completed"` arrivait à l'ARRIVÉE du chauffeur**, et aussi sur
+  une course **annulée** : effet de bord du gel du parcours, pas un état de la
+  course. Sur une course ordinaire le vrai `arrived` suivait une milliseconde
+  plus tard et le masquait ; une application qui traite `completed` comme un
+  terminus ne voyait jamais la correction. **C'est la règle « une trame ⇒ un
+  `GET` » qui a protégé celles qui n'ont rien vu.**
+- ⚠️ **Côté chauffeur : UNE trame, UN `mission_id`** — celui de la course à qui
+  appartient le prochain arrêt de `pool_plan`. Pousser une trame **par** course
+  **doublerait** la distance réelle des deux, puisque chaque point est déjà
+  recopié à l'autre.
+- 🤝 **Et les deux courses d'un partage ne se terminent pas ensemble** : c'est
+  normal. L'une peut être `completed` quand l'autre roule encore.
 
 ### 4.63.0 — 11 octobre 2026
 

@@ -1,6 +1,6 @@
 # App CHAUFFEUR — COURSES (VTC) — contrat d'API
 
-> **Version 4.64.0** · 11 octobre 2026
+> **Version 4.65.0** · 11 octobre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Courses : `https://api-staging.dira.llc/api/v1/vtc` · Suivi : `wss://tracking-staging.dira.llc` · SIG : `https://maps.dira.llc/api`
 
 ---
@@ -2028,6 +2028,29 @@ plus lente parce que la clé manque.
 
 L'attente au départ, le temps réel, le klaxon, l'enchaînement, le hors ligne :
 tout fonctionne comme sur une course ordinaire, **course par course**.
+
+#### ⚠️ VOS POSITIONS : UNE SEULE TRAME, UN SEUL `mission_id` (v4.65.0)
+
+Vous avez deux courses et une voiture. **Poussez une seule trame**, sous le
+`mission_id` de **la course à qui appartient le prochain arrêt de
+`pool_plan`** — `ride_id` est écrit sur chaque arrêt, justement pour ça. Le
+serveur recopie ce point à **l'autre** course du groupe : les deux passagers
+voient la voiture, et chacun garde son propre parcours.
+
+⚠️ **NE POUSSEZ SURTOUT PAS UNE TRAME PAR COURSE.** Chaque point étant déjà
+recopié à l'autre, deux trames pour un même instant en mettraient **deux dans
+chaque parcours** : la distance réelle serait doublée — et c'est elle qui
+figure sur le reçu du passager.
+
+⚠️ **UNE COURSE TERMINÉE QUITTE LE GROUPE.** Après avoir déposé le premier
+passager, continuez sous le `mission_id` de la course **qui reste** — la règle
+du prochain arrêt vous y amène toute seule. Rester sur l'identifiant de la
+course déposée ferait rouler la voiture sur la carte de quelqu'un qui est
+descendu, et laisserait celui qui est encore à bord devant un écran figé.
+
+> **Avant la v4.65.0, le second passager ne voyait RIEN** : ni la voiture, ni
+> son parcours à l'arrivée. Ce n'était pas votre application — le suivi
+> n'acceptait qu'un `mission_id` par trame et ne recopiait rien.
 
 ---
 

@@ -1,6 +1,6 @@
 # App CLIENT — COURSES (VTC) — contrat d'API
 
-> **Version 4.64.0** · 11 octobre 2026
+> **Version 4.65.0** · 11 octobre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Courses : `https://api-staging.dira.llc/api/v1/vtc` · Suivi : `wss://tracking-staging.dira.llc`
 
 ---
@@ -2512,6 +2512,47 @@ WS wss://tracking-staging.dira.llc/track/subscribe/{ride_id}
 L'identifiant de course sert d'identifiant de mission (`mission_id` =
 `ride_id`). Le jeton d'accès passe dans l'URL (`?token=`) — un WebSocket de
 navigateur ne porte pas d'en-tête.
+
+### 🤝 SUR UNE COURSE PARTAGÉE, VOUS VOYEZ LA VOITURE COMME TOUT LE MONDE (v4.65.0)
+
+**Rien à faire de particulier : abonnez-vous à VOTRE `ride_id`.** Vous recevez
+les positions de la voiture pendant **tout** le trajet — y compris le temps
+qu'elle met à venir chercher l'autre passager — et votre reçu porte la
+distance **réellement** parcourue (`distance_source: "tracked"`).
+
+⚠️ **CE QUE ÇA RÉPARE, ET QUI A ÉTÉ VU EN RECETTE.** Le chauffeur ne pousse
+ses positions que sous **une** course — c'est tout ce que le protocole du
+suivi lui permet. Le second passager était donc abonné à un canal où personne
+ne publiait jamais : accueil **nu**, **carte vide du départ à l'arrivée**,
+course qui semblait figée, puis distance « prévue » sur le reçu. Le serveur
+recopie maintenant chaque position aux **deux** courses, chacune gardant son
+propre parcours.
+
+⚠️ **ET LES DEUX COURSES NE SE TERMINENT PAS ENSEMBLE** — c'est normal, ce
+n'est pas une panne. Vous êtes déposé, votre course passe à `completed` et
+votre socket se ferme ; le co-passager roule encore et voit la voiture
+continuer. L'inverse est vrai aussi : vous pouvez rester `in_transit`
+longtemps après que l'autre est descendu. **N'affichez jamais l'état de
+l'autre course** — vous ne le recevez pas, et vous n'avez pas à le deviner.
+
+### ⚠️ VOUS NE RECEVEZ PLUS « TERMINÉE » À L'ARRIVÉE DU CHAUFFEUR (v4.65.0)
+
+**Correctif.** Le socket envoyait une trame `{"type":"status","status":"completed"}`
+**au moment où le chauffeur arrivait à votre point de départ**, et une autre
+sur une course **annulée**. C'était un effet de bord du gel du parcours côté
+suivi, pas un état de votre course.
+
+Sur une course ordinaire, le vrai `arrived` suivait une milliseconde plus tard
+et le masquait. Une application qui traite `completed` comme un **terminus**
+(socket fermée, écran du reçu) ne voyait jamais passer la correction — et
+affichait une course terminée alors que le chauffeur se garait devant chez
+vous. Sur une course **partagée**, c'est exactement la scène qui a été
+signalée : « terminée » pour l'un, « en cours » pour l'autre.
+
+⚠️ **LA RÈGLE QUI PROTÉGEAIT DE TOUT ÇA N'A PAS CHANGÉ : une trame `status`
+n'est pas la vérité, c'est une invitation à relire.** `GET /rides/{id}` fait
+foi. Une application qui relisait à chaque trame n'a jamais rien vu de ce
+défaut.
 
 ### 🛰️ L'ACCUEIL PORTE LA DERNIÈRE POSITION CONNUE (v4.28.0)
 

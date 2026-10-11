@@ -1,6 +1,6 @@
 # App CLIENT UNIFIÉE — LIVRAISON **et** COURSES — contrat d'API
 
-> **Version 4.64.0** · 11 octobre 2026
+> **Version 4.65.0** · 11 octobre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Livraison : `…/api/v1/food` · Courses : `…/api/v1/vtc` · Combiné : `…/api/v1/analytics` · Suivi : `wss://tracking-staging.dira.llc`
 
 ---
@@ -845,6 +845,21 @@ symétrie des deux métiers attendrait une trame qui n'arrive jamais.
 pour le même passage (socket **et** push) sont normales : le second `GET` répond
 la même chose. Une application qui ferait du socket sa source de vérité verrait,
 un jour, une course « en route » qu'un `GET` dit terminée.
+
+### ⚠️ CE QUE CETTE RÈGLE A ÉVITÉ, POUR DE VRAI (v4.65.0)
+
+Le socket du suivi envoyait `{"type":"status","status":"completed"}` **à
+l'arrivée du chauffeur au point de départ**, et sur une course **annulée** :
+un effet de bord du gel du parcours côté suivi, pas un état de l'opération.
+Corrigé — mais c'est **le point 2 ci-dessus** (une trame ⇒ un `GET`) qui
+distinguait les applications qui n'ont rien vu de celles qui affichaient une
+course terminée pendant que la voiture se garait devant la porte.
+
+**Et sur une course partagée, la carte du second passager restait vide du
+départ à l'arrivée** : le chauffeur ne pousse ses positions que sous une
+seule des deux courses. Le serveur les recopie maintenant aux deux —
+abonnez-vous simplement à **votre** `ride_id`. Les deux courses d'un partage
+ne se terminent **pas** ensemble, et c'est normal : voir `VTC-CLIENT.md` §6.
 
 ---
 
