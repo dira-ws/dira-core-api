@@ -574,3 +574,28 @@ other = "Votre rôle sur cette flotte est en lecture seule : demandez un accès 
 
 [errors.partner_unavailable]
 other = "La console partenaire n'est pas disponible sur ce serveur"
+
+# ⚠️⚠️ CHANGER SON MOT DE PASSE. Les comptes à mot de passe de cette plateforme
+# sont créés PAR QUELQU'UN D'AUTRE, qui le choisit et le transmet de vive voix.
+# Sans ce geste, celui qui a ouvert l'accès le connaît pour toujours — et la
+# personne qui s'en sert n'a aucun moyen de reprendre la main sur son compte.
+[errors.current_password_wrong]
+other = "Le mot de passe actuel n'est pas le bon : vérifiez-le, ou demandez à la personne qui vous a ouvert l'accès"
+
+[errors.password_unchanged]
+other = "Le nouveau mot de passe est le même que l'ancien : choisissez-en un autre"
+
+# ⚠️ Un client entre par CODE : lui parler de mot de passe l'enverrait en
+# chercher un qu'il n'a jamais eu.
+[errors.account_has_no_password]
+other = "Ce compte se connecte par code, pas par mot de passe"
+
+# ⚠️ LA PHRASE PORTE LE NOMBRE. C'est le seul endroit de la plateforme où
+# quelqu'un INVENTE un mot de passe ; « trop court » l'enverrait essayer au
+# hasard. (Et cette règle ne vit PAS dans un tag `validate:` : elle en sortirait
+# en « Requête invalide ».)
+[errors.password_too_short]
+other = "Un mot de passe fait au moins 8 caractères : choisissez-en un plus long"
+
+[errors.password_too_long]
+other = "Un mot de passe ne peut pas dépasser 120 caractères"
