@@ -1,6 +1,6 @@
 # App CLIENT — COURSES (VTC) — contrat d'API
 
-> **Version 4.66.0** · 11 octobre 2026
+> **Version 4.67.0** · 11 octobre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Courses : `https://api-staging.dira.llc/api/v1/vtc` · Suivi : `wss://tracking-staging.dira.llc`
 
 ---
@@ -482,6 +482,42 @@ elle ne sert qu'elle-même, et aucune voiture ne répond à un appel de moto. Ri
 à faire de votre côté : c'est le serveur qui trie avant de sonner. Ne promettez
 donc pas « une voiture si aucune moto n'est libre » — cela n'arrivera pas, et
 l'écran d'attente doit dire la vérité.
+
+### 🛺 LE TRICYCLE — le tuk-tuk, trois places (v4.67.0)
+
+```json
+{ "key": "tricycle", "name": "Tricycle", "note": "Tuk-tuk · 1-3 passagers",
+  "seats": 3, "map_icon": "tricycle", "icon_url": null,
+  "modes": { "free": { … }, "rental": { … } } }
+```
+
+**Deuxième du catalogue**, entre la moto et l'éco : il porte plus de monde
+qu'une moto et coûte bien moins qu'une voiture. Ouvert dans tous les pays.
+
+⚠️ **`seats` VAUT 3, ET C'EST TOUTE LA DIFFÉRENCE AVEC LA MOTO.** Trois
+passagers, des bagages, un toit. C'est exactement le cas que le §précédent
+annonçait : **lisez `seats`**, ne le déduisez pas de la `key`. Une application
+qui aurait écrit « si c'est deux roues alors une place » se trompe ici.
+
+⚠️ **PAS DE COURSE PARTAGÉE DESSUS NON PLUS** — et, comme pour la moto, vous
+le savez **sans règle spéciale** : `modes` ne porte pas la clé `pool`. Mais
+attention au raisonnement : ce n'est pas parce qu'il n'y aurait pas la place
+(il y en a). C'est une **décision de produit** que personne n'a encore prise,
+et elle peut s'inverser demain **sans que vous changiez une ligne** — le jour
+où `pool` apparaît dans ses `modes`, il se partage. N'écrivez donc jamais
+« si key == tricycle alors pas de partage ».
+
+⚠️ **IL NE SE SUBSTITUE À RIEN, DANS AUCUN SENS.** Comme la moto, il est en
+dehors de la hiérarchie : il ne prend pas une course éco — le passager a
+demandé une voiture fermée et climatisée — et aucune voiture ne répond à un
+appel de tricycle, qui serait servi au tarif d'un tricycle. Ne promettez pas
+« une voiture si aucun tuk-tuk n'est libre ».
+
+⚠️ **`icon_url` ET `map_icon_url` SONT `null` AU DÉPART**, et c'est voulu : il
+n'existe pas d'illustration embarquée pour lui. Dessinez la silhouette
+`map_icon` (`tricycle`) — **jamais** une voiture de repli. Le marqueur partagé
+de la plateforme est une berline vue de dessus : la poser ici dessinerait une
+voiture là où roule un tricycle, ce qui est **pire** que la silhouette sobre.
 
 > ### 🧭 ⚠️ LES DEUX PINS D'UN VÉHICULE, ET LEUR ORIENTATION (v4.20.0)
 >
