@@ -1,6 +1,6 @@
 # Specs frontend — par rôle
 
-> **Version 4.67.0** · 11 octobre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics`
+> **Version 4.68.0** · 12 octobre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics`
 
 **Cinq** documents, un par application. Chacun est **autonome** : tout ce qu'un frontend doit savoir pour son rôle, sans avoir à ouvrir les vingt specs de modules.
 
@@ -355,6 +355,94 @@ Chaque document porte la même version en en-tête, et son propre journal des ch
 - [ ] ⚠️ **`TRACKING_JWT_SECRET` renseigné dans chaque environnement déployé.** Vide, l'authentification du service de suivi est **désactivée** : n'importe qui connaissant un `delivery_id` suit la course. Le secret doit valoir **exactement** le `JWT_SECRET` de `dira-food-api`.
 
 ## Journal
+
+### 4.68.0 — 12 octobre 2026
+
+Trois fonctions nouvelles, et une route citée qui n'existait pas.
+
+💸 **RETIRER SON ARGENT — mobile money, pour les CHAUFFEURS ET LES LIVREURS
+SEULEMENT.** `GET /payouts/available`, `POST /payouts { amount_xof }`,
+`GET /payouts`, **au socle** et commun aux deux métiers. `VTC-DRIVER.md`
+§6 ter, `FOOD-DELIVERY.md` §8 ter.
+
+- ⚠️⚠️ **`withdrawable_xof` N'EST PAS LE SOLDE** : la dette passe avant, et un
+  crédit offert ne se retire pas. **N'écrivez jamais « solde insuffisant »** —
+  un agent qui le lit devant 42 000 F appelle le support.
+- ⚠️ **QUATRE MODES, ET `rules.mode` DÉCIDE DE TOUT L'ÉCRAN** : `off` (pas de
+  bouton), `direct` (l'argent part), `request` (l'exploitation valide),
+  `periodic` (rien à demander — et la phrase a besoin de `periodic_weekday` et
+  `periodic_min_xof`). **Un bouton grisé fait chercher ce qui ne va pas** :
+  écrivez une phrase.
+- ⚠️ **LE NUMÉRO N'EST PAS DANS LA DEMANDE** — le montant, et rien d'autre.
+  Ajouter un champ `phone` fait **refuser la requête**, et ce n'est pas une
+  rigidité : un champ libre serait la porte ouverte au détournement.
+  `phone_masked` est là pour vérifier.
+- ⚠️ **L'ARGENT EST RETENU DÈS LA DEMANDE**, même en attente de validation.
+  Dites « 10 000 F mis de côté », pas « en attente » — sinon l'agent croit que
+  son argent a disparu.
+- ⚠️ **`failed` ET `rejected` NE SE DISENT PAS PAREIL** : l'un est l'agrégateur
+  qui n'a pas pu verser, l'autre l'exploitation qui a refusé. Les confondre
+  fait contester une décision que personne n'a prise.
+- ⚠️⚠️ **LE CHIFFRE D'UN REFUS EST DANS `error.reason`, PAS DANS
+  `error.message`** : la phrase est générique et traduite, le nombre arrive à
+  côté, déjà formaté dans la monnaie du pays.
+- ⚠️ **Un client n'a pas de retrait, un marchand non plus.** Ce n'est pas une
+  restriction technique : le solde d'un client vient de recharges et de
+  remboursements, et lui ouvrir un retrait ferait de la plateforme un service
+  de transfert d'argent.
+
+🔗 **PARTAGER SON TRAJET — « suis-moi jusqu'à ce que j'arrive ».**
+`POST /rides/{id}/share`, `POST /scheduled-rides/{id}/share`,
+`POST /trip-shares/{id}/revoke`, et la page publique `GET /shared/{token}`.
+`VTC-CLIENT.md` §6 bis, `DIRA-CLIENT.md` §11.
+
+- ⚠️⚠️ **`token` N'APPARAÎT QU'UNE FOIS, à la création.** Le serveur ne le garde
+  que haché et ne peut plus jamais le relire — pas même pour aider quelqu'un
+  qui a perdu son lien. **Partagez immédiatement**, ne le stockez pas. La
+  relecture des liens **ne porte pas le jeton**.
+- ⚠️ **`url` EST COMPOSÉE PAR LE SERVEUR.** Trois applications qui la
+  fabriqueraient sont trois endroits à corriger le jour où le domaine change.
+- ⚠️ **`minutes: 0` = « jusqu'à mon arrivée », et c'est le défaut à proposer en
+  premier.** Toute durée fixe est soit trop courte — le lien meurt alors que la
+  voiture roule — soit trop longue, et devient un traceur. `expires_at` est
+  **toujours** servi : c'est un **plafond**, pas une promesse.
+- ⚠️⚠️ **`position_silent: true` → AUCUN POINT SUR LA CARTE.** Un point qui n'a
+  pas bougé depuis dix minutes ne dit pas « la voiture est arrêtée », il dit
+  « nous ne savons pas où elle est ». L'un rassure à tort.
+- ⚠️ **TROIS REFUS DISTINCTS sur la page publique** — `share_unknown` (404),
+  `share_expired` (410), `share_revoked` (410). Les fondre en « lien invalide »
+  ferait croire au suiveur qu'il s'est trompé d'adresse, et il téléphonerait à
+  celui qu'il voulait laisser tranquille.
+- ⚠️ **Sur une programmation RÉCURRENTE, le lien suit la PREMIÈRE course et
+  meurt avec elle.** L'intuition est l'inverse : dites-le, parce que partager
+  son trajet quotidien pour toujours serait partager son emploi du temps.
+- 🔒 **Ce que la page publique ne sert pas** : le prix, l'identifiant du
+  passager, un numéro, le moyen de paiement, l'historique. Le **prénom** du
+  chauffeur, pas son nom ; la plaque **en entier**, parce que c'est elle qu'on
+  donne à la police.
+
+🛡️ **LA MODÉRATION DES CONVERSATIONS — l'automate d'abord, l'humain ensuite.**
+`VTC-CLIENT.md` §7, `VTC-DRIVER.md` §5, `FOOD-CLIENT.md` §6,
+`FOOD-DELIVERY.md` §7.
+
+- ⚠️⚠️ **UNE INSULTE PART, UNE MENACE NON** (`422`, `message_blocked`). Deux
+  personnes qui s'énervent sur un prix s'insultent ; les bloquer ne calme
+  personne et fait croire à une panne de réseau.
+- ⚠️⚠️ **GARDEZ LE TEXTE DANS LA ZONE DE SAISIE sur un refus.** Le vider fait
+  perdre ce qu'on venait d'écrire, et la personne recommence — en pire.
+- ⚠️ **N'affichez pas le message refusé dans le fil** : une bulle « non
+  envoyé » laisse croire à un problème de réseau et fait retenter dix fois.
+- ⚠️ **`hidden: true`** = retiré par un modérateur : `body` vide, **la ligne
+  reste**. Affichez « message retiré » — l'autre partie a vu qu'il y avait
+  quelque chose là.
+- ⚠️ **N'embarquez aucune liste de mots** : l'exploitation la change sans
+  redéploiement, et deux applications filtreraient différemment la même
+  conversation.
+
+🐞 **ET UNE ROUTE CITÉE QUI N'EXISTE PAS** — `DIRA-CLIENT.md` annonçait
+`POST /schedules` pour programmer une course. Le service sert
+**`POST /scheduled-rides`** : une équipe mobile qui suivait ce tableau prenait
+un `404`. Corrigé.
 
 ### 4.67.0 — 11 octobre 2026
 

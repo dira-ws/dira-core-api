@@ -1,6 +1,6 @@
 # App CLIENT — LIVRAISON — contrat d'API
 
-> **Version 4.67.0** · 11 octobre 2026
+> **Version 4.68.0** · 12 octobre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Livraison : `https://api-staging.dira.llc/api/v1/food` · Suivi : `wss://tracking-staging.dira.llc`
 
 
@@ -1565,6 +1565,53 @@ Réception immédiate sur le socket des commandes (§8). Repli : `?cursor=<derni
 > message, la conversation le dédoublonne par identifiant. Un client peut
 > couper la catégorie (`chat_messages` dans `PATCH /me/preferences`) — il
 > ne reçoit alors ni la notification ni l'archive.
+
+### 🛡️ LA MODÉRATION — l'automate d'abord, l'humain ensuite (v4.66.0)
+
+Chaque message passe par un filtre avant d'être relayé. Deux issues, et elles
+ne se ressemblent pas.
+
+| Gravité | Ce qui se passe | Ce que vous voyez |
+|---|---|---|
+| **insulte** | **le message part**, et il est signalé à l'exploitation | `201`, rien de particulier |
+| **menace** | **le message ne part pas** | `422 message_blocked` |
+
+⚠️⚠️ **UNE INSULTE PASSE, ET C'EST UNE DÉCISION, PAS UN TROU.** Deux personnes
+qui s'énervent sur un prix s'insultent ; les bloquer ne calme personne et fait
+croire à une panne de réseau — après quoi on réécrit la même chose autrement.
+Ce qui ne passe pas, c'est la **menace sur la personne** et l'**injure
+discriminatoire** : ce qui est en jeu n'est plus le confort de la conversation.
+
+⚠️ **N'ÉCRIVEZ AUCUNE LISTE DE MOTS DANS L'APPLICATION.** Les mots qui blessent
+changent d'un pays à l'autre et d'une année à l'autre ; l'exploitation ajoute et
+retire depuis la console, sans redéploiement. Une liste embarquée vieillirait
+dans votre binaire, et deux applications filtreraient différemment la même
+conversation.
+
+**Quand le message est refusé (`422`, `code: "message_blocked"`) :**
+
+⚠️⚠️ **GARDEZ LE TEXTE DANS LA ZONE DE SAISIE.** C'est le seul point de cette
+section qui change tout. Vider le champ sur un refus fait perdre ce qu'on
+venait d'écrire, et la personne recommence — en pire. Affichez la phrase du
+serveur **au-dessus** de sa saisie intacte, et laissez-la corriger.
+
+⚠️ **N'AFFICHEZ PAS LE MESSAGE DANS LE FIL.** Il n'a pas été envoyé : une bulle
+grise « non envoyé » laisse croire à un problème de réseau, et la personne
+retente dix fois. Le refus est définitif tant que le texte ne change pas.
+
+⚠️ **N'ESSAYEZ PAS DE DEVINER CE QUI A ÉTÉ REFUSÉ.** Le serveur ne dit pas quel
+mot a mordu, et c'est délibéré : le dire serait expliquer comment contourner le
+filtre.
+
+**`hidden: true` — un message retiré par un modérateur :**
+
+Le corps est **vide** et la ligne **reste** dans le fil, avec son heure et son
+auteur.
+
+⚠️ **AFFICHEZ « message retiré », PAS UN BLANC, ET NE SUPPRIMEZ PAS LA LIGNE.**
+L'autre partie a vu qu'il y avait quelque chose là ; faire disparaître le trou
+fabrique une conversation qui n'a jamais eu lieu, et c'est exactement ce qu'on
+ne veut pas dans un échange qui peut finir devant le support.
 
 ---
 
