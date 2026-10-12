@@ -595,3 +595,61 @@ func (s *Service) SettleDebt(ctx context.Context, actorID, ownerID string, amoun
 	}
 	return &resp, nil
 }
+
+// --- LE SENS SORTANT : voir `withdraw.go` ----------------------------------
+
+// HoldForWithdrawal retient de quoi verser, et écrit le mouvement au relevé.
+//
+// ⚠️ LE MOUVEMENT EST ÉCRIT MÊME SI L'ARGENT REVIENT ENSUITE. Un relevé où
+// l'argent disparaît puis réapparaît sans ligne est un relevé qu'un chauffeur
+// conteste — et il a raison.
+func (s *Service) HoldForWithdrawal(ctx context.Context, ownerID string, amount int) (bool, error) {
+	wallet, err := s.findWallet(ctx, ownerID)
+	if err != nil {
+		return false, err
+	}
+	ok, err := s.repo.HoldForWithdrawal(ctx, wallet.ID, amount)
+	if err != nil || !ok {
+		return false, err
+	}
+	if err := s.repo.InsertTransaction(ctx, &Transaction{
+		WalletID: wallet.ID, Kind: "consume", Reason: ReasonPayout,
+		Amount: -amount, Unit: UnitXOF, CreatedAt: time.Now().UTC(),
+	}); err != nil {
+		slog.ErrorContext(ctx, "token: retenue de retrait non écrite au relevé",
+			"owner_id", ownerID, "amount", amount, "error", err)
+	}
+	return true, nil
+}
+
+// ReleaseWithdrawal remet au solde ce qu'un retrait refusé ou échoué libère.
+func (s *Service) ReleaseWithdrawal(ctx context.Context, ownerID string, amount int, reason, payoutID string) error {
+	wallet, err := s.findWallet(ctx, ownerID)
+	if err != nil {
+		return err
+	}
+	if err := s.repo.ReleaseWithdrawal(ctx, wallet.ID, amount); err != nil {
+		return err
+	}
+	ref := map[string]any{"reason": reason}
+	if payoutID != "" {
+		ref["payout_id"] = payoutID
+	}
+	if err := s.repo.InsertTransaction(ctx, &Transaction{
+		WalletID: wallet.ID, Kind: "purchase", Reason: ReasonPayoutReturn,
+		Amount: amount, Unit: UnitXOF, Ref: ref, CreatedAt: time.Now().UTC(),
+	}); err != nil {
+		slog.ErrorContext(ctx, "token: remise de retrait non écrite au relevé",
+			"owner_id", ownerID, "amount", amount, "error", err)
+	}
+	return nil
+}
+
+// Withdrawable rend ce qui peut réellement sortir.
+func (s *Service) Withdrawable(ctx context.Context, ownerID string) (int, error) {
+	wallet, err := s.findWallet(ctx, ownerID)
+	if err != nil {
+		return 0, err
+	}
+	return s.repo.WithdrawableOf(ctx, wallet.ID)
+}

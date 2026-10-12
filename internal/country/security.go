@@ -105,6 +105,13 @@ type Security struct {
 	// SOS : les détections qui proposent le bouton d'alerte, le délai
 	// d'annulation, et les numéros de secours du pays. Voir `sos.go`.
 	SOS SOS `bson:"sos,omitempty"`
+	// Payout : les règles de RETRAIT d'argent — voir `payout.go`.
+	//
+	// ⚠️ RANGÉ DANS LA SÉCURITÉ, et pas dans un réglage financier : ce qui se
+	// décide ici, c'est à quelle condition de l'argent QUITTE la plateforme.
+	// Un plafond journalier n'est pas un confort comptable, c'est ce qui
+	// empêche un compte volé de se vider en une fois.
+	Payout Payout `bson:"payout,omitempty"`
 }
 
 // AppLockResponse est la politique telle que la console la lit et que les

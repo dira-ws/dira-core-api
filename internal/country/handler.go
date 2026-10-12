@@ -43,6 +43,11 @@ func (h *Handler) Mount(r chi.Router, authMW func(http.Handler) http.Handler) {
 		// secours — voir `sos.go`. ⚠️ Une route À PART du reste de la sécurité
 		// parce que c'est l'exploitation DE TERRAIN qui saisit les numéros, pas
 		// celle qui règle les verrous d'application.
+		// LES RETRAITS — à quelle condition de l'argent QUITTE la plateforme.
+		// ⚠️ Une route à part de la sécurité : ce n'est pas la même personne
+		// qui règle un verrou d'application et qui ouvre les versements.
+		g.With(admin).Get("/admin/countries/{code}/payout", h.payout)
+		g.With(admin).Put("/admin/countries/{code}/payout", h.updatePayout)
 		g.With(admin).Get("/admin/countries/{code}/sos", h.sos)
 		g.With(admin).Put("/admin/countries/{code}/sos", h.updateSOS)
 		// ⚠️ « J'AI COMPOSÉ CES NUMÉROS » — un geste À PART de l'enregistrement.
@@ -251,6 +256,31 @@ func (h *Handler) resolve(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	out, err := h.svc.Resolve(r.Context(), userID, ClientIP(r), req)
+	if err != nil {
+		httpx.Error(w, r, err)
+		return
+	}
+	httpx.JSON(w, http.StatusOK, out)
+}
+
+// GET /admin/countries/{code}/payout
+func (h *Handler) payout(w http.ResponseWriter, r *http.Request) {
+	out, err := h.svc.PayoutPolicy(r.Context(), chi.URLParam(r, "code"))
+	if err != nil {
+		httpx.Error(w, r, err)
+		return
+	}
+	httpx.JSON(w, http.StatusOK, out)
+}
+
+// PUT /admin/countries/{code}/payout
+func (h *Handler) updatePayout(w http.ResponseWriter, r *http.Request) {
+	var req PayoutUpdateRequest
+	if err := httpx.Decode(r, &req); err != nil {
+		httpx.Error(w, r, err)
+		return
+	}
+	out, err := h.svc.UpdatePayout(r.Context(), chi.URLParam(r, "code"), req)
 	if err != nil {
 		httpx.Error(w, r, err)
 		return

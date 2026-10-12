@@ -101,6 +101,14 @@ const (
 	// pouvoir le retirer.
 	ReasonBonus      = "bonus"
 	ReasonCommission = "commission"
+	// ReasonPayout : l'argent RETENU pour un versement mobile money.
+	//
+	// ⚠️ DEUX RAISONS, PAS UNE. `payout` retient, `payout_return` remet quand
+	// le versement est refusé ou échoue. Une seule raison avec un signe
+	// rendrait le relevé illisible — on ne saurait pas distinguer « parti »
+	// de « revenu », et c'est exactement ce qu'un chauffeur vient vérifier.
+	ReasonPayout       = "payout"
+	ReasonPayoutReturn = "payout_return"
 	// ReasonCommissionDue : la commission d'une course en espèces que le
 	// solde n'a pas pu payer — portée à la DETTE (`debt_xof`). Le mouvement
 	// porte `ref.debt: true` : il ne bouge pas le solde, il bouge la dette.

@@ -25,6 +25,13 @@ type Config struct {
 	FCMServiceAccountFile string
 	// MockPaymentSecret signe les rappels du prestataire de paiement simulé.
 	MockPaymentSecret string
+	// MockPayoutSecret signe les rappels de l'AGRÉGATEUR DE VERSEMENT simulé.
+	//
+	// ⚠️ UN SECRET À PART DE CELUI DES ENCAISSEMENTS : les deux sens sont deux
+	// contrats, chez deux prestataires qui peuvent différer. Les partager
+	// voudrait dire qu'une fuite côté encaissement permet de déclarer des
+	// versements payés — c'est-à-dire de faire sortir de l'argent.
+	MockPayoutSecret string
 	// ServiceToken authentifie les appels VENUS des verticales.
 	//
 	// ⚠️ VIDE = routes de service FERMÉES. Une porte de service sans serrure
@@ -123,6 +130,7 @@ func Load() (*Config, error) {
 		FCMServiceAccount:     core.Env("FCM_SERVICE_ACCOUNT_JSON", ""),
 		FCMServiceAccountFile: core.Env("FCM_SERVICE_ACCOUNT_FILE", ""),
 		MockPaymentSecret:     core.Env("MOCK_PAYMENT_SECRET", "mock-secret"),
+		MockPayoutSecret:      core.Env("MOCK_PAYOUT_SECRET", "mock-payout-secret"),
 		ServiceToken:          core.Env("CORE_SERVICE_TOKEN", ""),
 		// APP_LINK_BASE : la base des liens profonds que portent les QR —
 		// aujourd'hui celui de la remise du matériel.

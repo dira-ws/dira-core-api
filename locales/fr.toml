@@ -627,3 +627,61 @@ other = "Envoyez au plus 50 comptes rendus de détection par appel"
 [errors.detections_quota_reached]
 other = "Assez de comptes rendus pour aujourd'hui : le reste est abandonné, et rien d'autre n'est affecté"
 
+
+# LE RETRAIT MOBILE MONEY — l'argent qui QUITTE la plateforme.
+#
+# ⚠️⚠️ CHAQUE REFUS DIT CE QU'IL FAUT FAIRE. C'est l'écran où quelqu'un vient
+# chercher l'argent qu'il a gagné : un refus qu'il ne comprend pas se termine
+# toujours par un appel au support, et le support n'a rien à lui répondre.
+[errors.payout_unavailable]
+other = "Les retraits ne sont pas encore ouverts dans ce pays"
+
+# ⚠️ EN MODE PÉRIODIQUE, IL N'Y A RIEN À DEMANDER — et le dire vaut mieux qu'un
+# bouton grisé, qui fait chercher ce qui ne va pas.
+[errors.payout_is_periodic]
+other = "Vos gains vous sont versés automatiquement : il n'y a rien à demander"
+
+[errors.payout_below_minimum]
+other = "Ce montant est inférieur au minimum que nous pouvons envoyer"
+
+[errors.payout_above_maximum]
+other = "Ce montant dépasse ce que nous envoyons en une fois"
+
+# ⚠️⚠️ UN RÉGLAGE QUI REFUSE TOUT — et la phrase s'adresse à l'EXPLOITATION,
+# pas à l'agent. C'est le seul endroit de ce bloc où le lecteur est celui qui
+# peut corriger : la phrase lui dit quoi changer, pas ce qui ne marche pas.
+[errors.payout_max_under_min]
+other = "Le maximum par retrait est sous le minimum : aucun montant ne pourrait passer"
+
+[errors.payout_cap_under_min]
+other = "Le plafond du jour est sous le minimum d'un retrait : aucun montant ne pourrait passer"
+
+[errors.payout_daily_cap]
+other = "Vous avez atteint la limite de retrait du jour : le reste pourra partir demain"
+
+# ⚠️⚠️ ON NE DIT PAS « SOLDE INSUFFISANT ». Le solde peut être large et le
+# RETIRABLE nul : la dette passe avant, et un crédit offert ne se retire pas.
+# « Solde insuffisant » devant un solde de 40 000 F fait appeler le support.
+[errors.not_withdrawable]
+other = "C'est plus que ce que vous pouvez retirer : un crédit offert ne se retire pas, et ce que vous devez passe avant"
+
+[errors.payout_no_phone]
+other = "Votre compte n'a pas de numéro vers lequel envoyer l'argent"
+
+[errors.payout_already_pending]
+other = "Vous avez déjà un retrait en cours : attendez qu'il se termine"
+
+[errors.payout_not_found]
+other = "Ce retrait n'existe pas"
+
+[errors.payout_already_decided]
+other = "Ce retrait a déjà été traité"
+
+# ⚠️ UN REFUS SANS RAISON FAIT RAPPELER LE SUPPORT : l'agent la LIT.
+[errors.reject_reason_required]
+other = "Dites pourquoi vous refusez : l'agent lit cette phrase"
+
+# ⚠️ LA ROUTE DU RAPPEL EST PUBLIQUE : la signature est la seule chose qui
+# distingue l'agrégateur de n'importe qui.
+[errors.bad_signature]
+other = "Cette notification n'est pas signée par l'agrégateur"
