@@ -90,6 +90,21 @@ type Service struct {
 	// construit dans un test ne doit pas se mettre à refuser des messages
 	// parce qu'un lexique s'est invité tout seul.
 	lexicon Lexicon
+	// lexiconOf rend le lexique À APPLIQUER pour CETTE requête, quand il
+	// dépend d'elle.
+	//
+	// ⚠️⚠️ UNE FONCTION ET NON UNE LISTE, pour deux raisons qu'une liste figée
+	// ne couvre pas. La première est le PAYS : « les mots qui blessent
+	// changent d'un pays à l'autre » n'est pas une formule — un terme peut
+	// être une insulte ici et un nom de famille courant trois cents
+	// kilomètres plus loin, et c'est le pays de la requête qui tranche. La
+	// seconde est le TEMPS : l'exploitation ajoute un terme depuis la console
+	// un mardi après-midi, et il doit mordre sans attendre un redéploiement.
+	//
+	// Nil = on retombe sur `lexicon`, la liste posée au câblage. C'est le cas
+	// des tests, et c'est voulu : une fonction qui irait chercher un lexique
+	// quelque part ferait dépendre un test de modération d'un réseau.
+	lexiconOf func(ctx context.Context) Lexicon
 }
 
 // NewService builds the conversation service of ONE vertical.
@@ -111,6 +126,33 @@ func (s *Service) SetPusher(p Pusher) { s.pusher = p }
 // pays dont le lexique se révèle mauvais doit pouvoir l'éteindre en une
 // minute, sans déploiement.
 func (s *Service) SetLexicon(l Lexicon) { s.lexicon = l }
+
+// SetLexiconSource branche un lexique QUI DÉPEND DE LA REQUÊTE (câblage).
+//
+// ⚠️ IL PREND LE PAS SUR `SetLexicon` quand il rend quelque chose. Les deux
+// coexistent parce qu'ils répondent à deux moments : la liste embarquée fait
+// marcher la modération au PREMIER démarrage — un filtre qui attend qu'on le
+// remplisse est un filtre éteint, et personne ne s'en aperçoit — et la source
+// la remplace dès que l'exploitation a dit quelque chose.
+//
+// ⚠️ ET UNE SOURCE QUI REND UNE LISTE VIDE N'ÉTEINT PAS LA MODÉRATION : elle
+// laisse la liste du câblage s'appliquer. Un pays qui veut vraiment éteindre
+// le filtre retire ses termes un par un depuis la console — un geste visible,
+// qui laisse une trace au journal — plutôt qu'en vidant un document, ce qui
+// ressemblerait trop à une panne de lecture.
+func (s *Service) SetLexiconSource(f func(ctx context.Context) Lexicon) {
+	s.lexiconOf = f
+}
+
+// lexiconFor rend la liste à appliquer à cette requête.
+func (s *Service) lexiconFor(ctx context.Context) Lexicon {
+	if s.lexiconOf != nil {
+		if l := s.lexiconOf(ctx); len(l) > 0 {
+			return l
+		}
+	}
+	return s.lexicon
+}
 
 // roleOf tells which side of the conversation a caller is on, or "" when they
 // are on neither.
@@ -195,7 +237,7 @@ func (s *Service) Send(ctx context.Context, userID, role, refID, body string) (*
 	// doit y être, avec sa marque — parce que la retirer empêcherait le
 	// modérateur de voir ce qui s'est réellement dit, et le destinataire l'a de
 	// toute façon déjà lue s'il était devant son écran.
-	verdict := Check(body, s.lexicon)
+	verdict := Check(body, s.lexiconFor(ctx))
 	if verdict.Blocked() {
 		return nil, errBlockedByModeration
 	}
