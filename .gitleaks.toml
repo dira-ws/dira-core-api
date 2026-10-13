@@ -46,12 +46,23 @@ paths = ['''^\.rest/''']
 #
 # ⚠️ AUTORISÉ PAR COMMIT, ET PAS PAR CHEMIN. `^docs/frontend/` aurait été plus
 # simple et bien pire : les specs sont précisément l'endroit où quelqu'un colle
-# un vrai jeton en documentant une route. Un seul commit nommé laisse la
+# un vrai jeton en documentant une route. Des commits nommés laissent la
 # détection crier partout ailleurs, y compris dans ces mêmes fichiers demain.
+#
+# ⚠️ DEUX EMPREINTES POUR UN SEUL AJOUT, ET C'EST LE PIÈGE QUI A COÛTÉ UN TOUR.
+# Nommer le commit de FUSION (`7670d44`, la version écrasée sur `main`) n'a rien
+# changé : gitleaks signale l'ajout sur le commit d'ORIGINE (`c260afa`), encore
+# atteignable parce que la branche `docs/specs-4.66.0` existe toujours sur le
+# dépôt distant. Une fusion par écrasement laisse donc DEUX commits porteurs du
+# même ajout, et c'est celui qu'on n'a pas nommé qui parle. Les deux sont donc
+# nommés : la porte reste verte que la branche soit supprimée ou non.
 #
 # ⚠️ ET SI CE JETON AVAIT ÉTÉ RÉEL : le lien de suivi porte un jeton HACHÉ côté
 # serveur et son `expires_at` était le 12 octobre 2026 — il est mort de toute
 # façon. C'est la seule raison pour laquelle on autorise au lieu de révoquer.
 [[allowlists]]
 description = "Jeton d'EXEMPLE d'un lien de suivi, dans les specs frontend (4.68.0)"
-commits = ['''7670d44a730fba012b9881fc7ba831d737165560''']
+commits = [
+  '''c260afa71b052e03ef3587d2f6face14b964d85f''',  # l'ajout d'origine (branche)
+  '''7670d44a730fba012b9881fc7ba831d737165560''',  # le même, écrasé sur `main`
+]
