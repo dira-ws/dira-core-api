@@ -2807,8 +2807,8 @@ togolais à Dakar lit les règles du Togo.
 
 ```json
 { "id": "…", "kind": "ride", "label": "Maman",
-  "token": "iO9Gq_p6hZ_4okL2Q-_XM94-IpriG0DHy4w1SC53JEE",
-  "url": "https://suivi.dira.llc/t/iO9Gq_p6hZ_4okL2Q-_XM94-IpriG0DHy4w1SC53JEE",
+  "token": "<JETON-EN-CLAIR-UNE-SEULE-FOIS>",
+  "url": "https://suivi.dira.llc/t/<JETON-EN-CLAIR-UNE-SEULE-FOIS>",
   "expires_at": "2026-10-12T23:05:02Z", "live": true,
   "created_at": "…", "views": 0 }
 ```
