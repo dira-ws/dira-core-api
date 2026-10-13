@@ -6,7 +6,12 @@
 [extend]
 useDefault = true
 
-[allowlist]
+# ⚠️ UNE SEULE FORME D'AUTORISATION DANS CE FICHIER : `[[allowlists]]`, la forme
+# TABLEAU. gitleaks accepte aussi `[allowlist]` au singulier, et faire cohabiter
+# les deux dans un même fichier est le genre de détail qui fait perdre une règle
+# SANS RIEN DIRE — on croit avoir deux autorisations, on en a une.
+
+[[allowlists]]
 description = """
 Les collections `.rest/` sont des BLOCS-NOTES DE REQUÊTES : elles montrent la
 forme d'un corps d'appel, avec des valeurs d'exemple. Le résultat qui a déclenché
@@ -28,3 +33,25 @@ entières, ce qui fait perdre les mises à jour de la liste par défaut — un r
 plus coûteux que le mal.
 """
 paths = ['''^\.rest/''']
+
+# ⚠️ UN EXEMPLE DE DOCUMENTATION, DANS L'HISTORIQUE — qu'aucune modification du
+# fichier ne peut retirer.
+#
+# `docs/frontend/VTC-CLIENT.md` (4.68.0, commit 7670d44) montrait la réponse de
+# création d'un lien de suivi avec un jeton d'allure RÉELLE, repris dans l'`url`
+# juste en dessous. Le scan lit l'HISTORIQUE (`fetch-depth: 0`) : remplacer la
+# valeur dans le fichier — c'est fait, elle dit maintenant
+# `<JETON-EN-CLAIR-UNE-SEULE-FOIS>` — ne la retire pas du dépôt, et ce résultat
+# faisait donc échouer la porte sur CHAQUE pull request, pour tout le monde.
+#
+# ⚠️ AUTORISÉ PAR COMMIT, ET PAS PAR CHEMIN. `^docs/frontend/` aurait été plus
+# simple et bien pire : les specs sont précisément l'endroit où quelqu'un colle
+# un vrai jeton en documentant une route. Un seul commit nommé laisse la
+# détection crier partout ailleurs, y compris dans ces mêmes fichiers demain.
+#
+# ⚠️ ET SI CE JETON AVAIT ÉTÉ RÉEL : le lien de suivi porte un jeton HACHÉ côté
+# serveur et son `expires_at` était le 12 octobre 2026 — il est mort de toute
+# façon. C'est la seule raison pour laquelle on autorise au lieu de révoquer.
+[[allowlists]]
+description = "Jeton d'EXEMPLE d'un lien de suivi, dans les specs frontend (4.68.0)"
+commits = ['''7670d44a730fba012b9881fc7ba831d737165560''']
