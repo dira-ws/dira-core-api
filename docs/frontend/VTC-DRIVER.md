@@ -1,6 +1,6 @@
 # App CHAUFFEUR — COURSES (VTC) — contrat d'API
 
-> **Version 4.68.0** · 12 octobre 2026
+> **Version 4.69.0** · 13 octobre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Courses : `https://api-staging.dira.llc/api/v1/vtc` · Suivi : `wss://tracking-staging.dira.llc` · SIG : `https://maps.dira.llc/api`
 
 ---
@@ -216,6 +216,189 @@ clair sur chaque requête de tuile — Google l'exige. Restreignez-la (empreinte
 bundle, référent), plafonnez son quota, et ne la recopiez pas dans un journal ni
 dans un rapport de plantage : ces fichiers partent chez un tiers et se gardent
 des mois.
+
+
+---
+
+## 🧭 LA NAVIGATION — elle SUIT le fond de carte (v4.69.0)
+
+**Vous ne choisissez pas la navigation séparément.** Elle découle du fond
+effectif qu'on vient de calculer, et il n'y a rien d'autre à décider :
+
+```
+fond effectif « dira »    →  NAVIGATION DIRA, dans votre application
+fond effectif « google »  →  NAVIGATION NATIVE de Google Maps, on passe la main
+```
+
+⚠️ **CE N'EST PAS UN SOUCI DE COHÉRENCE : LES DEUX RAISONS POINTENT DU MÊME
+CÔTÉ.**
+
+1. **Les conditions d'utilisation de Google.** Un guidage virage par virage
+   construit par-dessus **leurs** tuiles, en dehors de leur SDK de navigation,
+   enfreint leur contrat. Là où les tuiles sont les leurs, la navigation doit
+   être la leur — ce n'est pas négociable, et aucune astuce d'affichage ne le
+   contourne.
+2. **Le trafic en direct.** Google l'a, **nous ne l'avons pas** : notre moteur
+   calcule sur des vitesses **statiques**. Là où Google est le fond, sa
+   navigation est donc aussi la **meilleure**. Prétendre faire mieux qu'elle
+   dans un embouteillage de Dakar serait mentir au conducteur.
+
+⚠️ **ET LE RÉGLAGE « APPLICATION DE NAVIGATION » (Google Maps / Waze) RESTE.**
+Il décide **à qui** on passe la main quand on la passe. Un chauffeur qui l'a
+réglé **explicitement** garde son choix, même sur notre fond : c'est la même
+doctrine que le fond de carte — le choix de la personne prime, le réglage du
+pays décide par défaut. Ne le retirez pas de vos réglages.
+
+### Quand le fond est `dira` — LA NAVIGATION DIRA
+
+Elle se construit chez vous, avec ce que le SIG rend **déjà**. Un seul appel,
+et il n'y a pas de clé à présenter :
+
+```
+POST {SIG}/calc/route
+{ "ville": "lome",
+  "coordinates": [[1.2255, 6.1319], [1.2545, 6.1656]],
+  "mode": "driving", "alternatives": false }
+```
+
+⚠️ **`coordinates` VA DE VOTRE POSITION AU PROCHAIN ARRÊT**, jamais à la
+destination finale — voir plus bas, c'est le piège de la course partagée.
+L'ordre est `[lng, lat]`, celui de toute la plateforme.
+
+```jsonc
+{ "routes": [ {
+    "geometry": { "type": "LineString", "coordinates": [[1.2255,6.1319], …] },
+    "distance_m": 9926, "duration_s": 671,
+    "steps": [ {
+      "instruction": "Au rond-point à droite sur Boulevard du 13 Janvier",
+      "name": "Boulevard du 13 Janvier",
+      "distance_m": 800, "duration_s": 120,
+      "maneuver": { "type": "roundabout", "modifier": "right", "exit": 2,
+                    "location": [1.2255, 6.1319],
+                    "bearing_before": 10, "bearing_after": 95.5 },
+      "geometry": { "type": "LineString", "coordinates": [[…], […]] }
+    } ] } ],
+  "source": "engine" }
+```
+
+| champ | à quoi il sert |
+|---|---|
+| `geometry` du trajet | le tracé à dessiner, et la caméra à cadrer |
+| `maneuver.location` | **le point du virage** — c'est lui, et lui seul, qui permet de dire « dans 100 m » |
+| `maneuver.type` · `modifier` | la flèche à dessiner **et** la phrase à composer |
+| `maneuver.exit` | la sortie d'un rond-point. ⚠️ « 2<sup>e</sup> sortie » n'est pas « à droite » : l'ignorer fait tourner trop tôt |
+| `maneuver.bearing_before` · `after` | orienter la caméra en approche, puis après le virage |
+| `steps[].geometry` | surligner le segment courant, et **mesurer l'écart** quand on en sort |
+| `instruction` | **un repli**, en français, prêt à lire |
+| `source` | `redis` ou `engine` — information de supervision, rien à en faire |
+
+⚠️ **COMPOSEZ LA PHRASE SUR LE TÉLÉPHONE, NE LISEZ PAS LA NÔTRE.**
+`instruction` est en **français, en dur** dans le serveur. La plateforme sert
+**douze langues**, et c'est le téléphone qui **parle** — lui connaît la langue
+de son conducteur. Composez depuis `type` + `modifier` + `name` + `exit` ;
+`instruction` ne sert qu'à qui ne compose rien.
+
+#### Les trois annonces, et pas une de plus
+
+| Distance au `maneuver.location` | Ce qu'on dit |
+|---|---|
+| ~**500 m** | « Dans 500 mètres, tournez à droite sur Boulevard du 13 Janvier » |
+| ~**150 m** | « Dans 150 mètres, à droite » |
+| ~**30 m** | « Tournez à droite » |
+
+⚠️ **UNE MANŒUVRE NE S'ANNONCE JAMAIS DEUX FOIS.** Gardez ce qui a été dit
+pour l'étape en cours : sans cela, un chauffeur arrêté au feu à 140 m entend
+« dans 150 mètres » en boucle, et coupe la voix pour de bon.
+
+⚠️ **LES VIRAGES ENCHAÎNÉS SE DISENT ENSEMBLE.** Quand la manœuvre suivante
+est à moins de ~150 m de celle qu'on vient de passer, annoncez-la tout de
+suite — « tournez à droite, **puis immédiatement à gauche** ». Les annoncer
+l'une après l'autre arrive trop tard : le conducteur est déjà dans la seconde.
+
+⚠️ **SOUS ~30 KM/H, LES DISTANCES NE VEULENT PLUS RIEN DIRE.** En
+embouteillage, « dans 500 mètres » peut valoir cinq minutes. Gardez les trois
+paliers, mais n'annoncez pas le premier si la vitesse moyenne est très basse —
+il sera répété par le second avant que la rue change.
+
+#### La voix vient du téléphone
+
+`TextToSpeech` sur Android, `AVSpeechSynthesizer` sur iOS. **Aucun service à
+appeler** : ça marche sans réseau, ce qui est exactement la situation où un
+guidage compte.
+
+- ⚠️ **REPLI DE LANGUE, dans cet ordre** : la langue du conducteur → le
+  **français** → l'anglais → **le silence**. Et dans tous les cas **la bande
+  reste à l'écran** : un moteur de synthèse qui ne connaît pas l'éwé ne doit
+  pas faire disparaître le guidage, seulement se taire.
+- ⚠️ **MUET N'EST PAS SANS GUIDAGE.** Le réglage coupe la voix, pas la bande
+  de manœuvre.
+- **Baissez les autres sources, ne les coupez pas** (`duck`) : un chauffeur
+  écoute la radio, et une annonce qui arrête la musique se fait désactiver.
+- Un réglage par chauffeur, et il se retient. Par défaut : **voix active**.
+
+#### Sortie d'itinéraire et recalcul
+
+⚠️ **LE PIÈGE EST DANS LE CACHE.** Le SIG mémoïse un itinéraire par la **liste
+exacte** des coordonnées : un recalcul depuis une position nouvelle est donc
+**toujours** un défaut de cache, c'est-à-dire un vrai calcul. Recalculer à
+chaque point GPS mettrait le service à genoux pour tous les autres.
+
+La règle, et elle est stricte :
+
+- recalculez **seulement** si l'écart à `steps[].geometry` dépasse ~**50 m**
+  sur **trois points consécutifs** — un seul point aberrant ne prouve rien ;
+- **au plus une fois toutes les 10 s** ;
+- **jamais à l'arrêt** : à vitesse nulle, un écart est une dérive de GPS, pas
+  un détour.
+
+#### ⚠️ Naviguez vers le PROCHAIN arrêt, pas vers la destination
+
+Sur une course ordinaire, les deux se confondent. **Sur une course partagée,
+non** : `pool_plan` donne l'ordre de passage, et chaque arrêt porte le
+`ride_id` de son passager. Le prochain arrêt du plan est votre destination de
+navigation — pas le dernier. Naviguer vers la destination finale ferait sauter
+la seconde prise en charge, c'est-à-dire laisser un passager sur le trottoir.
+
+À chaque étape franchie, relancez un itinéraire **vers l'arrêt suivant**.
+
+#### ⚠️ La navigation ne REMPLACE pas l'écran de course
+
+C'est tout l'intérêt de l'avoir chez vous. « Je suis arrivé », la montée à
+bord, la conversation, le klaxon et le **SOS** restent atteignables **sans
+quitter le guidage** — une bande de manœuvre en haut, les gestes de la course
+en bas. Un plein écran de navigation qui cache le bouton d'arrivée fait sortir
+le chauffeur de l'application, et on a tout perdu.
+
+`nav_icon_url` (§ catalogue) est l'image de votre véhicule **sur cette vue** :
+vue 3D, caméra à ~45°, nez vers le haut. À défaut, la silhouette `map_icon`.
+
+### Quand le fond est `google` — LA NAVIGATION NATIVE
+
+**On passe la main, et on ne construit rien.** C'est l'application de Google
+(ou Waze, si le chauffeur l'a réglée) qui guide, avec sa voix, son trafic et
+ses douze langues.
+
+- Ouvrez l'itinéraire vers **le prochain arrêt**, en mode conduite.
+- ⚠️ **VOS POSITIONS DOIVENT CONTINUER À PARTIR.** Le chauffeur est dans une
+  autre application : sans un service de premier plan qui tient la poussée, le
+  passager voit la voiture se figer et l'exploitation déclare la course hors
+  radar. C'est la condition de ce choix, pas un détail.
+- **Revenez à l'écran de course** dès que le chauffeur revient dans
+  l'application — pas sur la liste, pas sur l'accueil : sur sa course.
+- ⚠️ **Aucune clé ne vient du serveur** (v4.40.0). La navigation native
+  s'ouvre par une intention système ; elle n'a besoin de rien de notre part.
+
+> ### 🧪 ÉPROUVEZ CECI AVANT DE LIVRER
+>
+> - fond `dira` : la voix dit les trois paliers, **une seule fois chacun** ;
+> - fond `google` : la main passe, **et la voiture continue de bouger** sur la
+>   carte du passager pendant ce temps ;
+> - un rond-point : la phrase dit **la sortie**, pas « à droite » ;
+> - coupez le réseau en pleine course : la voix continue (elle est locale),
+>   le recalcul ne peut plus se faire — **ne silenciez pas le guidage pour
+>   autant**, la dernière manœuvre connue reste valable ;
+> - une course **partagée** : le guidage mène à la **seconde prise en charge**,
+>   pas à l'aéroport.
 
 ---
 

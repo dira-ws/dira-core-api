@@ -1,6 +1,6 @@
 # Specs frontend — par rôle
 
-> **Version 4.68.0** · 12 octobre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics`
+> **Version 4.69.0** · 13 octobre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics`
 
 **Cinq** documents, un par application. Chacun est **autonome** : tout ce qu'un frontend doit savoir pour son rôle, sans avoir à ouvrir les vingt specs de modules.
 
@@ -355,6 +355,49 @@ Chaque document porte la même version en en-tête, et son propre journal des ch
 - [ ] ⚠️ **`TRACKING_JWT_SECRET` renseigné dans chaque environnement déployé.** Vide, l'authentification du service de suivi est **désactivée** : n'importe qui connaissant un `delivery_id` suit la course. Le secret doit valoir **exactement** le `JWT_SECRET` de `dira-food-api`.
 
 ## Journal
+
+### 4.69.0 — 13 octobre 2026
+
+🧭 **LA NAVIGATION VIRAGE PAR VIRAGE, ET ELLE SUIT LE FOND DE CARTE** —
+`VTC-DRIVER.md` §2, `FOOD-DELIVERY.md` §2. Rien de nouveau à choisir : le fond
+effectif décide.
+
+```
+fond « dira »    →  NAVIGATION DIRA, dans l'application
+fond « google »  →  NAVIGATION NATIVE de Google Maps, on passe la main
+```
+
+- ⚠️ **LES DEUX RAISONS POINTENT DU MÊME CÔTÉ.** Un guidage construit par-dessus
+  les tuiles **de Google**, hors de leur SDK, **enfreint leur contrat** : là où
+  les tuiles sont les leurs, la navigation doit l'être. Et ils ont le **trafic
+  en direct**, que nous n'avons pas — notre moteur calcule sur des vitesses
+  statiques. Prétendre faire mieux dans un embouteillage de Dakar serait mentir
+  au conducteur.
+- 🆕 **`POST {SIG}/calc/route` porte désormais de quoi GUIDER** :
+  `maneuver.location` (le point du virage — ⚠️ sans lui, pas de « dans 100 m »),
+  `type`/`modifier` bruts, `exit` d'un rond-point (« 2ᵉ sortie » ≠ « à droite »),
+  les caps avant/après et la **géométrie du segment**.
+- ⚠️ **COMPOSEZ LA PHRASE SUR LE TÉLÉPHONE.** `instruction` est en français
+  **en dur** ; la plateforme sert douze langues, et c'est le téléphone qui
+  **parle**. `instruction` n'est qu'un repli.
+- 🔊 **La voix vient du téléphone** (`TextToSpeech`, `AVSpeechSynthesizer`) :
+  aucun service à appeler, ça marche **sans réseau**. Trois annonces
+  (~500 m / 150 m / 30 m), ⚠️ **jamais deux fois la même**, virages enchaînés
+  annoncés ensemble, repli de langue → français → anglais → silence, et
+  ⚠️ **muet ne veut pas dire sans bande de manœuvre**.
+- ⚠️ **LE RECALCUL EST UN DÉFAUT DE CACHE À CHAQUE FOIS** : le SIG mémoïse par
+  la liste exacte des coordonnées. Recalculer seulement au-delà de ~50 m
+  d'écart sur trois points consécutifs, au plus toutes les 10 s, **jamais à
+  l'arrêt**.
+- ⚠️ **ON NAVIGUE VERS LE PROCHAIN ARRÊT**, pas vers la destination : la
+  seconde prise en charge d'une **course partagée**, la **collecte suivante**
+  d'une tournée à plusieurs enseignes.
+- ⚠️ **ET LA NAVIGATION NE REMPLACE PAS L'ÉCRAN DE COURSE** — c'est tout
+  l'intérêt de l'avoir chez nous : arrivée, collecte, conversation et **SOS**
+  restent atteignables sans quitter le guidage. Sur le chemin `google`, le
+  service de premier plan **doit** continuer à pousser les positions, sinon la
+  voiture se fige sur la carte du passager et l'exploitation la déclare hors
+  radar.
 
 ### 4.68.0 — 12 octobre 2026
 
