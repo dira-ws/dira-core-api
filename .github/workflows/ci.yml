@@ -1,9 +1,23 @@
 name: CI
 
+# ⚠️ PLUS SUR `push` VERS `main` — décidé le 18 octobre 2026.
+#
+# Après une fusion, la poussée sur `main` rejouait à l'identique ce qui venait
+# de passer sur la PR : même arbre, même verdict. Sur 30 jours, la plateforme
+# comptait 884 exécutions déclenchées par `push` pour 604 par PR.
+#
+# ⚠️ MAIS LA PR GARDE SON ÉPREUVE ICI, ET POUR UNE RAISON PRÉCISE : ce dépôt est
+# PUBLIC, ses minutes d'exécution sont gratuites. Ailleurs sur la plateforme les
+# épreuves ont été ramenées en local parce qu'elles coûtaient ; là où elles ne
+# coûtent rien, les retirer ne ferait que perdre une vérification.
 on:
-  push:
-    branches: [main]
   pull_request:
+  workflow_dispatch:
+
+# Une exécution par référence : la suivante annule la précédente.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   test:

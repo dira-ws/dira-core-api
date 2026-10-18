@@ -17,14 +17,22 @@
 # qu'on pense à mesurer `go_info`.
 name: Sécurité
 
+# ⚠️ LE `push` VERS `main` PART (18 octobre 2026) : il rejouait sur `main` le
+# verdict que la PR venait de rendre. La PR, elle, RESTE — ce dépôt est PUBLIC,
+# ses minutes sont gratuites, et un secret commis dans un dépôt public est le
+# pire des cas : c'est le seul endroit de la plateforme où cette barrière garde
+# tout son prix sans rien coûter.
 on:
   pull_request:
-  push:
-    branches: [main]
   schedule:
     # Lundi, 6 h UTC — avant que la semaine commence.
     - cron: "0 6 * * 1"
   workflow_dispatch:
+
+# Une exécution par référence : la suivante annule la précédente.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   vulnerabilites:
