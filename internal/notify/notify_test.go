@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -208,4 +209,91 @@ func TestEveryKeyHasACategory(t *testing.T) {
 	for _, d := range Defaults() {
 		assert.NotEmpty(t, categoryOf(d.Key), d.Key)
 	}
+}
+
+// --- L'APPEL SUR iOS, ET LE REGROUPEMENT (socle #193, 18 octobre 2026) ---
+
+// ⚠️ LE DÉCOMPTE VIENT DU TTL, celui-là même qu'on pose en `apns-expiration` :
+// le texte affiché et la péremption du message sortent du MÊME nombre. Les
+// lire à deux endroits laisserait « vous avez 30 s » s'afficher sur un message
+// gardé plus longtemps.
+func TestTheCallAlertCountsTheSecondsItIsValidFor(t *testing.T) {
+	var m PushMessage
+	applyRing(&m, defaultTmpl(t, KeyCallRing), LocaleFR, "c1", 30*time.Second)
+
+	assert.True(t, m.Ring, "sans cela, iOS ne réveille pas une application fermée")
+	assert.Equal(t, "Nouvelle course", m.Title)
+	assert.Equal(t, "Vous avez 30 s pour répondre.", m.Body)
+	assert.Equal(t, "call-c1", m.CollapseID, "une relance doit REMPLACER l'appel précédent")
+	assert.Equal(t, callSound, m.Sound, "le son par défaut d'iOS ne tient pas trente secondes")
+	assert.Equal(t, callCategory, m.Category, "elle dit à l'application quel écran ouvrir")
+}
+
+// La langue de l'APPAREIL, pas celle du compte : c'est l'écran que la personne
+// a sous les yeux.
+func TestTheCallAlertSpeaksTheDeviceLanguage(t *testing.T) {
+	var m PushMessage
+	applyRing(&m, defaultTmpl(t, KeyCallRing), LocaleEN, "c1", 25*time.Second)
+	assert.Equal(t, "New ride", m.Title)
+	assert.Equal(t, "You have 25 s to answer.", m.Body)
+}
+
+// ⚠️ UN APPEL SANS IDENTIFIANT NE SE REGROUPE PAS : un identifiant vide
+// ferait se remplacer DEUX APPELS DIFFÉRENTS, et le second effacerait le
+// premier sur l'écran du chauffeur.
+func TestACallWithoutAnIdentifierIsNotGrouped(t *testing.T) {
+	var m PushMessage
+	applyRing(&m, defaultTmpl(t, KeyCallRing), LocaleFR, "", 30*time.Second)
+	assert.Empty(t, m.CollapseID)
+	assert.True(t, m.Ring, "il doit sonner quand même")
+}
+
+// ⚠️ CINQ CHANGEMENTS D'ÉTAT D'UNE COURSE NE DOIVENT LAISSER QU'UNE LIGNE.
+// Android regroupe de lui-même ; iOS empile, et la seule notification qui
+// compte — la dernière — se lit au milieu de quatre périmées.
+func TestTheMessagesOfOneObjectReplaceEachOther(t *testing.T) {
+	accepted := collapseOf(map[string]string{"ride_id": "r1", "driver": "Kossi"})
+	arrived := collapseOf(map[string]string{"ride_id": "r1", "vehicle": "TG-1"})
+	assert.Equal(t, "ride-r1", accepted)
+	assert.Equal(t, accepted, arrived, "deux états de LA MÊME course se remplacent")
+}
+
+// ⚠️ MAIS DEUX OBJETS DIFFÉRENTS NE SE REMPLACENT JAMAIS — et le préfixe est
+// ce qui l'empêche : une course et une commande peuvent porter le même
+// identifiant hexadécimal, et l'une effacerait l'autre.
+func TestTwoDifferentObjectsNeverReplaceEachOther(t *testing.T) {
+	same := "6ab253499cb508f24710c036"
+	assert.NotEqual(t,
+		collapseOf(map[string]string{"ride_id": same}),
+		collapseOf(map[string]string{"order_id": same}),
+		"la course effacerait la commande")
+	assert.Equal(t, "ride-"+same, collapseOf(map[string]string{"ride_id": same}))
+	assert.Equal(t, "order-"+same, collapseOf(map[string]string{"order_id": same}))
+}
+
+// ⚠️ ET UN MESSAGE SANS OBJET NE SE REGROUPE PAS DU TOUT : rendre une chaîne
+// vide est une réponse. Sans identifiant, deux messages n'ont aucune raison de
+// se remplacer, et les confondre en perdrait un.
+func TestAMessageAboutNothingIsNotGrouped(t *testing.T) {
+	assert.Empty(t, collapseOf(nil))
+	assert.Empty(t, collapseOf(map[string]string{"type": "promo"}))
+	assert.Empty(t, collapseOf(map[string]string{"ride_id": ""}), "une valeur vide n'est pas un objet")
+}
+
+// defaultTmpl rend LE gabarit compilé d'une clé.
+//
+// ⚠️ EN UN SEUL APPEL À `Defaults()`, et ce n'est pas un détail de style :
+// `Defaults()` construit sa tranche depuis une map, donc l'ordre CHANGE d'un
+// appel à l'autre. Une version qui cherchait l'indice puis réindexait un
+// second appel lisait un autre gabarit — mon épreuve a commencé par échouer
+// sur « Nouveau  à valider », le texte d'une habilitation de staff.
+func defaultTmpl(t *testing.T, key string) Template {
+	t.Helper()
+	for _, d := range Defaults() {
+		if d.Key == key {
+			return d
+		}
+	}
+	t.Fatalf("gabarit %s absent", key)
+	return Template{}
 }

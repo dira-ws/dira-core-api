@@ -1,6 +1,6 @@
 # App LIVREUR — LIVRAISON — contrat d'API
 
-> **Version 4.70.0** · 18 octobre 2026
+> **Version 4.71.0** · 18 octobre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Livraison : `https://api-staging.dira.llc/api/v1/food` · Suivi : `wss://tracking-staging.dira.llc` · SIG : `https://maps.dira.llc/api`
 
 
@@ -1244,6 +1244,78 @@ POST {tracking}/track/calls/{call_id}/decline
 **Pendant un appel, la course est RÉSERVÉE** : elle disparaît de `/deliveries/available` pour les autres, et l'accepter leur renvoie `409 not_called`.
 
 ---
+
+### 📳 L'APPEL SUR iOS — une notification VISIBLE, et ce que l'app doit poser (v4.71.0)
+
+⚠️ **CE QUI PRÉCÈDE EST VRAI D'ANDROID, PAS D'iOS.** Sur Android, l'appel
+arrive en message **silencieux** et c'est l'application qui construit son
+écran plein et sa sonnerie — rien ne change. Sur iPhone, c'est impossible :
+
+- APNs **refuse** la priorité haute sur un message silencieux ;
+- et même en priorité basse, iOS **ne réveille pas** une application que
+  l'utilisateur a fermée, et plafonne ces messages à quelques-uns par heure.
+
+Un appel de trente secondes ne peut pas en dépendre. Depuis la 4.71.0, l'appel
+part donc, **vers les appareils Apple**, en notification **visible** :
+
+```
+en-têtes APNs   apns-push-type: alert
+                apns-priority: 10
+                apns-expiration: <instant Unix de la fin de l'appel>
+                apns-collapse-id: call-<call_id>
+aps             alert: { title: "Nouvelle course", body: "Vous avez 30 s pour répondre." }
+                sound: "ring_classic.caf"
+                interruption-level: "time-sensitive"
+                category: "RIDE_CALL"
+data            inchangé : { type, call_id, ref, expires_at, attempt, reason? }
+```
+
+**Ce que l'application iOS doit poser de son côté :**
+
+1. **La catégorie `RIDE_CALL`** (`UNNotificationCategory`) : c'est elle qui dit
+   quel écran ouvrir depuis la notification. Sans elle, le tap ouvre l'accueil.
+2. **Les sonneries dans le bundle** : `ring_classic.caf`, et `ring_soft.caf` /
+   `ring_insistent.caf` si vous les proposez en réglage. ⚠️ Un nom de fichier
+   absent du bundle **ne sonne pas** : iOS retombe en silence, sans erreur.
+3. **L'autorisation « Time Sensitive »** (`com.apple.developer.usernotifications.time-sensitive`)
+   sur les App ID chauffeur et livreur : c'est elle qui fait passer l'appel en
+   mode concentration. Sans elle, `interruption-level` est ignoré.
+4. **Le dédoublonnage par `call_id`**, et il devient plus important : au premier
+   plan, vous recevrez la trame du **socket** ET la notification. Un appel ne
+   sonne qu'une fois.
+
+⚠️ **LE CORPS PORTE UN DÉCOMPTE, ET IL NE MENT PAS** — parce que la même
+échéance est posée en `apns-expiration` : passé elle, APNs **jette** le message
+au lieu de le livrer. « Vous avez 30 s » ne peut donc pas s'afficher sur un
+appel déjà fermé. C'est aussi la réponse à la question « que se passe-t-il si le
+téléphone était hors réseau ? » : **rien n'arrive**.
+
+⚠️ **LE TEXTE NE DIT NI LE PRIX NI LA DISTANCE**, et ce n'est pas un oubli : le
+signal du suivi ne les transporte pas, et les inventer afficherait un montant
+que personne n'a calculé. Le prix est dans la trame du socket et dans
+`GET /calls/{id}` — l'écran d'appel les montre, la notification ne les promet
+pas.
+
+⚠️ **UNE RELANCE REMPLACE L'APPEL PRÉCÉDENT** (`apns-collapse-id`) : trois
+tentatives sur la même course laissaient trois lignes sur l'écran verrouillé,
+dont deux périmées.
+
+### 🔢 Les notifications d'un même objet se REMPLACENT (v4.71.0)
+
+Sur iPhone, une course qui change cinq fois d'état laissait **cinq lignes** sur
+l'écran verrouillé — « acceptée », « en approche », « arrivé », « à bord »,
+« terminée » — et la seule qui compte, la dernière, se lisait au milieu de
+quatre périmées. Android regroupe de lui-même ; iOS empile.
+
+Le serveur pose donc un `apns-collapse-id` dérivé de **l'objet** dont parle le
+message (`ride-<id>`, `order-<id>`, `delivery-<id>`, `ticket-<id>`). **Rien à
+faire côté application** : c'est transparent. À savoir seulement si vous vous
+demandez pourquoi une notification en a remplacé une autre — et pourquoi deux
+objets différents ne se remplacent jamais, même si leurs identifiants se
+ressemblent.
+
+⚠️ **Un message qui ne parle d'aucun objet ne se regroupe pas** : il s'affiche
+à part, comme avant.
 
 ## 4. Ce qu'une course coûte, et ce qu'elle exige
 

@@ -1,6 +1,6 @@
 # Specs frontend — par rôle
 
-> **Version 4.70.0** · 18 octobre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics`
+> **Version 4.71.0** · 18 octobre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics`
 
 **Cinq** documents, un par application. Chacun est **autonome** : tout ce qu'un frontend doit savoir pour son rôle, sans avoir à ouvrir les vingt specs de modules.
 
@@ -355,6 +355,70 @@ Chaque document porte la même version en en-tête, et son propre journal des ch
 - [ ] ⚠️ **`TRACKING_JWT_SECRET` renseigné dans chaque environnement déployé.** Vide, l'authentification du service de suivi est **désactivée** : n'importe qui connaissant un `delivery_id` suit la course. Le secret doit valoir **exactement** le `JWT_SECRET` de `dira-food-api`.
 
 ## Journal
+
+### 4.71.0 — 18 octobre 2026
+
+📳 **L'APPEL SONNE SUR iPHONE** — `VTC-DRIVER.md`, `FOOD-DELIVERY.md`.
+Demandé par l'équipe iOS (socle #193), qui vient d'intégrer Firebase dans les
+quatre applications Apple.
+
+⚠️ **UN MESSAGE SILENCIEUX NE PEUT PAS PORTER UN APPEL SUR iOS**, et c'est
+toute la question : APNs **refuse** la priorité haute sur un
+`content-available`, et même en priorité basse, iOS ne réveille **pas** une
+application que l'utilisateur a fermée — il plafonne en plus ces messages à
+quelques-uns par heure. Un appel de trente secondes ne peut pas en dépendre.
+
+```
+Android   message SILENCIEUX   → l'app construit son écran plein   (inchangé)
+iOS       notification VISIBLE → alerte + sonnerie + time-sensitive (nouveau)
+```
+
+- ⚠️ **ANDROID NE CHANGE PAS**, et pas « parce qu'on l'a épargné » : FCM ne lit
+  l'enveloppe APNs que lorsqu'il livre à un jeton Apple. Rien de ce qui précède
+  ne concerne un téléphone Android.
+- **Ce que l'app iOS doit poser** : la catégorie `RIDE_CALL`, les sonneries
+  `.caf` dans le bundle, l'autorisation *Time Sensitive*, et le dédoublonnage
+  par `call_id` — qui devient plus important, l'app recevant au premier plan la
+  trame du socket **et** la notification.
+- ⚠️ **LE DÉCOMPTE AFFICHÉ NE MENT PAS** : la même échéance est posée en
+  `apns-expiration`, donc APNs **jette** le message au lieu de le livrer en
+  retard. « Vous avez 30 s » ne peut pas s'afficher sur un appel déjà fermé —
+  et un téléphone qui était hors réseau ne reçoit **rien**.
+- ⚠️ **LE TEXTE NE DIT NI LE PRIX NI LA DISTANCE** : le signal du suivi ne les
+  transporte pas, et les inventer afficherait un montant que personne n'a
+  calculé. Ils sont dans la trame du socket et dans `GET /calls/{id}`.
+
+🔢 **LES NOTIFICATIONS D'UN MÊME OBJET SE REMPLACENT** — toutes les specs.
+Sur iPhone, une course qui changeait cinq fois d'état laissait **cinq lignes**
+sur l'écran verrouillé, et la dernière — la seule qui compte — se lisait au
+milieu de quatre périmées. Android regroupe de lui-même ; iOS empile. Le
+serveur pose un regroupement par **objet** (`ride-<id>`, `order-<id>`,
+`delivery-<id>`, `ticket-<id>`). **Rien à faire côté application.**
+
+- ⚠️ **PAR OBJET, PAS PAR TYPE DE MESSAGE** : regrouper par clé de gabarit
+  ferait disparaître la notification d'une course sous celle d'une AUTRE course
+  au même état.
+- ⚠️ Et un message qui ne parle d'aucun objet **ne se regroupe pas** : il
+  s'affiche à part, comme avant.
+
+⏳ **LA DURÉE DE VIE S'APPLIQUE ENFIN AUX DEUX SYSTÈMES.** Elle ne descendait
+que dans `android.ttl` : APNs gardait le message et pouvait livrer un appel
+**déjà fermé** plusieurs minutes plus tard — exactement ce que ce réglage
+existe pour empêcher.
+
+💀 **UN JETON REFUSÉ EST UN APPAREIL MORT.** Les premières versions iOS
+envoyaient le **jeton APNs brut** (64 caractères hexadécimaux) là où FCM attend
+un jeton d'enregistrement : chaque envoi échouait, et comme ce n'est ni un 404
+ni un `UNREGISTERED`, l'appareil restait actif — réessayé à chaque
+notification, indéfiniment. Ces appareils se désactivent maintenant d'eux-mêmes
+au premier envoi. ⚠️ Mais **seulement quand FCM désigne nommément le jeton** :
+le même refus couvre nos propres fautes de sérialisation, et le confondre avec
+une mort d'appareil désactiverait toute la flotte au premier bogue.
+
+**Rien à faire côté Android, ni côté client web.** Et ⚠️ **deux prérequis hors
+code** restent à poser dans les consoles, sans quoi rien n'arrive aux iPhone
+quoi que fasse le serveur : la **clé APNs `.p8`** dans la console Firebase, et
+les capacités **Push Notifications** + **Time Sensitive** au portail Apple.
 
 ### 4.70.0 — 18 octobre 2026
 

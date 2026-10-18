@@ -3,6 +3,7 @@ package notify
 import (
 	"context"
 	"log/slog"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -29,6 +30,17 @@ type PushMessage struct {
 	// Signal. TTL borne la vie du message chez FCM.
 	DataOnly bool
 	TTL      time.Duration
+	// Ring : ce message doit SONNER sur un iPhone, application fermée
+	// comprise. Réservé à l'appel de course — voir Signal.
+	Ring bool
+	// Sound est le fichier de sonnerie embarqué dans l'application, Category
+	// l'écran qu'elle doit ouvrir.
+	Sound    string
+	Category string
+	// CollapseID : les messages de même identifiant se REMPLACENT sur l'écran
+	// verrouillé au lieu de s'empiler — un statut de course en laisse une
+	// ligne, pas cinq.
+	CollapseID string
 }
 
 // PushResult dit ce qu'il est advenu d'un envoi.
@@ -191,6 +203,9 @@ func (s *Service) Notify(ctx context.Context, userID, key string, vars map[strin
 			Title: Truncate(title, MaxTitle),
 			Body:  Truncate(body, MaxBody),
 			Data:  data,
+			// Les messages d'un même OBJET se remplacent sur l'écran
+			// verrouillé — voir collapseOf.
+			CollapseID: collapseOf(data),
 		})
 	}
 
@@ -213,6 +228,60 @@ func (s *Service) Notify(ctx context.Context, userID, key string, vars map[strin
 			slog.WarnContext(ctx, "notify: push rejected", "key", key, "error", r.Err)
 		}
 	}
+}
+
+// applyRing habille un signal d'appel de son alerte visible, pour UN appareil.
+//
+// ⚠️ LE DÉCOMPTE VIENT DU TTL, PAS DE `expires_at`. Les deux disent la même
+// échéance, mais le TTL est celui qu'on pose aussi en `apns-expiration` : le
+// texte affiché et la date de péremption du message sortent ainsi du MÊME
+// nombre. Les lire à deux endroits laisserait « vous avez 30 s » s'afficher sur
+// un message qu'APNs aurait gardé plus longtemps.
+func applyRing(m *PushMessage, tmpl Template, locale, callID string, ttl time.Duration) {
+	// La langue de l'APPAREIL : c'est celle de l'écran que la personne a sous
+	// les yeux, pas celle du compte.
+	t := pick(tmpl, locale)
+	vars := map[string]string{"seconds": strconv.Itoa(int(ttl.Seconds()))}
+	title, _ := Render(t.Title, vars)
+	body, _ := Render(t.Body, vars)
+	m.Ring = true
+	m.Title, m.Body = Truncate(title, MaxTitle), Truncate(body, MaxBody)
+	m.Sound, m.Category = callSound, callCategory
+	// ⚠️ UNE RELANCE REMPLACE L'APPEL PRÉCÉDENT au lieu de s'empiler : trois
+	// tentatives pour la même course laisseraient trois lignes sur l'écran
+	// verrouillé, dont deux périmées.
+	if callID != "" {
+		m.CollapseID = "call-" + callID
+	}
+}
+
+// collapseOf dit QUELS messages se remplacent entre eux : ceux qui parlent du
+// même objet.
+//
+// ⚠️ SANS LUI, UNE COURSE QUI CHANGE CINQ FOIS D'ÉTAT LAISSE CINQ LIGNES sur
+// l'écran verrouillé d'un iPhone — « acceptée », « en approche », « arrivé »,
+// « à bord », « terminée » — et la seule qui compte, la dernière, se lit au
+// milieu de quatre périmées. Android regroupe de lui-même ; iOS empile.
+// Signalé par l'équipe iOS (socle #193).
+//
+// ⚠️ L'OBJET, PAS LA CLÉ : regrouper par clé de gabarit ferait disparaître la
+// notification d'une course sous celle d'une AUTRE course au même état. On
+// regroupe donc sur l'identifiant que porte le message, dans l'ordre de ce
+// que les deux métiers servent.
+//
+// ⚠️ ET UN MESSAGE SANS OBJET NE SE REGROUPE PAS : rendre une chaîne vide est
+// une réponse — sans identifiant, deux messages n'ont aucune raison de se
+// remplacer, et les confondre en perdrait un.
+func collapseOf(data map[string]string) string {
+	for _, k := range []string{"ride_id", "order_id", "delivery_id", "ticket_id"} {
+		if v := data[k]; v != "" {
+			// Le PRÉFIXE compte : une course et une commande peuvent porter le
+			// même identifiant hexadécimal, et se remplaceraient l'une
+			// l'autre.
+			return strings.TrimSuffix(k, "_id") + "-" + v
+		}
+	}
+	return ""
 }
 
 // --- gabarits ---
@@ -414,6 +483,21 @@ func firstNonEmpty(vals ...string) string {
 // Pas de gabarit, pas de boîte de réception, pas de préférence : ce n'est
 // pas une notification, c'est un signal d'infrastructure. Un chauffeur qui
 // aurait coupé « les notifications » doit quand même recevoir ses appels.
+// Ce que le suivi met dans `data["type"]`, et ce que l'appel exige d'iOS.
+const (
+	// signalCall : une course est PROPOSÉE. C'est le seul signal qui sonne —
+	// `call_closed` ferme un écran, il n'a personne à réveiller.
+	signalCall = "call"
+	// callSound est la sonnerie EMBARQUÉE dans les applications chauffeur et
+	// livreur. ⚠️ Le son par défaut d'iOS dure un instant : il ne tient pas
+	// les trente secondes d'un appel. (`ring_soft.caf` et
+	// `ring_insistent.caf` existent aussi côté application.)
+	callSound = "ring_classic.caf"
+	// callCategory dit à l'application quel écran ouvrir depuis la
+	// notification, et quelles actions y proposer.
+	callCategory = "RIDE_CALL"
+)
+
 func (s *Service) Signal(ctx context.Context, userID string, data map[string]string, ttl time.Duration) (int, error) {
 	uid, err := primitive.ObjectIDFromHex(userID)
 	if err != nil {
@@ -429,9 +513,35 @@ func (s *Service) Signal(ctx context.Context, userID string, data map[string]str
 	if len(devices) == 0 {
 		return 0, nil
 	}
+	// L'APPEL DOIT SONNER, et sur iOS cela demande une notification visible.
+	//
+	// ⚠️ UN MESSAGE SILENCIEUX NE PORTE PAS UN APPEL SUR iPHONE : APNs refuse
+	// la priorité haute sur un `content-available`, et même en priorité
+	// basse, iOS ne réveille pas une application que l'utilisateur a fermée et
+	// plafonne ces messages à quelques-uns par heure. Un appel de trente
+	// secondes ne peut pas en dépendre. Android ne change pas : il reste
+	// réveillé en silence et construit lui-même son écran plein — deux
+	// alertes pour un appel seraient pires qu'une.
+	//
+	// ⚠️ ET CELA N'ÉCRIT RIEN DANS LA BOÎTE : un appel relu le lendemain dans
+	// une liste est un faux rendez-vous. C'est pourquoi le texte se rend ici
+	// plutôt que de passer par `Notify`.
+	var ringTmpl Template
+	ring := data["type"] == signalCall
+	if ring {
+		tmpl, ok := s.template(ctx, KeyCallRing)
+		// Gabarit absent ou coupé au back-office : l'appel part quand même,
+		// en silence plutôt que pas du tout. Un chauffeur qui ne reçoit rien
+		// ne travaille pas.
+		ring, ringTmpl = ok && tmpl.Enabled, tmpl
+	}
 	msgs := make([]PushMessage, 0, len(devices))
 	for _, d := range devices {
-		msgs = append(msgs, PushMessage{Token: d.Token, Data: data, DataOnly: true, TTL: ttl})
+		m := PushMessage{Token: d.Token, Data: data, DataOnly: true, TTL: ttl}
+		if ring {
+			applyRing(&m, ringTmpl, d.Locale, data["call_id"], ttl)
+		}
+		msgs = append(msgs, m)
 	}
 	results, err := s.pusher.Push(ctx, msgs)
 	if err != nil {
