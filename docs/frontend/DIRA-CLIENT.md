@@ -1,6 +1,6 @@
 # App CLIENT UNIFIÉE — LIVRAISON **et** COURSES — contrat d'API
 
-> **Version 4.69.0** · 13 octobre 2026
+> **Version 4.70.0** · 18 octobre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Livraison : `…/api/v1/food` · Courses : `…/api/v1/vtc` · Combiné : `…/api/v1/analytics` · Suivi : `wss://tracking-staging.dira.llc`
 
 ---
@@ -163,6 +163,63 @@ appartient à l'application. Proposez **toujours les deux** fonds.
 création ; changer la valeur sans reconstruire la vue ne se voit pas. C'est le
 défaut qu'a eu la console : le logo d'un fournisseur posé sur les tuiles de
 l'autre.
+
+---
+
+### ⚠️ LE SDK DE CARTE CHANGE DE NOM — `@dira-ws/dira-maps-react-native` (v4.70.0)
+
+Le paquet `@kgtech-org/dira-maps-react-native` devient
+**`@dira-ws/dira-maps-react-native`**, en version **0.5.0**.
+
+**Aucune ligne du SDK ne change** : son API est celle de 0.4.7, au caractère
+près. Seul le **nom** du paquet change.
+
+**Pourquoi** : les dépôts de la plateforme ont quitté l'organisation
+`kgtech-org` pour **`dira-ws`** le 12 octobre 2026, et le registre de paquets
+de GitHub impose que le scope d'un paquet soit le **propriétaire de son
+dépôt**. Sous `@kgtech-org`, plus aucune version ne peut être publiée — il n'y
+a pas de contournement.
+
+**Ce que l'application unifiée doit changer** — la dépendance est épinglée sur
+un **tag git**, pas sur le registre :
+
+```diff
+ // package.json
+-"@kgtech-org/dira-maps-react-native": "github:kgtech-org/dira-maps-react-native-sdk#v0.3.0"
++"@dira-ws/dira-maps-react-native": "github:dira-ws/dira-maps-react-native-sdk#v0.5.0"
+```
+
+puis les **17 imports** (17 fichiers) :
+
+```diff
+-import { useRoute } from '@kgtech-org/dira-maps-react-native'
++import { useRoute } from '@dira-ws/dira-maps-react-native'
+```
+
+⚠️ **LA CLÉ ET LES IMPORTS SE CHANGENT ENSEMBLE.** Avec un spécificateur git,
+npm range le paquet dans le dossier portant la **clé du `package.json`**, et non
+le nom que le paquet déclare lui-même. Changer l'une sans les autres casse la
+résolution des modules.
+
+⚠️ **ET NPM NE SIGNALE PAS LE DÉSACCORD** — vérifié. Si vous montez le tag à
+`#v0.5.0` en gardant la clé `@kgtech-org/…`, l'installation **réussit** et
+l'application **compile sans un mot** : le paquet renommé est rangé sous
+l'ancien dossier. Rien ne casse, et rien ne vous apprend que le nom a changé.
+
+⚠️ **ET LE TAG ÉPINGLÉ ICI EST `v0.3.0`** — quatre versions en arrière (0.4.0 à
+0.4.7 : fraîcheur des réponses de géocodage réglable, une icône par catégorie de
+lieu, gabarits de tuiles). Le renommage est l'occasion de monter en 0.5.0, qui
+contient tout cela.
+
+⚠️ **RIEN NE CASSE LE JOUR OÙ VOUS NE FAITES RIEN.** Les versions publiées sous
+l'ancien nom restent installables. Mais plus aucune n'y sera publiée : une
+application qui garde l'ancien nom est **figée sans que rien ne le signale** —
+la même panne silencieuse qu'un serveur qui tire son image d'un registre que
+personne n'alimente plus, et elle a coûté six jours de préproduction.
+
+Il n'y a **pas de `.npmrc` à toucher** : l'application n'installe pas depuis le
+registre de paquets. (Si vous y passez un jour, la ligne devient
+`@dira-ws:registry=https://npm.pkg.github.com`, avec un jeton `read:packages`.)
 
 ---
 

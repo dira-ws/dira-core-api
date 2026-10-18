@@ -1,6 +1,6 @@
 # App / console MARCHAND — LIVRAISON — contrat d'API
 
-> **Version 4.69.0** · 13 octobre 2026
+> **Version 4.70.0** · 18 octobre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Livraison : `https://api-staging.dira.llc/api/v1/food`
 
 
@@ -25,6 +25,61 @@
 >
 > Le **jeton reste le même** des deux côtés — même secret, même session. Vous ne
 > vous connectez pas deux fois.
+
+
+### ⚠️ LE SDK DE CARTE CHANGE DE NOM — `@dira-ws/dira-maps-react-native` (v4.70.0)
+
+Le paquet `@kgtech-org/dira-maps-react-native` devient
+**`@dira-ws/dira-maps-react-native`**, en version **0.5.0**.
+
+**Aucune ligne du SDK ne change** : son API est celle de 0.4.7, au caractère
+près. Il n'y a rien à réapprendre, rien à réécrire autour. Seul le **nom** du
+paquet change.
+
+**Pourquoi** : les dépôts de la plateforme ont quitté l'organisation
+`kgtech-org` pour **`dira-ws`** le 12 octobre 2026, et le registre de paquets
+de GitHub impose que le scope d'un paquet soit le **propriétaire de son
+dépôt**. Sous `@kgtech-org`, plus aucune version ne peut être publiée. Ce n'est
+pas un réglage : il n'y a pas de contournement.
+
+**Ce que l'application marchand doit changer** — la dépendance est épinglée sur un **tag git**,
+pas sur le registre :
+
+```diff
+ // package.json
+-"@kgtech-org/dira-maps-react-native": "github:kgtech-org/dira-maps-react-native-sdk#v0.4.4"
++"@dira-ws/dira-maps-react-native": "github:dira-ws/dira-maps-react-native-sdk#v0.5.0"
+```
+
+puis les **17 imports** (17 fichiers) :
+
+```diff
+-import { useRoute } from '@kgtech-org/dira-maps-react-native'
++import { useRoute } from '@dira-ws/dira-maps-react-native'
+```
+
+⚠️ **LA CLÉ ET LES IMPORTS SE CHANGENT ENSEMBLE.** Avec un spécificateur git,
+npm range le paquet dans le dossier portant la **clé du `package.json`**, et non
+le nom que le paquet déclare lui-même. Changer l'une sans les autres casse la
+résolution des modules.
+
+⚠️ **ET NPM NE SIGNALE PAS LE DÉSACCORD** — vérifié. Si vous montez le tag à
+`#v0.5.0` en gardant la clé `@kgtech-org/…`, l'installation **réussit** et
+l'application **compile sans un mot** : le paquet renommé est simplement rangé
+sous l'ancien dossier. Rien ne casse, et rien ne vous apprend que le nom a
+changé — jusqu'au jour où quelqu'un cherche pourquoi le paquet n'a plus de
+nouvelles versions.
+
+⚠️ **RIEN NE CASSE LE JOUR OÙ VOUS NE FAITES RIEN.** Les versions publiées sous
+l'ancien nom restent installables, et le tag git que vous épinglez aujourd'hui
+continuera de se télécharger. Mais plus aucune version n'y sera publiée : une
+application qui garde l'ancien nom est **figée sans que rien ne le signale**.
+C'est la même panne silencieuse qu'un serveur qui tire son image d'un registre
+que personne n'alimente plus — et elle a coûté six jours de préproduction.
+
+Il n'y a **pas de `.npmrc` à toucher** : l'application marchand n'installe pas depuis le registre
+de paquets. (Si vous y passez un jour, la ligne de registre devient
+`@dira-ws:registry=https://npm.pkg.github.com`, avec un jeton `read:packages`.)
 
 ---
 

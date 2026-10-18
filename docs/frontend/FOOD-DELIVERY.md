@@ -1,6 +1,6 @@
 # App LIVREUR — LIVRAISON — contrat d'API
 
-> **Version 4.69.0** · 13 octobre 2026
+> **Version 4.70.0** · 18 octobre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Livraison : `https://api-staging.dira.llc/api/v1/food` · Suivi : `wss://tracking-staging.dira.llc` · SIG : `https://maps.dira.llc/api`
 
 
@@ -2698,13 +2698,26 @@ c'est l'état « à traiter » à mettre en avant.
 
 ## 10. Carte et itinéraire
 
-Par le **SDK** `@kgtech-org/dira-maps-react-native`, jamais en direct :
+Par le **SDK** `@dira-ws/dira-maps-react-native`, jamais en direct :
 
 - `RouteService` / `useRoute` — tracé de la tournée
 - `client.reverseGeocode` — adresse d'un point
 - `diraTileTemplate` — couches en surimpression (facultatif)
 
 Ne réécrivez ni la conversion de coordonnées, ni le cache de tournée, ni le repli approximatif : ils sont dans le SDK. À votre charge : afficher l'état **approximatif** (`result.approximate`) et ouvrir l'application de navigation du téléphone.
+
+> ⚠️ **LE PAQUET A CHANGÉ DE NOM** (v4.70.0) : `@kgtech-org/dira-maps-react-native`
+> est devenu **`@dira-ws/dira-maps-react-native`** (version 0.5.0, API inchangée),
+> parce que le registre de GitHub impose que le scope soit le propriétaire du
+> dépôt et que les dépôts ont rejoint l'organisation `dira-ws`. **La clé du
+> `package.json` et les imports se changent ensemble** : avec un spécificateur
+> git, npm range le paquet dans le dossier portant la clé, et il ne signale pas
+> le désaccord — l'application compilerait sans un mot sous l'ancien dossier.
+>
+> ⚠️ **Cette section ne concerne que les applications React Native.** L'app
+> livreur Android est en Kotlin : elle appelle `POST {SIG}/calc/route` et
+> `GET {SIG}/geocode/reverse` en direct (voir la documentation d'intégration
+> Kotlin du SIG), et aucun paquet npm ne la concerne.
 
 - L'itinéraire suit le **réseau routier réel** : collectes dans l'ordre `sequence`, puis dépôt.
 - `/api/calc/route` est appelé **une fois par tournée**, pas à chaque position GPS.
