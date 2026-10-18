@@ -926,7 +926,13 @@ type fcmPusher struct{ client *fcm.Client }
 func (p fcmPusher) Push(ctx context.Context, msgs []notify.PushMessage) ([]notify.PushResult, error) {
 	out := make([]fcm.Message, 0, len(msgs))
 	for _, m := range msgs {
-		out = append(out, fcm.Message{Token: m.Token, Title: m.Title, Body: m.Body, Data: m.Data, DataOnly: m.DataOnly, TTL: m.TTL})
+		out = append(out, fcm.Message{
+			Token: m.Token, Title: m.Title, Body: m.Body, Data: m.Data,
+			DataOnly: m.DataOnly, TTL: m.TTL,
+			// L'enveloppe iOS : sonnerie de l'appel, et regroupement des
+			// notifications qui se remplacent.
+			Ring: m.Ring, Sound: m.Sound, Category: m.Category, CollapseID: m.CollapseID,
+		})
 	}
 	res, err := p.client.Send(ctx, out)
 	if err != nil {

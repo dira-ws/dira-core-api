@@ -87,6 +87,21 @@ const (
 	KeyOrderCancelled = "order_cancelled"
 	KeyChatMessage    = "chat_message"
 	KeyDriverCall     = "driver_call"
+	// KeyCallRing est le texte que l'APPEL affiche sur un iPhone.
+	//
+	// ⚠️ IL N'EXISTE QUE POUR iOS, et il n'écrit RIEN dans la boîte de
+	// réception. Sur Android, l'appel reste un message silencieux : c'est
+	// l'application qui construit son écran plein à partir des données, et une
+	// notification système par-dessus ferait deux alertes pour un appel. Sur
+	// iOS, un message silencieux ne réveille pas une application fermée —
+	// l'appel doit donc être une notification visible, et une notification
+	// visible a besoin d'un texte. Celui-ci.
+	//
+	// ⚠️ ET IL NE S'ARCHIVE PAS : un appel de trente secondes relu le
+	// lendemain dans une liste n'est pas une information, c'est un faux
+	// rendez-vous. L'application dédoublonne avec la trame du socket par
+	// `call_id`.
+	KeyCallRing       = "call_ring"
 	KeyDispatchFailed = "dispatch_failed"
 	// KeyMerchantNewOrder prévient un point de vente qu'une commande vient de
 	// tomber. Sans lui, un marchand ne recevait RIEN : tous les autres
@@ -374,6 +389,19 @@ var defaults = map[string]Template{
 		Locales: map[string]Text{
 			LocaleFR: {Title: "Nouvelle course", Body: "[distance_km] km · [token_cost] jeton(s)[cash_line]. Répondez vite."},
 			LocaleEN: {Title: "New delivery", Body: "[distance_km] km · [token_cost] token(s)[cash_line]. Answer quickly."},
+		},
+	},
+	KeyCallRing: {
+		Key: KeyCallRing,
+		// ⚠️ LE DÉCOMPTE EST SÛR PARCE QUE LE MESSAGE EXPIRE AVEC LUI : la
+		// même durée est posée en `apns-expiration`, donc APNs JETTE le
+		// message au lieu de le livrer en retard. Sans cette échéance, « vous
+		// avez 30 s » s'afficherait deux minutes après la fin de l'appel.
+		Description: "L'appel de course, tel qu'un iPhone l'affiche. Ne s'archive pas.",
+		Enabled:     true,
+		Locales: map[string]Text{
+			LocaleFR: {Title: "Nouvelle course", Body: "Vous avez [seconds] s pour répondre."},
+			LocaleEN: {Title: "New ride", Body: "You have [seconds] s to answer."},
 		},
 	},
 	KeyMerchantNewOrder: {
@@ -902,8 +930,12 @@ var provided = map[string][]string{
 	// ⚠️ `body` et RIEN d'autre. Le canal existe pour que le client et le
 	// livreur se parlent sans échanger leurs coordonnées : offrir un
 	// `sender_name` ici défairait cela sur l'écran verrouillé.
-	KeyChatMessage:    {"body"},
-	KeyDriverCall:     {"distance_km", "token_cost", "cash_line"},
+	KeyChatMessage: {"body"},
+	KeyDriverCall:  {"distance_km", "token_cost", "cash_line"},
+	// L'appel sur iOS : le temps qu'il reste pour répondre, et rien d'autre.
+	// Le prix et la distance ne voyagent pas sur le signal du suivi — les
+	// inventer ici afficherait un montant que personne n'a calculé.
+	KeyCallRing:       {"seconds"},
 	KeyDispatchFailed: {"order_ref"},
 	// Les courses programmées : le lieu de départ, l'heure locale, les
 	// minutes avant l'appel, et la raison d'un échec.

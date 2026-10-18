@@ -1,6 +1,6 @@
 # App CLIENT UNIFIÉE — LIVRAISON **et** COURSES — contrat d'API
 
-> **Version 4.70.0** · 18 octobre 2026
+> **Version 4.71.0** · 18 octobre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Livraison : `…/api/v1/food` · Courses : `…/api/v1/vtc` · Combiné : `…/api/v1/analytics` · Suivi : `wss://tracking-staging.dira.llc`
 
 ---
@@ -222,6 +222,22 @@ registre de paquets. (Si vous y passez un jour, la ligne devient
 `@dira-ws:registry=https://npm.pkg.github.com`, avec un jeton `read:packages`.)
 
 ---
+
+> ### 🔢 Sur iPhone, les notifications d'un même objet se REMPLACENT (v4.71.0)
+>
+> Une course qui change cinq fois d'état laissait **cinq lignes** sur l'écran
+> verrouillé, et la seule qui compte — la dernière — se lisait au milieu de
+> quatre périmées. Android regroupe de lui-même ; iOS empile.
+>
+> Le serveur pose donc un identifiant de regroupement dérivé de **l'objet**
+> dont parle le message (`ride-<id>`, `order-<id>`, `delivery-<id>`,
+> `ticket-<id>`). **Rien à faire côté application** : c'est transparent, et
+> aucun contrat ne change. À savoir seulement si vous vous demandez pourquoi
+> une notification en a remplacé une autre.
+>
+> ⚠️ **Deux objets différents ne se remplacent jamais**, même si leurs
+> identifiants se ressemblent — et un message qui ne parle d'aucun objet ne se
+> regroupe pas : il s'affiche à part, comme avant.
 
 ## 5 bis. 🔒 LE VERROU DE L'APPLICATION — `app_lock` (v4.46.0)
 

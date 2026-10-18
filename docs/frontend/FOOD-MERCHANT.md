@@ -1,6 +1,6 @@
 # App / console MARCHAND — LIVRAISON — contrat d'API
 
-> **Version 4.70.0** · 18 octobre 2026
+> **Version 4.71.0** · 18 octobre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Livraison : `https://api-staging.dira.llc/api/v1/food`
 
 
@@ -968,6 +968,22 @@ POST /uploads?kind=dish&entity={id}                (SOCLE, sans /food)
 POST /me/devices · GET /me/notifications           (SOCLE, sans /food)
 POST /tickets · GET /tickets · GET /tickets/{id} · POST /tickets/{id}/messages · POST /bug-reports
 ```
+
+> ### 🔢 Sur iPhone, les notifications d'un même objet se REMPLACENT (v4.71.0)
+>
+> Une commande qui change cinq fois d'état laissait **cinq lignes** sur l'écran
+> verrouillé, et la seule qui compte — la dernière — se lisait au milieu de
+> quatre périmées. Android regroupe de lui-même ; iOS empile.
+>
+> Le serveur pose donc un identifiant de regroupement dérivé de **l'objet**
+> dont parle le message (`ride-<id>`, `order-<id>`, `delivery-<id>`,
+> `ticket-<id>`). **Rien à faire côté application** : c'est transparent, et
+> aucun contrat ne change. À savoir seulement si vous vous demandez pourquoi
+> une notification en a remplacé une autre.
+>
+> ⚠️ **Deux objets différents ne se remplacent jamais**, même si leurs
+> identifiants se ressemblent — et un message qui ne parle d'aucun objet ne se
+> regroupe pas : il s'affiche à part, comme avant.
 
 **Le support (v4.9.0)** : `POST /tickets { category, message }`, `category`
 ∈ `tokens` (jetons, propulsions) · `payment` · `account` · `order`

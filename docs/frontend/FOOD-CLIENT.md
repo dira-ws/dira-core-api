@@ -1,6 +1,6 @@
 # App CLIENT — LIVRAISON — contrat d'API
 
-> **Version 4.70.0** · 18 octobre 2026
+> **Version 4.71.0** · 18 octobre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Livraison : `https://api-staging.dira.llc/api/v1/food` · Suivi : `wss://tracking-staging.dira.llc`
 
 
@@ -1974,6 +1974,22 @@ GET    /me/notifications?limit=&cursor=      → { items, unread, next_cursor }
 POST   /me/notifications/read
 POST   /me/notifications/{id}/read
 ```
+
+> ### 🔢 Sur iPhone, les notifications d'un même objet se REMPLACENT (v4.71.0)
+>
+> Une commande qui change cinq fois d'état laissait **cinq lignes** sur l'écran
+> verrouillé, et la seule qui compte — la dernière — se lisait au milieu de
+> quatre périmées. Android regroupe de lui-même ; iOS empile.
+>
+> Le serveur pose donc un identifiant de regroupement dérivé de **l'objet**
+> dont parle le message (`ride-<id>`, `order-<id>`, `delivery-<id>`,
+> `ticket-<id>`). **Rien à faire côté application** : c'est transparent, et
+> aucun contrat ne change. À savoir seulement si vous vous demandez pourquoi
+> une notification en a remplacé une autre.
+>
+> ⚠️ **Deux objets différents ne se remplacent jamais**, même si leurs
+> identifiants se ressemblent — et un message qui ne parle d'aucun objet ne se
+> regroupe pas : il s'affiche à part, comme avant.
 
 - Déclarez le jeton FCM **à la connexion et à chaque rotation** — le système le remplace sans prévenir.
 - **Retirez-le à la déconnexion** : sinon le téléphone continue de recevoir les notifications d'un compte dont son propriétaire est sorti.

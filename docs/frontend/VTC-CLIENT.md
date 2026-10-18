@@ -1,6 +1,6 @@
 # App CLIENT — COURSES (VTC) — contrat d'API
 
-> **Version 4.70.0** · 18 octobre 2026
+> **Version 4.71.0** · 18 octobre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Courses : `https://api-staging.dira.llc/api/v1/vtc` · Suivi : `wss://tracking-staging.dira.llc`
 
 ---
@@ -3629,6 +3629,22 @@ dans le fil : c'est ce qui protège les deux côtés.
 | `GET /me/notifications` · `POST /me/devices` | les notifications |
 | `GET /agents/{id}/ratings` | les avis d'un chauffeur — `id` = `driver.id` de la course (le profil) |
 
+
+> ### 🔢 Sur iPhone, les notifications d'un même objet se REMPLACENT (v4.71.0)
+>
+> Une course qui change cinq fois d'état laissait **cinq lignes** sur l'écran
+> verrouillé, et la seule qui compte — la dernière — se lisait au milieu de
+> quatre périmées. Android regroupe de lui-même ; iOS empile.
+>
+> Le serveur pose donc un identifiant de regroupement dérivé de **l'objet**
+> dont parle le message (`ride-<id>`, `order-<id>`, `delivery-<id>`,
+> `ticket-<id>`). **Rien à faire côté application** : c'est transparent, et
+> aucun contrat ne change. À savoir seulement si vous vous demandez pourquoi
+> une notification en a remplacé une autre.
+>
+> ⚠️ **Deux objets différents ne se remplacent jamais**, même si leurs
+> identifiants se ressemblent — et un message qui ne parle d'aucun objet ne se
+> regroupe pas : il s'affiche à part, comme avant.
 - **Inscription** : `{ phone (E.164, avec le +), name, password, role: "client", email?, first_name?, last_name? }`. Sans `+`, `422` avec `fields: ["phone"]` ; `phone_taken` (409) → proposer la connexion ; `account_suspended` (403) → le dire tel quel.
 - **Un `422` nomme ses champs** (`fields`, `reason`) — §0.
 - `GET /wallet` répond toujours `200` à un client : le Dira Cash s'ouvre à la première lecture.
