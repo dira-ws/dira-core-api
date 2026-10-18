@@ -1,6 +1,6 @@
 # Specs frontend — par rôle
 
-> **Version 4.69.0** · 13 octobre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics`
+> **Version 4.70.0** · 18 octobre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics`
 
 **Cinq** documents, un par application. Chacun est **autonome** : tout ce qu'un frontend doit savoir pour son rôle, sans avoir à ouvrir les vingt specs de modules.
 
@@ -355,6 +355,46 @@ Chaque document porte la même version en en-tête, et son propre journal des ch
 - [ ] ⚠️ **`TRACKING_JWT_SECRET` renseigné dans chaque environnement déployé.** Vide, l'authentification du service de suivi est **désactivée** : n'importe qui connaissant un `delivery_id` suit la course. Le secret doit valoir **exactement** le `JWT_SECRET` de `dira-food-api`.
 
 ## Journal
+
+### 4.70.0 — 18 octobre 2026
+
+📦 **LE SDK DE CARTE CHANGE DE NOM** — `@kgtech-org/dira-maps-react-native`
+devient **`@dira-ws/dira-maps-react-native`** (version **0.5.0**).
+`DIRA-CLIENT.md` §5, `FOOD-CLIENT.md` §5, `VTC-CLIENT.md` §5,
+`FOOD-MERCHANT.md` §5, `FOOD-DELIVERY.md` §10.
+
+**Aucune ligne du SDK ne change** : son API est celle de 0.4.7, au caractère
+près. Les dépôts de la plateforme ont quitté `kgtech-org` pour **`dira-ws`** le
+12 octobre, et le registre de paquets de GitHub impose que le scope soit le
+**propriétaire du dépôt** — sous `@kgtech-org`, plus aucune version ne peut
+être publiée. C'est la même règle qui avait forcé `@kgtech` → `@kgtech-org`
+en 0.3.0, dans l'autre sens.
+
+```diff
+ // package.json — les trois applications épinglent un TAG GIT, pas le registre
+-"@kgtech-org/dira-maps-react-native": "github:kgtech-org/dira-maps-react-native-sdk#v0.4.4"
++"@dira-ws/dira-maps-react-native": "github:dira-ws/dira-maps-react-native-sdk#v0.5.0"
+```
+
+- ⚠️ **LA CLÉ ET LES IMPORTS SE CHANGENT ENSEMBLE.** Avec un spécificateur git,
+  npm range le paquet dans le dossier portant la **clé**, pas le nom que le
+  paquet déclare. Changer l'une sans les autres casse la résolution.
+- ⚠️ **ET NPM NE SIGNALE PAS LE DÉSACCORD** (vérifié) : monter le tag en gardant
+  l'ancienne clé **s'installe et compile sans un mot**, le paquet renommé rangé
+  sous l'ancien dossier. Rien ne casse — et rien n'apprend que le nom a changé.
+- ⚠️ **RIEN NE CASSE LE JOUR OÙ L'ON NE FAIT RIEN** : les versions publiées sous
+  l'ancien nom restent installables. Mais plus aucune n'y sera publiée, et une
+  application qui garde l'ancien nom est **figée sans que rien ne le signale**.
+  La même panne silencieuse qu'un serveur tirant son image d'un registre que
+  personne n'alimente plus — elle a coûté **six jours de préproduction** du 12
+  au 18 octobre.
+- Chantier en retard à signaler : l'application cliente épingle encore
+  **v0.3.0**, quatre versions en arrière. Le renommage est l'occasion de monter
+  en 0.5.0.
+- ⚠️ **L'app livreur Android n'est pas concernée** : elle est en Kotlin et
+  appelle le SIG en direct — aucun paquet npm.
+- Il n'y a **pas de `.npmrc`** dans les applications Dira : elles n'installent
+  pas depuis le registre de paquets.
 
 ### 4.69.0 — 13 octobre 2026
 
