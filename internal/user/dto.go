@@ -3,12 +3,12 @@ package user
 import "time"
 
 // RegisterRequest creates an account. Role admin is not self-assignable:
-// only client, driver and merchant are accepted (422 otherwise).
+// only client, driver, merchant and publisher are accepted (422 otherwise).
 type RegisterRequest struct {
 	Phone    string `json:"phone" validate:"required,e164"`
 	Name     string `json:"name" validate:"required,min=1,max=120"`
 	Password string `json:"password" validate:"required,min=8,max=128"`
-	Role     string `json:"role,omitempty" validate:"omitempty,oneof=client driver merchant"`
+	Role     string `json:"role,omitempty" validate:"omitempty,oneof=client driver merchant publisher"`
 	Email    string `json:"email,omitempty" validate:"omitempty,email"`
 	// Prénom et nom, FACULTATIFS : `name` reste le nom d'affichage. Les
 	// applications les demandent à l'inscription (spécification projet
@@ -25,7 +25,12 @@ type RegisterRequest struct {
 	// ce rôle — il donne des pouvoirs sur le travail d'autres personnes —, donc
 	// l'accepter ici n'ouvrirait rien et ferait croire le contraire. L'accès
 	// d'un partenaire s'ouvre depuis la fiche de sa flotte.
-	App        string `json:"app,omitempty" validate:"omitempty,oneof=client driver courier merchant console"`
+	//
+	// ⚠️ `immo_pro` Y EST, LUI, et c'est la différence : un particulier qui
+	// met son appartement en ligne s'inscrit lui-même. Il n'a de pouvoir que
+	// sur ses propres biens — la forme d'un marchand, pas celle d'un
+	// partenaire.
+	App        string `json:"app,omitempty" validate:"omitempty,oneof=client driver courier merchant immo_pro console"`
 	DeviceID   string `json:"device_id,omitempty" validate:"omitempty,max=128"`
 	DeviceName string `json:"device_name,omitempty" validate:"omitempty,max=120"`
 	// Platform dit SUR QUOI l'application tourne — `web`, `android`, `ios`.
@@ -74,7 +79,7 @@ type LoginRequest struct {
 	// champ `app` : un rôle complet, sans aucune porte. Ça ne s'est vu qu'en
 	// ouvrant la console pour de vrai. Voir `TestEveryKnownAppCanLogIn`, qui
 	// fige l'accord entre cette liste et `appRole`.
-	App string `json:"app,omitempty" validate:"omitempty,oneof=client driver courier merchant partner console"`
+	App string `json:"app,omitempty" validate:"omitempty,oneof=client driver courier merchant partner immo_pro console"`
 	// DeviceID est l'IDENTIFIANT D'INSTALLATION de l'application : un chauffeur
 	// ou un livreur ne tient qu'UNE session, et c'est ce champ qui dit laquelle.
 	//
@@ -347,7 +352,7 @@ type OTPRequest struct {
 	Channel string `json:"channel,omitempty" validate:"omitempty,oneof=whatsapp sms"`
 	// App : seules les applications de CLIENT ouvrent cette porte. Vide =
 	// toléré, comme ailleurs, pour une application pas encore à jour.
-	App    string `json:"app,omitempty" validate:"omitempty,oneof=client driver courier merchant console"`
+	App    string `json:"app,omitempty" validate:"omitempty,oneof=client driver courier merchant immo_pro console"`
 	Locale string `json:"locale,omitempty" validate:"omitempty,oneof=fr en"`
 }
 
@@ -378,7 +383,7 @@ type OTPVerifyRequest struct {
 	Name       string `json:"name,omitempty" validate:"omitempty,max=120"`
 	FirstName  string `json:"first_name,omitempty" validate:"omitempty,max=80"`
 	LastName   string `json:"last_name,omitempty" validate:"omitempty,max=80"`
-	App        string `json:"app,omitempty" validate:"omitempty,oneof=client driver courier merchant console"`
+	App        string `json:"app,omitempty" validate:"omitempty,oneof=client driver courier merchant immo_pro console"`
 	DeviceID   string `json:"device_id,omitempty" validate:"omitempty,max=128"`
 	DeviceName string `json:"device_name,omitempty" validate:"omitempty,max=120"`
 	// Platform : acceptée et ignorée, comme à l'inscription — voir

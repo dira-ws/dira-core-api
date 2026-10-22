@@ -43,16 +43,21 @@ func TestAtLeastOneScopeIsRequired(t *testing.T) {
 	require.Error(t, err, "des chaînes vides ne font pas une portée")
 }
 
-// ⚠️ COUVRIR TOUT S'ÉCRIT EN TROIS PORTÉES, et se stocke ainsi.
+// ⚠️ COUVRIR TOUT S'ÉCRIT PORTÉE PAR PORTÉE, et se stocke ainsi.
 //
 // Aucune réduction vers une valeur « toutes » : elle aurait fait deux façons
 // d'exprimer la même chose, et le jour où une quatrième verticale apparaît,
 // cette valeur aurait continué de désigner les trois d'hier — sans que rien ne
 // le signale. Écrire la liste, c'est écrire une date.
-func TestFullCoverageIsStoredAsThreeScopes(t *testing.T) {
-	out, err := normaliseScopes([]string{auth.ScopeCore, auth.ScopeFood, auth.ScopeVTC})
+//
+// ⚠️ ET CE TEST LISAIT « TROIS », EN DUR — la quatrième verticale est arrivée
+// et il est tombé, au même titre que la valeur magique qu'il interdit. Il lit
+// désormais `auth.AllScopes` : la seule liste qui ne peut pas vieillir est
+// celle qu'on ne recopie pas.
+func TestFullCoverageIsStoredAsEveryScope(t *testing.T) {
+	out, err := normaliseScopes(auth.AllScopes)
 	require.NoError(t, err)
-	assert.Len(t, out, 3, "les trois portées se stockent telles quelles")
+	assert.Len(t, out, len(auth.AllScopes), "les portées se stockent telles quelles")
 
 	full := &Member{Scopes: out}
 	assert.True(t, full.CoversEverything())
@@ -96,9 +101,9 @@ func TestScopesForCoversTheThreeCases(t *testing.T) {
 // La réponse porte la liste ET le résumé calculé. `scopes` reste la seule
 // vérité — c'est lui qu'on modifie.
 func TestResponseCarriesScopesAndSummary(t *testing.T) {
-	full := toResponse(&Member{Scopes: []string{auth.ScopeCore, auth.ScopeFood, auth.ScopeVTC}})
+	full := toResponse(&Member{Scopes: auth.AllScopes})
 	assert.True(t, full.CoversEverything)
-	assert.Len(t, full.Scopes, 3)
+	assert.Len(t, full.Scopes, len(auth.AllScopes))
 
 	scoped := toResponse(&Member{Scopes: []string{auth.ScopeFood}})
 	assert.False(t, scoped.CoversEverything)

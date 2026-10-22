@@ -173,6 +173,10 @@ func signIn(t *testing.T, base, country string) []audience {
 		{name: "client", phone: os.Getenv("DIRA_MATRIX_CLIENT_PHONE"), app: "client"},
 		{name: "chauffeur", phone: os.Getenv("DIRA_MATRIX_DRIVER_PHONE"), app: "driver"},
 		{name: "livreur", phone: os.Getenv("DIRA_MATRIX_COURIER_PHONE"), app: "courier"},
+		// ⚠️ L'ANNONCEUR IMMOBILIER — le public pour lequel ce rôle a été
+		// créé plutôt que de réutiliser `merchant`. Le sonder est la seule
+		// chose qui transforme cette raison en vérification.
+		{name: "annonceur", phone: os.Getenv("DIRA_MATRIX_PUBLISHER_PHONE"), app: "immo_pro"},
 	} {
 		if c.phone == "" && c.email == "" {
 			t.Logf("public %q sans identifiants : ignoré", c.name)
