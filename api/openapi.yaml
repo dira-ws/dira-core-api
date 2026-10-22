@@ -124,13 +124,13 @@ paths:
                 phone: {type: string, description: E.164 avec le +}
                 name: {type: string, maxLength: 120}
                 password: {type: string, minLength: 8, maxLength: 128}
-                role: {type: string, enum: [client, driver, merchant]}
+                role: {type: string, enum: [client, driver, merchant, publisher]}
                 email: {type: string, format: email}
                 first_name: {type: string, maxLength: 80}
                 last_name: {type: string, maxLength: 80}
                 app:
                   type: string
-                  enum: [client, driver, courier, merchant, console]
+                  enum: [client, driver, courier, merchant, immo_pro, console]
                   description: >-
                     L'application qui inscrit. ⚠️ **Pour un `role: driver`,
                     elle décide du MÉTIER du compte** : `driver` en fait un
@@ -231,7 +231,7 @@ paths:
                 password: {type: string}
                 app:
                   type: string
-                  enum: [client, driver, courier, merchant, console]
+                  enum: [client, driver, courier, merchant, immo_pro, console]
                   description: >-
                     L'application qui demande. `driver` = les COURSES,
                     `courier` = la LIVRAISON. Omis = aucune vérification
@@ -390,7 +390,7 @@ paths:
                     RÉELLEMENT servi : un fournisseur peut basculer.
                 app:
                   type: string
-                  enum: [client, driver, courier, merchant, console]
+                  enum: [client, driver, courier, merchant, immo_pro, console]
                   description: >-
                     Seul `client` ouvre cette porte (les deux applications de
                     clients partagent ce mot). Omis = toléré, comme ailleurs,
@@ -471,7 +471,7 @@ paths:
                 last_name: {type: string, maxLength: 80}
                 app:
                   type: string
-                  enum: [client, driver, courier, merchant, console]
+                  enum: [client, driver, courier, merchant, immo_pro, console]
                 device_id: {type: string, maxLength: 128}
                 device_name: {type: string, maxLength: 120}
                 platform:
