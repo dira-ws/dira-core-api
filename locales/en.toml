@@ -746,3 +746,6 @@ other = "This kind of file only accepts {{.formats}}"
 
 [errors.upload_too_large]
 other = "This file is over {{.max_mib}} MiB, the limit for this kind of file"
+
+[errors.store_directory_unavailable]
+other = "A store wallet is read from the merchant app: this service cannot tell who owns a store"

@@ -844,3 +844,6 @@ other = "Ce genre de fichier n'accepte que {{.formats}}"
 
 [errors.upload_too_large]
 other = "Ce fichier dépasse {{.max_mib}} Mio, la limite de ce genre de fichier"
+
+[errors.store_directory_unavailable]
+other = "Le portefeuille d'un point de vente se lit depuis l'application marchand : ce service ne sait pas à qui appartient une boutique"

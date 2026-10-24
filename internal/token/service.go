@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"strings"
 	"time"
 
@@ -80,6 +81,16 @@ type StoreOwnership interface {
 }
 
 var errInsufficientTokens = apperr.PaymentRequired("insufficient_tokens", "insufficient token balance")
+
+// errNoStoreDirectory : ce déploiement ne sait pas à qui appartient une
+// boutique, donc il ne peut pas servir le portefeuille d'un point de vente.
+//
+// ⚠️ 503 ET NON 403 : rien n'est refusé à qui que ce soit, il manque un
+// annuaire. Le journal le dit à voix haute à chaque fois, parce que c'est un
+// CÂBLAGE à faire, pas un cas d'usage à documenter.
+var errNoStoreDirectory = apperr.New("store_directory_unavailable",
+	"this deployment cannot check store ownership: the merchant wallet is served by the delivery API",
+	http.StatusServiceUnavailable)
 
 // Service implements the token business logic and the cross-module provider
 // contract (CreateWallet, Consume, Credit).
@@ -475,6 +486,22 @@ func (s *Service) resolveOwner(ctx context.Context, userID, role, storeID string
 func (s *Service) requireStoreAccess(ctx context.Context, userID, role, storeID string) error {
 	if role == auth.RoleAdmin {
 		return nil
+	}
+	// ⚠️⚠️ CE SOCLE NE CONNAÎT PAS LES BOUTIQUES, ET IL PANIQUAIT DESSUS.
+	// `stores` est branché à `nil` depuis l'extraction du socle — les points de
+	// vente appartiennent à la livraison — et ce chemin l'appelait sans
+	// regarder : chaque lecture de portefeuille par un MARCHAND
+	// (`GET /wallet?store_id=…`) déréférençait un pointeur nul, répondait 500
+	// et réveillait l'alerte « un service a paniqué ». Quarante-deux fois en
+	// une heure sur la préproduction, le 24 octobre, avant qu'on ne le voie.
+	//
+	// ⚠️ ET LE REFUS EST UN 503 NOMMÉ, PAS UN 403 : le marchand n'a rien fait
+	// de mal et ne peut rien corriger — c'est un annuaire qui manque de CE
+	// côté-ci. Un « vous ne possédez pas cette boutique » l'aurait envoyé
+	// chercher une faute qui n'est pas la sienne, et aurait masqué un câblage
+	// absent derrière une phrase d'autorisation.
+	if s.stores == nil {
+		return errNoStoreDirectory
 	}
 	owns, err := s.stores.OwnsStore(ctx, userID, storeID)
 	if err != nil {
