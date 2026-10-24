@@ -175,6 +175,27 @@ const (
 	// preneur — message au PASSAGER, avec de quoi relancer. La course n'est
 	// pas annulée : c'est lui qui décide.
 	KeyRideSearchExhausted = "ride_search_exhausted"
+	// LE TRANSFERT D'UNE COURSE — quand le chauffeur en place passe la main.
+	//
+	// ⚠️⚠️ QUATRE CLÉS, ET CHACUNE VA À QUELQU'UN DE DIFFÉRENT. Un transfert
+	// est le moment où trois personnes ont besoin de trois phrases qui ne se
+	// remplacent pas :
+	//
+	//   - `ride_transfer_started` : au PASSAGER, avec LE MOTIF. Une voiture
+	//     qu'on remplace sans explication est une course qu'on croit annulée ;
+	//   - `ride_transferred` : au PASSAGER, quand quelqu'un a repris — avec
+	//     le nom et le véhicule, parce qu'il va monter dedans ;
+	//   - `ride_transfer_failed` : au PASSAGER, quand personne n'a repris.
+	//     ⚠️ Et la bonne nouvelle est dans la phrase : son chauffeur continue.
+	//     Sans elle, il resterait sur « on cherche quelqu'un d'autre » pendant
+	//     que la voiture roule vers sa destination ;
+	//   - `ride_transfer_done` : à l'ANCIEN CHAUFFEUR, avec sa part. Son écran
+	//     se ferme sur une course qu'il n'a pas terminée : lui dire ce qu'il a
+	//     gagné est la seule façon qu'il ne croie pas l'avoir perdue.
+	KeyRideTransferStarted = "ride_transfer_started"
+	KeyRideTransferred     = "ride_transferred"
+	KeyRideTransferFailed  = "ride_transfer_failed"
+	KeyRideTransferDone    = "ride_transfer_done"
 	// LA COURSE PARTAGÉE : les trois moments où le passager doit être prévenu.
 	//
 	// ⚠️ TROIS CLÉS ET NON UNE, parce que l'écran ne propose pas la même
@@ -600,6 +621,42 @@ var defaults = map[string]Template{
 		Locales: map[string]Text{
 			LocaleFR: {Title: "Co-passager trouvé", Body: "Quelqu'un partage votre trajet depuis [pickup]. Nous cherchons une voiture pour vous deux."},
 			LocaleEN: {Title: "Co-rider found", Body: "Someone is sharing your trip from [pickup]. We are now finding a car for the two of you."},
+		},
+	},
+	KeyRideTransferStarted: {
+		Key:         KeyRideTransferStarted,
+		Description: "Le chauffeur en place passe la main — message au PASSAGER, avec le motif. Un remplacement sans explication se lit comme une annulation.",
+		Enabled:     true,
+		Locales: map[string]Text{
+			LocaleFR: {Title: "Changement de chauffeur", Body: "Votre chauffeur ne peut pas continuer : [reason]. Nous cherchons quelqu'un pour venir vous reprendre — restez où vous êtes, votre course continue."},
+			LocaleEN: {Title: "Change of driver", Body: "Your driver cannot continue: [reason]. We are finding someone to come and pick you up — stay where you are, your trip continues."},
+		},
+	},
+	KeyRideTransferred: {
+		Key:         KeyRideTransferred,
+		Description: "Un autre chauffeur a repris la course — message au PASSAGER, avec le nom et le véhicule : il va monter dedans.",
+		Enabled:     true,
+		Locales: map[string]Text{
+			LocaleFR: {Title: "Un autre chauffeur arrive", Body: "[driver] reprend votre course en [vehicle]. Il vient à votre rencontre."},
+			LocaleEN: {Title: "Another driver is coming", Body: "[driver] is taking over your trip in a [vehicle]. They are on their way to you."},
+		},
+	},
+	KeyRideTransferFailed: {
+		Key:         KeyRideTransferFailed,
+		Description: "Personne n'a repris la course — message au PASSAGER. ⚠️ La bonne nouvelle est dans la phrase : son chauffeur continue.",
+		Enabled:     true,
+		Locales: map[string]Text{
+			LocaleFR: {Title: "Votre chauffeur continue", Body: "Nous n'avons pas trouvé d'autre chauffeur : [driver] poursuit votre course."},
+			LocaleEN: {Title: "Your driver continues", Body: "We found no other driver: [driver] is continuing your trip."},
+		},
+	},
+	KeyRideTransferDone: {
+		Key:         KeyRideTransferDone,
+		Description: "La course a été reprise — message à L'ANCIEN CHAUFFEUR, avec sa part. Son écran se ferme sur une course qu'il n'a pas terminée.",
+		Enabled:     true,
+		Locales: map[string]Text{
+			LocaleFR: {Title: "Course reprise", Body: "Un autre chauffeur a repris la course. Votre part pour ce que vous avez roulé : [amount]."},
+			LocaleEN: {Title: "Trip taken over", Body: "Another driver has taken over the trip. Your share for the distance you covered: [amount]."},
 		},
 	},
 	KeyRidePoolNoMatch: {
@@ -1036,6 +1093,10 @@ var provided = map[string][]string{
 	// co-passager, ni son adresse : deux inconnus se rencontrent dans la
 	// voiture, pas dans une notification — et le lieu de départ est ce qui
 	// permet au passager de reconnaître DE QUELLE course on lui parle.
+	KeyRideTransferStarted:   {"reason"},
+	KeyRideTransferred:       {"driver", "vehicle"},
+	KeyRideTransferFailed:    {"driver"},
+	KeyRideTransferDone:      {"amount"},
 	KeyRidePoolMatched:       {"pickup"},
 	KeyRidePoolNoMatch:       {"pickup"},
 	KeyRidePoolPartnerLeft:   {"pickup"},
