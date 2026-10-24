@@ -1,6 +1,6 @@
 # App CHAUFFEUR — COURSES (VTC) — contrat d'API
 
-> **Version 4.76.0** · 24 octobre 2026
+> **Version 4.77.0** · 24 octobre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Courses : `https://api-staging.dira.llc/api/v1/vtc` · Suivi : `wss://tracking-staging.dira.llc` · SIG : `https://maps.dira.llc/api`
 
 ---
@@ -1430,6 +1430,9 @@ POST https://tracking-staging.dira.llc/track/calls/{call_id}/decline  { "vehicle
 PATCH /rides/{id}/status                   { "status": "picking_up" | "arrived" | "in_transit" | "completed" }
 POST  /rides/{id}/stops/{index}/reached
 POST  /rides/{id}/decline                  { "reason_code": "rider_no_show", "reason": "…" }
+POST  /rides/{id}/transfer                 { "reason": "vehicle_breakdown", "note": "…" }   🆕 v4.77.0
+POST  /rides/{id}/transfer/cancel                                                            🆕 v4.77.0
+POST  /rides/{id}/stop-events              { "stop_index", "event", … }   🆕 v4.76.0 — voir §5 bis
 GET   /rides/{id}
 GET   /rides?cursor=…                      # l'historique de VOS courses
 ```
@@ -1439,6 +1442,89 @@ accepted → picking_up → arrived → in_transit → completed
         ↘ cancelled
 ```
 
+
+### 🆕 🤝 PASSER LA MAIN — un autre chauffeur reprend votre course (v4.77.0)
+
+> Demandé par le propriétaire. Une panne, un malaise, une route coupée, la fin
+> de votre service : vous ne pouvez pas continuer, **et le passager ne doit pas
+> rester sur le trottoir**.
+
+```
+POST /rides/{id}/transfer         { "reason": "vehicle_breakdown", "note": "courroie cassée" }
+POST /rides/{id}/transfer/cancel
+```
+
+#### ⚠️⚠️ DEMANDER UN REMPLAÇANT NE VOUS ENLÈVE PAS LA COURSE
+
+**Rien ne change pour vous à cet instant.** La course reste la vôtre, avec son
+état, son passager, son suivi — et **vous pouvez continuer à rouler**. La
+plateforme ouvre, **en parallèle**, un appel pour trouver quelqu'un.
+
+Trois suites possibles, et votre écran doit les tenir **toutes les trois** :
+
+| | Ce qui se passe | Votre écran |
+|---|---|---|
+| **quelqu'un reprend** | la course passe à lui, votre part est **figée et versée** | vous recevez `ride_transfer_done` avec **votre montant**, et la course quitte votre écran |
+| **personne ne reprend** | `transfer.state: "failed"` — **la course est toujours la vôtre** | « personne n'a pu reprendre : la course continue avec vous ». ⚠️ **Ne fermez pas l'écran** |
+| **vous changez d'avis** | `POST /rides/{id}/transfer/cancel` | retour à l'état normal |
+
+⚠️ **NE FERMEZ PAS LA COURSE EN DEMANDANT UN TRANSFERT.** C'est l'erreur qui
+coûterait le plus cher : un chauffeur qui range son téléphone en croyant avoir
+rendu la course laisse un passager à bord d'une voiture dont plus personne ne
+suit le trajet — et la course se facturera sur un parcours interrompu.
+
+#### Les huit motifs, et ce qu'ils déclenchent
+
+| `reason` | |
+|---|---|
+| `vehicle_breakdown` | panne, pneu, batterie |
+| `out_of_fuel` | plus de carburant ou de charge |
+| `road_blocked` | route coupée, barrage — vous ne passerez pas |
+| `wrong_vehicle` | bagages, places, siège enfant : votre véhicule ne convient pas |
+| `shift_end` | fin de service, vous rendez le véhicule |
+| `driver_unwell` | malaise, urgence personnelle — ⚠️ **ouvre un incident** |
+| `accident` | ⚠️ **ouvre un incident** |
+| `unsafe` | la sécurité de quelqu'un — ⚠️ **ouvre un incident** |
+| `other` | aucun des précédents — **mettez la phrase dans `note`** |
+
+⚠️ **LE MOTIF EST OBLIGATOIRE** (contrairement à l'annulation) : il est
+**traduit et montré au passager**. « Votre chauffeur ne peut pas continuer »
+sans la moitié de la phrase se lit comme une panne de la plateforme.
+
+⚠️ **`note` EST POUR L'EXPLOITATION, PAS POUR LE PASSAGER.** Écrivez-y ce qu'un
+opérateur doit savoir ; le passager ne la verra jamais. Un code inventé est
+refusé — `422 transfer_reason_unknown`, **et la phrase nomme les acceptés**.
+
+⚠️ **TROIS MOTIFS OUVRENT UN INCIDENT DE SUPPORT** (`driver_unwell`,
+`accident`, `unsafe`) : quelqu'un vous rappellera. Ce n'est pas une sanction —
+c'est la même file que les annulations graves.
+
+#### Ce que vous touchez
+
+⚠️⚠️ **VOTRE PART EST CALCULÉE SUR LA DISTANCE QUE VOUS AVEZ RÉELLEMENT
+ROULÉE**, rapportée à la distance prévue, et **versée immédiatement** — pas à
+la fin de la course, parce que vous n'y serez plus. Le passager, lui, paie le
+même prix qu'avant : un transfert ne lui coûte rien de plus.
+
+⚠️ **SANS PARCOURS MESURÉ, LA PART EST NULLE.** Si le suivi n'a rien gardé
+(réseau coupé toute la course), la plateforme ne devine pas : signalez-le au
+support plutôt que d'attendre un montant qui n'arrivera pas.
+
+#### Et si c'est VOUS qui reprenez une course
+
+L'appel arrive comme un autre, avec **`meta.transfer: "1"`** et le motif — et
+`meta.rider_on_board: "1"` quand le passager est **déjà dans une voiture**.
+
+⚠️⚠️ **CE N'EST PAS UNE COURSE QUI COMMENCE.** Vous n'allez pas à un point de
+départ : vous allez **rejoindre une voiture en mouvement**. L'écran doit le
+dire — « reprise de course, le passager est à bord » — et vous mener sur **la
+position vivante du trajet**, pas sur un point figé : la voiture roule pendant
+que vous approchez.
+
+⚠️ **ACCEPTER SE FAIT COMME TOUJOURS** (le même geste sur l'appel) : c'est le
+serveur qui échange les chauffeurs. La course arrive **dans l'état où elle
+est** — à bord, en approche — et non en `accepted` : ne remettez pas le
+compteur à zéro.
 
 ### 🏷️ LE MOTIF, NOMMÉ — `reason_code` et `GET /rides/cancel-reasons` (v4.55.0)
 

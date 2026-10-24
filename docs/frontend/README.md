@@ -1,6 +1,6 @@
 # Specs frontend — par rôle
 
-> **Version 4.76.0** · 24 octobre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics`
+> **Version 4.77.0** · 24 octobre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics`
 
 **Cinq** documents, un par application. Chacun est **autonome** : tout ce qu'un frontend doit savoir pour son rôle, sans avoir à ouvrir les vingt specs de modules.
 
@@ -355,6 +355,54 @@ Chaque document porte la même version en en-tête, et son propre journal des ch
 - [ ] ⚠️ **`TRACKING_JWT_SECRET` renseigné dans chaque environnement déployé.** Vide, l'authentification du service de suivi est **désactivée** : n'importe qui connaissant un `delivery_id` suit la course. Le secret doit valoir **exactement** le `JWT_SECRET` de `dira-food-api`.
 
 ## Journal
+
+### 4.77.0 — 24 octobre 2026
+
+🤝 **PASSER LA MAIN — une course en cours confiée à un autre chauffeur** —
+`VTC-DRIVER.md`, `VTC-CLIENT.md`. Demandé par le propriétaire : « transfert de
+course à un autre agent, avec raison ; il passe récupérer le client et continue
+la course ; le chauffeur peut toujours être en mouvement, et le client doit être
+prévenu du transfert ainsi que de la raison. »
+
+```
+POST /vtc/rides/{id}/transfer         { reason, note? }   (chauffeur)
+POST /vtc/rides/{id}/transfer/cancel
+"transfer": { state, reason, by, grave, requested_at }    (sur la course)
+```
+
+- ⚠️⚠️ **DEMANDER UN REMPLAÇANT N'ENLÈVE RIEN AU CHAUFFEUR EN PLACE.** La
+  course garde son état, son chauffeur, sa carte — et la voiture **peut
+  continuer à rouler**. On ouvre un appel **en parallèle**. Sans cette règle, il
+  aurait fallu un état qui mente (`in_transit` sans voiture) ou débarquer le
+  passager avant de savoir si quelqu'un reprend.
+- ⚠️⚠️ **CÔTÉ PASSAGER : JAMAIS « COURSE ANNULÉE ».** Elle ne l'est pas, et
+  celui qui le croit **descend de la voiture**. L'écran dit « votre chauffeur ne
+  peut pas continuer (*raison*), nous cherchons quelqu'un — restez où vous
+  êtes », et **garde la carte du chauffeur actuel** pendant `searching`.
+- ⚠️ **`failed` PORTE LA BONNE NOUVELLE** : « votre chauffeur continue ». Sans
+  cette phrase, l'écran reste sur « on cherche » pendant que la voiture roule
+  vers la destination.
+- ⚠️ **`grave: true`** (accident, malaise, sécurité) → **changez de ton**, et un
+  incident est déjà ouvert au support.
+- ⚠️ **Le motif est OBLIGATOIRE** (contrairement à l'annulation) : il est
+  traduit et montré au passager. La `note` libre est **pour l'exploitation** —
+  le passager ne la verra jamais.
+- ⚠️ **CÔTÉ CHAUFFEUR : NE FERMEZ PAS LA COURSE EN DEMANDANT UN TRANSFERT.**
+  C'est l'erreur la plus coûteuse : un passager à bord d'une voiture dont plus
+  personne ne suit le trajet, et une course facturée sur un parcours
+  interrompu. Trois suites à tenir : quelqu'un reprend (votre part est versée),
+  personne ne reprend (**la course est toujours la vôtre**), vous vous retirez.
+- ⚠️ **Votre part est calculée sur la distance RÉELLEMENT roulée** et versée
+  **tout de suite** — vous ne serez plus là à la fin. Sans parcours mesuré, elle
+  est **nulle** : la plateforme ne devine pas.
+- ⚠️ **Le passager ne paie pas plus** : le partage entre les deux chauffeurs est
+  un problème de la plateforme.
+- ⚠️ **Reprendre une course n'est pas en commencer une** : l'appel porte
+  `meta.transfer: "1"` (et `rider_on_board: "1"` le cas échéant), la course
+  arrive **dans l'état où elle est**, et il faut mener le remplaçant sur la
+  **position vivante** du trajet — la voiture roule pendant qu'il approche.
+- ⚠️ **Le passager ne peut pas demander un transfert lui-même** : aucune route.
+  C'est le support qui le décide (`rider_asked`), ou il annule.
 
 ### 4.76.0 — 24 octobre 2026
 
