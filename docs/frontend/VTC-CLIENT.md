@@ -1,6 +1,6 @@
 # App CLIENT — COURSES (VTC) — contrat d'API
 
-> **Version 4.74.0** · 24 octobre 2026
+> **Version 4.75.0** · 24 octobre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Courses : `https://api-staging.dira.llc/api/v1/vtc` · Suivi : `wss://tracking-staging.dira.llc`
 
 ---
@@ -2153,6 +2153,84 @@ Une course `searching` porte alors **`dispatch_state`** :
 
 `dispatch_at` date le dernier passage.
 
+### 🆕 🛰️ `dispatch_call` — CE QUE LE PASSAGER VOIT DE SON APPEL (v4.75.0)
+
+> Demandé par l'équipe mobile (socle #205) **et** par le propriétaire. Jusqu'ici
+> l'application dessinait des ondes de **taille fixe** autour de l'épingle du
+> passager : le rayon n'existait que côté serveur, et elle n'avait aucun moyen
+> de l'inventer.
+
+Tant que `dispatch_state` vaut `calling`, la course porte :
+
+```jsonc
+"dispatch_call": {
+  "center": [1.2255, 6.1319],
+  "radius_m": 3500,
+  "attempt": 2,
+  "max_attempts": 3,
+  "attempt_ends_at": "2026-10-24T12:01:30Z",
+  "ringing": [
+    { "position": [1.2301, 6.1402], "type": "car",  "distance_m": 420 },
+    { "position": [1.2410, 6.1511], "type": "moto", "distance_m": 980 }
+  ],
+  "target_missed": false
+}
+```
+
+**Absent hors de `calling`** — il n'y a alors rien à dessiner.
+
+⚠️⚠️ **`radius_m` EST LE RAYON DE LA TENTATIVE EN COURS, DÉJÀ ÉLARGI.** L'appel
+commence petit et s'écarte à chaque tentative (`call_radius_step_m`) : dessiner
+le rayon de départ au quatrième essai tracerait un cercle **à l'intérieur
+duquel plus personne n'est appelé**. Le serveur lit le rayon sur la vague en
+cours ; ne le recalculez pas.
+
+⚠️ **`center` EST SERVI, NE LE DÉDUISEZ PAS DU DÉPART.** En course **partagée**,
+l'appel part d'un point que la plateforme a retenu pour le groupe, et le
+passager **ne connaît pas** le départ de l'autre : il ne peut donc pas le
+calculer. Centrez l'onde sur `center`.
+
+⚠️ **`attempt_ends_at` EST UN INSTANT**, à décompter sur place — jamais une
+durée. « Il reste 12 s » servi il y a huit secondes en vaut quatre.
+
+#### `ringing` — où sonnent les voitures qu'on appelle pour vous
+
+⚠️⚠️ **CES POINTS NE NOMMENT PERSONNE, ET C'EST DÉFINITIF.** Position, genre de
+véhicule, distance — pas d'identifiant, pas de plaque, pas de nom, **pas de
+`ref`** (contrairement aux points du radar) : une voiture qu'on sonne n'est plus
+libre, donc un jeton d'épingle ne la désignerait pas. Pour en choisir une autre,
+c'est le radar ; pour rappeler, `POST /rides/{id}/relaunch`.
+
+⚠️⚠️ **ET IL N'Y A AUCUN COMPTE DE REFUS, NI DE CHAUFFEURS APPELÉS.** Ni
+`ringing.length` ni rien d'autre ne doit être présenté comme « 4 chauffeurs
+contactés, 2 ont refusé ». Ce chiffre n'apprend au passager qu'une chose —
+qu'on ne veut pas de lui — **et c'est faux** : un chauffeur qui ne répond pas
+est au volant, pas en train de le juger. Les refusés et les écartés **ne sont
+pas** dans la liste.
+
+⚠️ **`ringing` PEUT ÊTRE ABSENT ALORS QUE LE RESTE EST LÀ** : le pays n'a pas
+ouvert le radar, ou a fermé le suivi de l'appel (`progress_enabled`). L'onde et
+le rayon suffisent alors à dire qu'il se passe quelque chose — **n'inventez pas
+de points**.
+
+⚠️ **`target_missed: true`** : la voiture que le passager avait choisie n'était
+**plus libre**, et la recherche a continué sans elle. **Dites-le tout de
+suite** — « la voiture que vous avez choisie vient d'être prise, nous appelons
+les plus proches » —, sinon son écran attend la réponse d'une voiture qui n'a
+jamais sonné, puis annonce un autre chauffeur sans explication.
+
+#### ⚠️ LA MISE À JOUR ARRIVE PAR UNE TRAME QUI NE PORTE RIEN
+
+À chaque nouvelle tentative, le serveur pousse une trame de statut sur le
+socket de la course — **le statut ne change pas** (`searching`). Elle dit
+« quelque chose a bougé, **relis** » : `GET /rides/{id}` rend le nouveau
+`dispatch_call`.
+
+⚠️ **UN ÉCRAN QUI IGNORE UNE TRAME DONT LE STATUT N'A PAS CHANGÉ NE VERRA
+JAMAIS LE RAYON S'ÉLARGIR.** C'est la règle de toute la plateforme — aucune
+trame ne porte la vérité, elles disent de relire —, et c'est ici qu'elle se
+voit le plus.
+
 ⚠️ **`dispatch_reason` (v4.42.0) DIT POURQUOI, quand il y a plusieurs façons de
 s'arrêter** — et il change ce que vous proposez. Il n'apparaît que sur une
 course partagée : `pool_no_match`, `pool_partner_left`, `pool_call_failed`.
@@ -3201,6 +3279,61 @@ question**.
 
 ⚠️ **LA RÉPONSE EST `no-store`.** Ne la mettez pas en cache : un radar en cache
 montre des voitures là où elles ne sont plus.
+
+### 🆕 ⚠️⚠️ APPUYER SUR UNE VOITURE ET L'APPELER (v4.75.0)
+
+> Demandé par le propriétaire : « cliquez sur la map l'icône d'un chauffeur et
+> l'appeler (chauffeur anonyme tant qu'il n'a pas décroché) ».
+
+```
+POST /rides/{id}/pick   { "ref": "<le `ref` de l'épingle>" }   → 200 Ride
+```
+
+⚠️ **LE CORPS NE PORTE PAS D'IDENTIFIANT DE VÉHICULE, ET IL NE PEUT PAS EN
+PORTER** : le radar n'en sert aucun. Il porte le **`ref` de l'épingle** sur
+laquelle le passager a appuyé — et ce jeton n'est servi que si le pays a ouvert
+le geste. **Pas de `ref` sur un point ⇒ pas de bouton.**
+
+#### Ce que le jeton est, et ce qu'il n'est pas
+
+| | |
+|---|---|
+| Ce qu'il est | une **empreinte signée** du véhicule et d'une **fenêtre de deux minutes** |
+| Ce qu'il permet | appeler **cette** voiture en premier |
+| Ce qu'il ne permet pas | ⚠️ **suivre une voiture** : il change à chaque fenêtre, donc deux balayages ne se recollent pas. ⚠️ **lire quoi que ce soit** : aucune route ne rend d'information contre un `ref` |
+| Où il se résout | ⚠️ **parmi les voitures encore LIBRES autour de votre départ**, et nulle part ailleurs : un jeton d'une autre ville ou d'un autre passager ne désigne rien |
+
+#### ⚠️⚠️ « EN PREMIER », PAS « SEULEMENT ELLE »
+
+La voiture choisie est sonnée **la première**. Si elle ne répond pas, **la
+recherche continue d'elle-même** auprès des plus proches : rien à renvoyer.
+
+C'est délibéré. Un appel qui n'appellerait **que** la voiture choisie
+laisserait le passager attendre le silence d'un chauffeur en course pendant que
+trois autres passaient devant chez lui. **Dites-le à l'écran** : « nous
+appelons d'abord cette voiture ».
+
+#### Les deux refus, et ce qu'ils demandent d'afficher
+
+| Refus | Quand | Ce que l'écran dit |
+|---|---|---|
+| `409 pick_driver_gone` | la voiture **n'est plus libre** — prise, hors ligne, déjà sonnée pour quelqu'un d'autre, ou jeton trop vieux | « cette voiture vient d'être prise — choisissez-en une autre, ou laissez-nous appeler les plus proches ». ⚠️ **Ce n'est pas une panne** : rebalayez et proposez la suite |
+| `422 pick_disabled` | le pays n'ouvre pas le geste | **ne devrait jamais arriver** : sans `ref`, aucun bouton. Si vous le recevez, c'est que l'écran a fabriqué un jeton |
+| `409 not_searching` | la course a été prise, terminée ou annulée entre-temps | relire la course |
+
+#### Ce que le passager peut faire ensuite — les trois gestes, et rien d'autre
+
+| Geste | Route | ⚠️ |
+|---|---|---|
+| **Rappeler** (relancer la recherche) | `POST /rides/{id}/relaunch` | masqué tant que `dispatch_state` vaut `calling` (`409 search_running`) |
+| **Appeler une autre voiture** | `POST /rides/{id}/pick` avec une **nouvelle** épingle | le radar a rebalayé : les `ref` précédents peuvent être périmés |
+| **Ne rien faire** | — | ⚠️ **c'est souvent le bon conseil** : la recherche continue seule, s'élargit, et finit par trouver. Un écran qui pousse à agir fait annuler des courses que la plateforme aurait servies |
+
+⚠️⚠️ **LE CHAUFFEUR RESTE ANONYME TANT QU'IL N'A PAS ACCEPTÉ.** Avant son
+acceptation, vous n'avez qu'un point et un genre de véhicule — ni nom, ni
+plaque, ni photo, ni note. **N'inventez pas de carte de chauffeur** « en cours
+d'appel » : elle serait vide, et une carte vide se lit comme une panne. La
+carte (`driver`) arrive avec l'acceptation, d'un coup, comme avant.
 
 ---
 

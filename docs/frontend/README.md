@@ -1,6 +1,6 @@
 # Specs frontend — par rôle
 
-> **Version 4.74.0** · 24 octobre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics`
+> **Version 4.75.0** · 24 octobre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics`
 
 **Cinq** documents, un par application. Chacun est **autonome** : tout ce qu'un frontend doit savoir pour son rôle, sans avoir à ouvrir les vingt specs de modules.
 
@@ -355,6 +355,56 @@ Chaque document porte la même version en en-tête, et son propre journal des ch
 - [ ] ⚠️ **`TRACKING_JWT_SECRET` renseigné dans chaque environnement déployé.** Vide, l'authentification du service de suivi est **désactivée** : n'importe qui connaissant un `delivery_id` suit la course. Le secret doit valoir **exactement** le `JWT_SECRET` de `dira-food-api`.
 
 ## Journal
+
+### 4.75.0 — 24 octobre 2026
+
+📡 **LE PASSAGER VOIT SON APPEL, ET PEUT CHOISIR UNE VOITURE** — `VTC-CLIENT.md`,
+`DIRA-CLIENT.md`. Deux demandes : l'**équipe mobile** (socle #205 — servir le
+rayon d'appel en cours, parce que l'application dessinait des ondes de taille
+fixe faute de pouvoir l'inventer) et le **propriétaire** (voir le chauffeur en
+cours d'appel, appuyer sur son icône pour l'appeler, proposer de rappeler ou
+d'en appeler un autre).
+
+```
+"dispatch_call": { center, radius_m, attempt, max_attempts, attempt_ends_at,
+                   ringing: [ { position, type, distance_m } ], target_missed }
+POST /vtc/rides/{id}/pick   { "ref": "<le ref d'une épingle du radar>" }
+```
+
+- ⚠️⚠️ **`radius_m` EST CELUI DE LA TENTATIVE EN COURS, déjà élargi.** L'appel
+  commence petit et s'écarte à chaque tentative : dessiner le rayon de départ au
+  quatrième essai tracerait un cercle **à l'intérieur duquel plus personne n'est
+  appelé**.
+- ⚠️ **`center` est SERVI** : en course partagée, l'appel part d'un point retenu
+  pour le groupe, et le passager ne connaît pas le départ de l'autre — il ne
+  peut pas le calculer.
+- ⚠️⚠️ **`ringing[]` NE NOMME PERSONNE ET NE COMPTE AUCUN REFUS.** Position,
+  genre, distance — et les refusés n'y sont pas. « 4 contactés, 2 ont refusé »
+  n'apprend au passager qu'une chose, qu'on ne veut pas de lui, **et c'est
+  faux** : un chauffeur qui ne répond pas est au volant. `ringing` peut être
+  absent (le pays n'ouvre pas le radar) alors que le rayon est là : **n'inventez
+  pas de points**.
+- ⚠️ **La mise à jour arrive par une trame dont le STATUT NE CHANGE PAS**
+  (`searching`) : elle dit « relis ». Un écran qui ignore une trame au statut
+  inchangé **ne verra jamais le rayon s'élargir**.
+- 🆕 **`POST /rides/{id}/pick { ref }`** sonne **en premier** la voiture choisie.
+  ⚠️ **Pas « seulement elle »** : si elle ne répond pas, la recherche continue
+  d'elle-même — un appel exclusif ferait attendre le silence d'un chauffeur en
+  course pendant que trois autres passent devant la porte.
+- ⚠️ **Le corps ne porte aucun identifiant de véhicule** — le radar n'en sert
+  aucun. Le `ref` d'une épingle est une empreinte signée du véhicule et d'une
+  **fenêtre de deux minutes** : elle ne permet pas de **suivre** une voiture
+  (elle change de fenêtre en fenêtre), ne rend **aucune** information, et ne se
+  résout que parmi les voitures **libres autour du même départ**.
+- ⚠️ **`409 pick_driver_gone`** = « cette voiture vient d'être prise, choisissez-en
+  une autre » : un **état**, pas une panne. **`422 pick_disabled`** ne devrait
+  jamais arriver — sans `ref`, pas de bouton.
+- ⚠️⚠️ **LE CHAUFFEUR RESTE ANONYME JUSQU'À SON ACCEPTATION** : un point et un
+  genre de véhicule, rien d'autre. **N'inventez pas de carte de chauffeur « en
+  cours d'appel »** — elle serait vide, et une carte vide se lit comme une panne.
+- **Les trois gestes, et rien d'autre** : *rappeler* (`relaunch`), *appeler une
+  autre voiture* (`pick` avec une nouvelle épingle), ou **ne rien faire** — qui
+  est souvent le bon conseil : la recherche continue seule et s'élargit.
 
 ### 4.74.0 — 24 octobre 2026
 
