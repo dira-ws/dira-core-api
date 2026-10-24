@@ -1,6 +1,6 @@
 # App CHAUFFEUR — COURSES (VTC) — contrat d'API
 
-> **Version 4.71.0** · 18 octobre 2026
+> **Version 4.72.0** · 24 octobre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Courses : `https://api-staging.dira.llc/api/v1/vtc` · Suivi : `wss://tracking-staging.dira.llc` · SIG : `https://maps.dira.llc/api`
 
 ---
@@ -1586,8 +1586,10 @@ Vous êtes sur place, vous ne voyez personne.
 ```
 POST /rides/{id}/honk
 → 200 { …la course…, "honked_at", "honk_count" }
-→ 409 not_arrived     — vous n'avez pas encore envoyé `arrived`
-→ 409 honk_too_soon   — trop tôt (meta.cooldown_s)
+→ 409 not_arrived              — vous n'avez pas encore envoyé `arrived`
+→ 409 honk_wait_after_arrival  — vous venez d'arriver, laissez descendre (v4.72.0)
+→ 409 honk_too_soon            — vous venez de klaxonner
+→ 403 honk_not_available       — le pays a fermé l'alerte sonore
 ```
 
 Le passager reçoit une notification courte et sonore qui dit **qui** l'attend
@@ -1595,18 +1597,56 @@ et **dans quoi** — c'est ce qu'il cherche des yeux en sortant. La course ne
 change pas d'état : elle reste `arrived`, et vous pouvez klaxonner plusieurs
 fois.
 
-> ⚠️ **GRISEZ LE BOUTON PENDANT 60 SECONDES APRÈS CHAQUE COUP**, avec un
-> compte à rebours visible.
+#### ⚠️ LES DEUX DÉLAIS SE RÈGLENT PAR PAYS (v4.72.0) — ils étaient en dur
+
+`GET /settings/dispatch` porte désormais deux nombres de plus :
+
+```
+honk_delay_s      le délai entre l'arrivée annoncée et le PREMIER klaxon
+                  0 = tout de suite (le comportement d'avant)
+honk_interval_s   le temps minimum entre DEUX klaxons
+```
+
+⚠️ **CESSEZ DE GRISER 60 SECONDES EN DUR.** Jusqu'ici ce contrat vous
+demandait un délai fixe de soixante secondes : c'est devenu un réglage. Le
+temps qu'il faut pour descendre de chez soi n'est pas le même d'une ville à
+l'autre — un immeuble de Dakar, une concession de Lomé, un portail gardé —, et
+c'est ce temps-là que l'exploitation règle maintenant pour son pays.
+
+**Les deux compteurs que votre écran doit tenir :**
+
+| Bouton grisé jusqu'à | Calcul |
+|---|---|
+| le premier klaxon | `arrived_at` + `honk_delay_s` |
+| les suivants | `honked_at` + `honk_interval_s` |
+
+> ⚠️ **GRISEZ LE BOUTON, avec un compte à rebours visible**, dans les deux
+> cas.
 >
 > Un bouton qui sonne fort et qu'on peut presser dix fois devient du
 > harcèlement en dix secondes — et c'est le passager, celui qui descend les
-> escaliers avec ses sacs, qui le prend. Le service refuse de toute façon un
-> second klaxon trop rapproché (`409 honk_too_soon`), mais **ne comptez pas
-> là-dessus pour l'affichage** : un bouton qui répond « non » est un bouton
-> cassé aux yeux de celui qui appuie.
+> escaliers avec ses sacs, qui le prend. Le service refuse de toute façon
+> (`409 honk_wait_after_arrival` ou `409 honk_too_soon`), mais **ne comptez
+> pas là-dessus pour l'affichage** : un bouton qui répond « non » est un
+> bouton cassé aux yeux de celui qui appuie.
 >
-> Le décompte repart de `honked_at`, pas d'un minuteur local : l'application
-> redémarrée ne doit pas offrir un klaxon de plus.
+> Les décomptes repartent de `arrived_at` et de `honked_at`, **pas d'un
+> minuteur local** : l'application redémarrée ne doit pas offrir un klaxon de
+> plus.
+
+⚠️⚠️ **ET LE CHIFFRE N'ARRIVE PAS DANS LE REFUS — la version précédente de ce
+contrat vous le promettait à tort.** Elle annonçait « `409 honk_too_soon` —
+trop tôt (`meta.cooldown_s`) ». **Ce champ n'a jamais été servi** : l'enveloppe
+de refus de la plateforme ne porte que `code`, `message`, `fields` et `reason`.
+Le nombre de secondes restantes est **dans la phrase traduite** du `message`
+(« Patientez 12 s avant de klaxonner à nouveau ») — lisible par un humain, pas
+par votre minuteur. **Calculez vos décomptes depuis les deux réglages et les
+deux horodatages**, comme le tableau ci-dessus.
+
+⚠️ **`honk_interval_s` à 0 ne veut pas dire « aucune limite »** : le service
+retombe alors sur un plancher de vingt secondes. Un pays qui n'a rien réglé
+garde donc son garde-fou — mais ne vous en servez pas comme valeur
+d'affichage, lisez le réglage.
 
 ⚠️ **Klaxonner n'est pas « dépêchez-vous ».** C'est pour cela que la route
 refuse avant `arrived` : personne ne descend attendre sous le soleil une
@@ -2623,7 +2663,8 @@ défendre quand elle est contestée.
 ```
 GET /settings/dispatch → { chain_calls, chain_radius_m, call_mode, call_radius_m,
                            call_ranking, call_ttl_s, max_drivers, max_minutes,
-                           max_attempts, search_expiry_min, speed_limit_kmh }
+                           max_attempts, search_expiry_min, speed_limit_kmh,
+                           honk_delay_s, honk_interval_s }
 ```
 
 ⚠️ **`speed_limit_kmh` (v4.33.0) : alertez le chauffeur au-delà.** Un passager

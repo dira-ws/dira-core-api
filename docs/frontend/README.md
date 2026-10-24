@@ -1,6 +1,6 @@
 # Specs frontend — par rôle
 
-> **Version 4.71.0** · 18 octobre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics`
+> **Version 4.72.0** · 24 octobre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics`
 
 **Cinq** documents, un par application. Chacun est **autonome** : tout ce qu'un frontend doit savoir pour son rôle, sans avoir à ouvrir les vingt specs de modules.
 
@@ -355,6 +355,40 @@ Chaque document porte la même version en en-tête, et son propre journal des ch
 - [ ] ⚠️ **`TRACKING_JWT_SECRET` renseigné dans chaque environnement déployé.** Vide, l'authentification du service de suivi est **désactivée** : n'importe qui connaissant un `delivery_id` suit la course. Le secret doit valoir **exactement** le `JWT_SECRET` de `dira-food-api`.
 
 ## Journal
+
+### 4.72.0 — 24 octobre 2026
+
+🔔 **LES DEUX DÉLAIS DU KLAXON SE RÈGLENT PAR PAYS** — `VTC-DRIVER.md`,
+`VTC-CLIENT.md`. Demandé par le propriétaire : pouvoir choisir le délai après
+l'arrivée et l'intervalle entre deux coups.
+
+```
+honk_delay_s      arrivée annoncée → premier klaxon   (0 = tout de suite)
+honk_interval_s   un klaxon → le suivant
+```
+
+Les deux arrivent dans `GET /settings/dispatch`, à côté du seuil de vitesse.
+
+- ⚠️ **CESSEZ DE GRISER 60 SECONDES EN DUR.** Ce contrat demandait un délai
+  fixe ; c'est devenu un réglage. Le temps qu'il faut pour descendre de chez
+  soi n'est pas le même d'une ville à l'autre.
+- **Deux compteurs à tenir** : `arrived_at` + `honk_delay_s` pour le premier
+  coup, `honked_at` + `honk_interval_s` pour les suivants.
+- 🆕 **`409 honk_wait_after_arrival`** — distinct de `honk_too_soon` : le
+  chauffeur vient d'arriver et n'a pas encore klaxonné une seule fois. Lui
+  dire « patientez avant de klaxonner **à nouveau** » serait incompréhensible.
+- ⚠️⚠️ **UNE PROMESSE FAUSSE DEPUIS LA v4.24.0 EST RETIRÉE.** Ce contrat
+  annonçait « `409 honk_too_soon` — trop tôt (`meta.cooldown_s`) ». **Ce champ
+  n'a jamais été servi** : l'enveloppe de refus ne porte que `code`, `message`,
+  `fields` et `reason`, et `meta` alimente le gabarit de traduction. Les
+  secondes restantes sont désormais **dans la phrase** du `message` ; les
+  décomptes se calculent depuis les réglages et les horodatages. C'est la
+  troisième fois que ce piège se présente sur la plateforme (après
+  `pool_too_short` et `rental_out_of_range`).
+- ⚠️ **`honk_interval_s` à 0 ne veut pas dire « aucune limite »** : le service
+  retombe sur un plancher de 20 s. Un pays qui n'a rien réglé garde son
+  garde-fou — mais lisez le réglage pour l'affichage, pas le plancher.
+- **Rien ne change pour la livraison** : il n'y a pas de klaxon côté livreur.
 
 ### 4.71.0 — 18 octobre 2026
 
