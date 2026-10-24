@@ -62,7 +62,13 @@ func categoryOf(key string) string {
 		// ⚠️ LE SOS EST RANGÉ AVEC LE STAFF, DONC NON COUPABLE (voir
 		// `Muteable`). C'est la raison d'être de cette catégorie : un poste de
 		// supervision qui peut se couper l'alarme d'urgence n'en est plus un.
-		KeyStaffSOS, KeyStaffSOSClosed:
+		KeyStaffSOS, KeyStaffSOSClosed,
+		// ⚠️ L'EXCÈS GRAVE EST RANGÉ AVEC LE STAFF, DONC NON COUPABLE. Même
+		// raisonnement que le SOS : un poste de supervision qui peut se couper
+		// les alertes de sécurité n'en est plus un. Et contrairement au SOS, le
+		// chauffeur concerné n'a RIEN demandé — personne d'autre que
+		// l'exploitation ne sait que ça vient d'arriver.
+		KeyStaffSpeeding:
 		return CategoryStaff
 	case KeyEquipmentProposed, KeyEquipmentHandedOver, KeyEquipmentDue, KeyEquipmentCharged,
 		KeyEquipmentOverdue, KeyEquipmentBlocked, KeyEquipmentReturned:
