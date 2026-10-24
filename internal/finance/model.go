@@ -1,6 +1,6 @@
 // Package finance : LA COMPTABILITÉ de la plateforme, et ses règles d'argent.
 //
-// Trois choses vivent ici, parce qu'elles se lisent ensemble :
+// Quatre choses vivent ici, parce qu'elles se lisent ensemble :
 //
 //   - la FACTURATION par pays et par métier (`Billing`) : comment la
 //     plateforme se rémunère sur un agent — des JETONS à l'acceptation, ou
@@ -14,7 +14,11 @@
 //   - l'INTÉGRITÉ (`Finding`) : un balayage qui recalcule chaque solde depuis
 //     ses mouvements, vérifie que le journal est équilibré et que chaque
 //     mouvement a son écriture — et alerte quand ce n'est pas le cas. Un
-//     solde modifié sans mouvement se voit ; une écriture manquante aussi.
+//     solde modifié sans mouvement se voit ; une écriture manquante aussi ;
+//   - les DÉCLARATIONS (`Declaration`, voir `declaration.go`) : l'argent qui
+//     entre et sort SANS passer par un portefeuille — un loyer, du carburant,
+//     un apport d'associé, une subvention. Elles écrivent dans le MÊME
+//     journal, en partie double, et se contre-passent au lieu de se modifier.
 package finance
 
 import (
@@ -136,6 +140,43 @@ const (
 	AccExpensePromo    = "expense_promo"
 	AccExpenseCredits  = "expense_operator_credits"
 	AccExpenseWriteoff = "expense_writeoff"
+
+	// LES COMPTES DES DÉCLARATIONS (voir `declaration.go`). L'argent que la
+	// plateforme dépense et reçoit HORS de ce qu'elle fait circuler : un
+	// loyer, un plein, un apport d'associé, une subvention.
+	//
+	// ⚠️ La TRÉSORERIE d'abord, et elle manquait : le plan ne savait nommer
+	// que `mobile_money`, donc un loyer payé en espèces n'avait aucune
+	// contrepartie à créditer. Une caisse et une banque, c'est ce qui permet
+	// de rapprocher une déclaration d'un relevé.
+	AccCashBox = "cash_box" // la caisse, en espèces
+	AccBank    = "bank"     // les comptes en banque
+
+	AccExpenseRent        = "expense_rent"
+	AccExpenseUtilities   = "expense_utilities"
+	AccExpenseFuel        = "expense_fuel"
+	AccExpenseMaintenance = "expense_maintenance"
+	// ⚠️ AccExpenseSalaries est LA COUTURE comptable laissée à la paie des
+	// salariés : le compte existe, la catégorie `salaries` le meut, et le
+	// module de paie n'aura qu'à passer par `DeclareFromModule` pour que ses
+	// versements apparaissent ici. Aucun code de la finance ne connaît la
+	// paie, et réciproquement.
+	AccExpenseSalaries = "expense_salaries"
+	AccExpenseTax      = "expense_tax"
+	AccExpenseFine     = "expense_fine"
+	AccExpenseOther    = "expense_other"
+	// Immobilisations : un véhicule acheté n'est pas une charge, c'est un
+	// actif. L'y mettre aurait fait passer le résultat du mois en perte pour
+	// un achat qui enrichit la plateforme.
+	AccFixedAssets = "fixed_assets"
+	// ⚠️ Les apports des associés sont classés en PASSIF et non en actif : ce
+	// que les associés ont mis dans la plateforme, la plateforme le leur
+	// doit. Le plan n'a pas de nature « capitaux propres », et en inventer
+	// une aurait demandé de rouvrir l'aperçu, qui ne connaît que cinq
+	// natures ; un passif dit la bonne chose au bon endroit.
+	AccOwnerContributions = "owner_contributions"
+	AccRevenueSubsidy     = "revenue_subsidy"
+	AccRevenueOther       = "revenue_other"
 )
 
 // Kinds de compte, pour l'aperçu.
@@ -173,6 +214,21 @@ var Chart = []Account{
 	{AccExpensePromo, KindExpense, "Promotions offertes"},
 	{AccExpenseCredits, KindExpense, "Crédits opérateur"},
 	{AccExpenseWriteoff, KindExpense, "Pertes et abandons"},
+	// La trésorerie et les comptes des déclarations.
+	{AccCashBox, KindAsset, "Caisse (espèces)"},
+	{AccBank, KindAsset, "Banque"},
+	{AccFixedAssets, KindAsset, "Immobilisations"},
+	{AccOwnerContributions, KindLiability, "Apports des associés"},
+	{AccRevenueSubsidy, KindRevenue, "Subventions"},
+	{AccRevenueOther, KindRevenue, "Autres produits"},
+	{AccExpenseRent, KindExpense, "Loyers"},
+	{AccExpenseUtilities, KindExpense, "Eau, électricité, internet"},
+	{AccExpenseFuel, KindExpense, "Carburant"},
+	{AccExpenseMaintenance, KindExpense, "Entretien et réparations"},
+	{AccExpenseSalaries, KindExpense, "Salaires et charges"},
+	{AccExpenseTax, KindExpense, "Impôts et taxes"},
+	{AccExpenseFine, KindExpense, "Amendes et pénalités"},
+	{AccExpenseOther, KindExpense, "Autres charges"},
 }
 
 // Line : un côté d'une écriture.

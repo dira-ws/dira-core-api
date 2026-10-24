@@ -1570,6 +1570,182 @@ paths:
         le staff de portée `core` du pays (`staff_finance_alert`).
       responses:
         "200": {description: "Run : portefeuilles vus, écritures, constats, nouveaux, résolus"}
+  /admin/finance/declarations:
+    get:
+      tags: [finance]
+      summary: Les entrées et sorties d'argent déclarées
+      description: >-
+        L'argent qui entre et sort SANS passer par un portefeuille : un loyer,
+        du carburant, un apport d'associé, une subvention, une amende, l'achat
+        d'un véhicule. Les plus récentes d'abord, curseur sur `id`. Bornées au
+        pays de la requête.
+      parameters:
+        - {name: direction, in: query, schema: {type: string, enum: [in, out]}}
+        - {name: category, in: query, schema: {type: string}}
+        - {name: means, in: query, schema: {type: string, enum: [cash, bank, mobile_money]}}
+        - {name: status, in: query, schema: {type: string, enum: [posted, reversed]}}
+        - {name: source, in: query, schema: {type: string}, description: "`console`, ou le module qui a déclaré"}
+        - {name: q, in: query, schema: {type: string}, description: cherche dans la contrepartie et la pièce}
+        - {name: from, in: query, schema: {type: string, format: date}, description: sur la date de VALEUR}
+        - {name: to, in: query, schema: {type: string, format: date}}
+        - {name: cursor, in: query, schema: {type: string}}
+        - {name: limit, in: query, schema: {type: integer, maximum: 200}}
+      responses:
+        "200":
+          description: Declarations
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items: {type: array, items: {$ref: "#/components/schemas/MoneyDeclaration"}}
+                  next_cursor: {type: string}
+    post:
+      tags: [finance]
+      summary: Déclarer une entrée ou une sortie d'argent
+      description: >-
+        Produit une écriture en PARTIE DOUBLE dans le journal existant
+        (`ref_kind=declaration`, `ref_id` = l'identifiant de la déclaration) :
+        une sortie débite le compte de la catégorie et crédite la trésorerie
+        (`means`), une entrée fait l'inverse. Le compte vient de la CATÉGORIE
+        (`GET /admin/finance/declaration-categories`) et il est FIGÉ sur la
+        déclaration : repointer la catégorie plus tard ne réécrit pas le passé.
+        Le montant est un ENTIER dans la plus petite unité de la monnaie du
+        pays ; `currency`, si envoyé, doit être celle du pays. `value_date` ne
+        peut pas être dans le futur. Le justificatif est obligatoire,
+        `attachment_url` vient de `POST /uploads?kind=receipt`. Au journal
+        d'audit (`finance.declaration.create`).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/MoneyDeclarationInput"}
+      responses:
+        "201":
+          description: MoneyDeclaration
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/MoneyDeclaration"}
+        "409": {description: "`declaration_duplicate` — cette pièce a déjà été déclarée dans ce pays · `corrects_not_reversed` · `corrects_already_corrected`"}
+        "422": {description: "`invalid declaration` — `reason` dit quoi (catégorie inconnue, sens que la catégorie n'admet pas, date de valeur future, monnaie d'un autre pays)"}
+  /admin/finance/declarations/summary:
+    get:
+      tags: [finance]
+      summary: L'état de synthèse des entrées et sorties
+      description: >-
+        Les totaux `in`, `out`, `net` d'une période, par CATÉGORIE et par MOIS,
+        pour le pays de la requête. Défaut : le dernier mois.
+
+        ⚠️ Une déclaration CONTRE-PASSÉE compte DEUX faits, pas zéro : la
+        somme à sa date de valeur, et la somme en négatif à la date de la
+        contre-passation. Une déclaration de janvier annulée en mars laisse donc
+        janvier tel qu'il était et retire la somme de mars — exactement comme le
+        journal, qui ne réécrit jamais une écriture posée. `count` suit la même
+        règle. `truncated` dit que le plafond de lecture (5 000 déclarations) a
+        été atteint et que les totaux sont donc incomplets.
+      parameters:
+        - {name: from, in: query, schema: {type: string, format: date}}
+        - {name: to, in: query, schema: {type: string, format: date}}
+      responses:
+        "200":
+          description: MoneyDeclarationSummary
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/MoneyDeclarationSummary"}
+  /admin/finance/declarations/{id}:
+    get:
+      tags: [finance]
+      summary: Une déclaration
+      parameters: [{name: id, in: path, required: true, schema: {type: string}}]
+      responses:
+        "200":
+          description: MoneyDeclaration
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/MoneyDeclaration"}
+        "404": {description: "`declaration_not_found`"}
+  /admin/finance/declarations/{id}/reverse:
+    post:
+      tags: [finance]
+      summary: Contre-passer une déclaration
+      description: >-
+        ⚠️ UNE ÉCRITURE NE SE MODIFIE PAS, ELLE SE CONTRE-PASSE. Rien n'est
+        supprimé : la déclaration reste, son écriture reste, et une SECONDE
+        écriture — les mêmes comptes, les côtés échangés — la neutralise. Elle
+        est datée du JOUR OÙ ON LA FAIT, pas de la date de valeur de la
+        déclaration fautive. Le motif est obligatoire. Pour corriger, déclarer à
+        nouveau avec `corrects` = l'identifiant de celle-ci. Au journal d'audit
+        (`finance.declaration.reverse`).
+      parameters: [{name: id, in: path, required: true, schema: {type: string}}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason: {type: string, minLength: 5, maxLength: 500}
+      responses:
+        "200":
+          description: MoneyDeclaration — `status=reversed`, `reversal_entry_id` posée
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/MoneyDeclaration"}
+        "409": {description: "`declaration_not_posted` — déjà contre-passée"}
+  /admin/finance/declaration-categories:
+    get:
+      tags: [finance]
+      summary: Le catalogue des catégories de déclaration du pays
+      description: >-
+        Chaque catégorie pointe LE COMPTE du plan qu'elle meut, et dit dans quel
+        sens elle marche (`in`, `out`, `both`). La réponse porte aussi
+        `accounts` — les seuls comptes qu'une catégorie PEUT mouvoir — et
+        `means`. Un pays qui n'a rien réglé reçoit le catalogue par défaut
+        (loyer, eau/électricité/internet, carburant, entretien, salaires,
+        impôts, amendes, immobilisation, apport, subvention, autre entrée,
+        autre sortie).
+
+        ⚠️ `accounts` EXCLUT tout compte adossé à un portefeuille (soldes
+        clients, dû aux agents, jetons prépayés, transit) : une déclaration qui
+        les mouvrait ferait dire au journal que la plateforme doit un argent que
+        personne ne détient, et rien ne le signalerait.
+      responses:
+        "200":
+          description: Catalogue
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/MoneyDeclarationCatalog"}
+    put:
+      tags: [finance]
+      summary: Régler le catalogue des catégories du pays
+      description: >-
+        ⚠️ REMPLACE LA LISTE ENTIÈRE, elle ne fusionne pas : envoyer deux
+        catégories en laisse deux. Une catégorie dont on ne veut plus se
+        DÉSACTIVE (`disabled`) plutôt que de disparaître — les déclarations déjà
+        faites portent leur libellé et leur compte, mais la console ne saurait
+        plus les nommer. Au journal d'audit
+        (`finance.declaration_categories.update`).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [categories]
+              properties:
+                categories:
+                  type: array
+                  minItems: 1
+                  maxItems: 60
+                  items: {$ref: "#/components/schemas/MoneyDeclarationCategory"}
+      responses:
+        "200":
+          description: Catalogue
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/MoneyDeclarationCatalog"}
+        "422": {description: "`invalid declaration categories` — `reason` dit quoi (code en double, compte non déclarable, sens inconnu)"}
   /payments/providers:
     get:
       tags: [payments]
@@ -2673,6 +2849,110 @@ components:
               account: {type: string}
               debit: {type: integer}
               credit: {type: integer}
+    MoneyDeclarationCategory:
+      type: object
+      required: [code, label, direction, account]
+      properties:
+        code: {type: string, pattern: "^[a-z0-9_]{2,40}$", description: ce que PORTENT les déclarations — il ne se renomme pas}
+        label: {type: string, maxLength: 80}
+        direction: {type: string, enum: [in, out, both]}
+        account: {type: string, description: un code de `accounts` (le plan comptable, restreint aux comptes déclarables)}
+        disabled: {type: boolean}
+    MoneyDeclarationCatalog:
+      type: object
+      properties:
+        country: {type: string}
+        categories: {type: array, items: {$ref: "#/components/schemas/MoneyDeclarationCategory"}}
+        updated_by: {type: string}
+        updated_at: {type: string, format: date-time}
+        accounts:
+          type: array
+          description: les SEULS comptes qu'une catégorie peut mouvoir
+          items:
+            type: object
+            properties:
+              code: {type: string}
+              kind: {type: string, enum: [asset, liability, clearing, revenue, expense]}
+              label: {type: string}
+        means: {type: array, items: {type: string, enum: [cash, bank, mobile_money]}}
+    MoneyDeclarationInput:
+      type: object
+      required: [direction, category, means, amount, value_date, counterparty, justification]
+      properties:
+        direction: {type: string, enum: [in, out]}
+        category: {type: string, description: un code du catalogue du pays}
+        means: {type: string, enum: [cash, bank, mobile_money], description: par OÙ l'argent a passé — la contrepartie de l'écriture}
+        amount: {type: integer, minimum: 1, description: ENTIER, dans la plus petite unité de la monnaie du pays}
+        currency: {type: string, minLength: 3, maxLength: 3, description: "facultatif ; refusé (422) s'il n'est pas celui du pays"}
+        value_date: {type: string, format: date, description: le jour où l'argent a bougé — jamais dans le futur}
+        counterparty: {type: string, minLength: 2, maxLength: 160, description: qui a payé, ou qui a été payé}
+        reference: {type: string, maxLength: 60, description: le numéro de la pièce — UNIQUE par pays quand il est renseigné}
+        justification: {type: string, minLength: 5, maxLength: 600}
+        attachment_url: {type: string, description: "`POST /uploads?kind=receipt` (images, 5 Mo)"}
+        corrects: {type: string, description: la déclaration CONTRE-PASSÉE que celle-ci remplace}
+    MoneyDeclaration:
+      type: object
+      properties:
+        id: {type: string}
+        country: {type: string}
+        direction: {type: string, enum: [in, out]}
+        category: {type: string}
+        category_label: {type: string, description: FIGÉ à la déclaration}
+        account: {type: string, description: le compte mouvementé, FIGÉ à la déclaration}
+        means: {type: string, enum: [cash, bank, mobile_money]}
+        amount: {type: integer}
+        currency: {type: string}
+        value_date: {type: string, format: date-time}
+        counterparty: {type: string}
+        reference: {type: string}
+        justification: {type: string}
+        attachment_url: {type: string}
+        status: {type: string, enum: [posted, reversed]}
+        entry_id: {type: string, description: l'écriture du journal}
+        reversal_entry_id: {type: string}
+        reversal_reason: {type: string}
+        reversed_by: {type: string}
+        reversed_at: {type: string, format: date-time}
+        corrects: {type: string}
+        corrected_by: {type: string}
+        source: {type: string, description: "`console`, ou le module qui a déclaré"}
+        source_ref: {type: string}
+        declared_by: {type: string}
+        created_at: {type: string, format: date-time}
+    MoneyDeclarationSummary:
+      type: object
+      properties:
+        country: {type: string}
+        currency: {type: string}
+        from: {type: string, format: date-time}
+        to: {type: string, format: date-time}
+        in: {type: integer}
+        out: {type: integer}
+        net: {type: integer, description: "`in` − `out`"}
+        count: {type: integer, description: les déclarations qui TIENNENT sur la période}
+        reversals: {type: integer, description: les contre-passations posées dans la période}
+        truncated: {type: boolean, description: le plafond de lecture a été atteint — les totaux sont incomplets}
+        categories:
+          type: array
+          items:
+            type: object
+            properties:
+              category: {type: string}
+              label: {type: string}
+              account: {type: string}
+              in: {type: integer}
+              out: {type: integer}
+              net: {type: integer}
+              count: {type: integer}
+        months:
+          type: array
+          items:
+            type: object
+            properties:
+              month: {type: string, example: "2026-10"}
+              in: {type: integer}
+              out: {type: integer}
+              net: {type: integer}
     EquipmentSettings:
       type: object
       properties:

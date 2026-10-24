@@ -32,6 +32,15 @@ var Kinds = map[string]bool{
 	// livreur, client, marchand, arrêt — deux images par genre, comme un
 	// mode. Images seules, petites.
 	"marker": true,
+	// PIÈCES JOINTES AUX DÉCLARATIONS D'ENTRÉE ET DE SORTIE D'ARGENT
+	// (internal/finance) : la photo d'une facture, d'un reçu, d'une quittance.
+	//
+	// ⚠️ IMAGES SEULEMENT, comme tout le reste : `AllowedTypes` ne connaît pas
+	// le PDF, et l'y ajouter ouvrirait le PDF sur TOUS les points d'envoi —
+	// un plat, un avatar, une bannière. C'est une décision à prendre à part ;
+	// en attendant, on photographie la pièce, ce qui est de toute façon ce
+	// qu'on fait au comptoir.
+	"receipt": true,
 }
 
 // AllowedTypes maps accepted IMAGE content types to file extensions.

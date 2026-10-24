@@ -21,13 +21,23 @@ type Repository struct {
 	findings *mongo.Collection
 	wallets  *mongo.Collection
 	txs      *mongo.Collection
+	// Les DÉCLARATIONS d'entrée et de sortie, et le catalogue de catégories
+	// de chaque pays — voir `declaration.go`.
+	declarations *mongo.Collection
+	declCatalog  *mongo.Collection
+	// mongo : gardé pour la TRANSACTION. Une déclaration et son écriture au
+	// journal n'ont de sens qu'ensemble.
+	mongo *db.Mongo
 }
 
 func NewRepository(m *db.Mongo) *Repository {
 	return &Repository{
-		billing:  m.Collection(billingCollection),
-		entries:  m.Collection(entriesCollection),
-		findings: m.Collection(findingsCollection),
+		billing:      m.Collection(billingCollection),
+		entries:      m.Collection(entriesCollection),
+		findings:     m.Collection(findingsCollection),
+		declarations: m.Collection(declarationsCollection),
+		declCatalog:  m.Collection(declCatalogCollection),
+		mongo:        m,
 		// Lus en direct par le balayage : le grand livre des portefeuilles
 		// est ce que l'on vérifie. Jamais écrits d'ici.
 		wallets: m.Collection("token_wallets"),
@@ -526,5 +536,8 @@ func (r *Repository) EnsureIndexes(ctx context.Context) error {
 		{Keys: bson.D{{Key: "fingerprint", Value: 1}, {Key: "status", Value: 1}}},
 		{Keys: bson.D{{Key: "status", Value: 1}, {Key: "last_seen_at", Value: -1}}},
 	})
-	return err
+	if err != nil {
+		return err
+	}
+	return r.EnsureDeclarationIndexes(ctx)
 }

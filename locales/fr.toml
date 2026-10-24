@@ -702,3 +702,23 @@ other = "Ce terme ne contient aucune lettre une fois normalisé"
 # terme avec une espace ne peut jamais correspondre à rien.
 [errors.lexicon_not_a_word]
 other = "Un terme du lexique doit être UN SEUL mot : la comparaison porte sur des mots entiers, jamais sur une phrase"
+
+# LES DÉCLARATIONS D'ENTRÉE ET DE SORTIE D'ARGENT (internal/finance).
+#
+# ⚠️ CES PHRASES S'ADRESSENT À QUELQU'UN QUI SAISIT UNE PIÈCE COMPTABLE, et
+# chacune doit dire quoi faire ensuite : un refus qu'on ne sait pas corriger
+# finit en appel au service client.
+[errors.declaration_not_found]
+other = "Déclaration introuvable"
+
+[errors.declaration_duplicate]
+other = "Cette pièce a déjà été déclarée dans ce pays — vérifiez le numéro avant de saisir à nouveau"
+
+[errors.declaration_not_posted]
+other = "Cette déclaration est déjà contre-passée : il n'y a plus rien à annuler"
+
+[errors.corrects_not_reversed]
+other = "Contre-passez d'abord la déclaration fautive : sans cela, la dépense serait comptée deux fois"
+
+[errors.corrects_already_corrected]
+other = "Cette déclaration a déjà été corrigée par une autre"
