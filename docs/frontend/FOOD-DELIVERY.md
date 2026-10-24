@@ -1,6 +1,6 @@
 # App LIVREUR — LIVRAISON — contrat d'API
 
-> **Version 4.78.0** · 24 octobre 2026
+> **Version 4.79.0** · 24 octobre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Livraison : `https://api-staging.dira.llc/api/v1/food` · Suivi : `wss://tracking-staging.dira.llc` · SIG : `https://maps.dira.llc/api`
 
 
@@ -1356,6 +1356,7 @@ POST /deliveries/{id}/pickups/{pickup_id}/done
 POST /deliveries/{id}/complete
 POST /deliveries/{id}/transfer              { "reason": "vehicle_breakdown", "note": "…" }   🆕 v4.78.0
 POST /deliveries/{id}/transfer/cancel                                                        🆕 v4.78.0
+GET  /deliveries/transfer-reasons           → { by, items: [ { code, grave } ] }             🆕 v4.79.0
 GET  /deliveries/{id}
 GET  /deliveries?status=&limit=&cursor=     # VOS courses, les plus récentes d'abord (v4.12.1)
 ```
@@ -1553,6 +1554,23 @@ que plus personne ne suit** — et, en espèces, l'argent du marchand avec.
 | `accident` | ⚠️ **ouvre un incident** |
 | `unsafe` | la sécurité de quelqu'un — ⚠️ **ouvre un incident** |
 | `other` | aucun des précédents — **mettez la phrase dans `note`** |
+
+#### 🆕 Demandez la liste, n'écrivez pas les codes (v4.79.0)
+
+```
+GET /deliveries/transfer-reasons   → { "by": "courier", "items": [ { "code": "wrong_vehicle", "grave": false }, … ] }
+```
+
+⚠️ **Un motif ajouté côté serveur n'apparaîtrait sur aucun téléphone non
+republié**, et un motif retiré continuerait d'être envoyé **puis refusé** — au
+moment précis où un livreur en panne essaie de passer la main. La liste servie
+est, par construction, celle que la validation accepte.
+
+⚠️ **`grave: true` se dit à l'écran** (`accident`, `courier_unwell`, `unsafe`) :
+ces motifs ouvrent un **incident de support**. Dites-le, et affichez-les à part.
+
+Le serveur sert des **codes**, pas des phrases : les étiquettes françaises
+restent à votre charge, et le tableau ci-dessous en donne une pour chacun.
 
 ⚠️ **LE MOTIF EST OBLIGATOIRE** : il est **traduit et montré au client**.
 « Votre livreur ne peut pas continuer » sans la moitié de la phrase se lit

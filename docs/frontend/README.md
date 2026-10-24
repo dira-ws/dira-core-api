@@ -1,6 +1,6 @@
 # Specs frontend — par rôle
 
-> **Version 4.78.0** · 24 octobre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics`
+> **Version 4.79.0** · 24 octobre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics`
 
 **Cinq** documents, un par application. Chacun est **autonome** : tout ce qu'un frontend doit savoir pour son rôle, sans avoir à ouvrir les vingt specs de modules.
 
@@ -355,6 +355,30 @@ Chaque document porte la même version en en-tête, et son propre journal des ch
 - [ ] ⚠️ **`TRACKING_JWT_SECRET` renseigné dans chaque environnement déployé.** Vide, l'authentification du service de suivi est **désactivée** : n'importe qui connaissant un `delivery_id` suit la course. Le secret doit valoir **exactement** le `JWT_SECRET` de `dira-food-api`.
 
 ## Journal
+
+### 4.79.0 — 24 octobre 2026
+
+🏷️ **LES MOTIFS DE TRANSFERT SE DEMANDENT AU SERVEUR** — `VTC-DRIVER.md`,
+`FOOD-DELIVERY.md`.
+
+```
+GET /vtc/rides/transfer-reasons         → { by: "driver",  items: [ { code, grave } ] }
+GET /food/deliveries/transfer-reasons   → { by: "courier", items: [ { code, grave } ] }
+```
+
+- ⚠️ **MÊME RÈGLE QUE LES MOTIFS D'ANNULATION, et le même piège évité** : un
+  motif ajouté côté serveur n'apparaîtrait **sur aucun téléphone non republié**,
+  et un motif retiré continuerait d'être envoyé **puis refusé** — au moment
+  précis où un agent en panne essaie de passer la main. La liste servie est,
+  par construction, celle que la validation accepte.
+- ⚠️ **`grave: true` se dit à l'écran** : ces motifs ouvrent un **incident de
+  support**. « Quelqu'un va vous rappeler » n'est pas une sanction, et le
+  cacher ferait d'un accident un choix de liste ordinaire.
+- ⚠️ **À L'AGENT SEUL.** Le client ne transfère rien : lui servir la liste
+  l'inviterait à demander un autre agent par un chemin qui n'existe pas — c'est
+  l'annulation, ou le support.
+- Le serveur sert des **codes**, pas des phrases : les étiquettes restent à la
+  charge de l'application, et les deux specs en donnent une par motif.
 
 ### 4.78.0 — 24 octobre 2026
 

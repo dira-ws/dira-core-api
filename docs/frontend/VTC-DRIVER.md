@@ -1,6 +1,6 @@
 # App CHAUFFEUR — COURSES (VTC) — contrat d'API
 
-> **Version 4.78.0** · 24 octobre 2026
+> **Version 4.79.0** · 24 octobre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Courses : `https://api-staging.dira.llc/api/v1/vtc` · Suivi : `wss://tracking-staging.dira.llc` · SIG : `https://maps.dira.llc/api`
 
 ---
@@ -1432,6 +1432,7 @@ POST  /rides/{id}/stops/{index}/reached
 POST  /rides/{id}/decline                  { "reason_code": "rider_no_show", "reason": "…" }
 POST  /rides/{id}/transfer                 { "reason": "vehicle_breakdown", "note": "…" }   🆕 v4.77.0
 POST  /rides/{id}/transfer/cancel                                                            🆕 v4.77.0
+GET   /rides/transfer-reasons              → { by, items: [ { code, grave } ] }              🆕 v4.79.0
 POST  /rides/{id}/stop-events              { "stop_index", "event", … }   🆕 v4.76.0 — voir §5 bis
 GET   /rides/{id}
 GET   /rides?cursor=…                      # l'historique de VOS courses
@@ -1486,6 +1487,27 @@ suit le trajet — et la course se facturera sur un parcours interrompu.
 | `accident` | ⚠️ **ouvre un incident** |
 | `unsafe` | la sécurité de quelqu'un — ⚠️ **ouvre un incident** |
 | `other` | aucun des précédents — **mettez la phrase dans `note`** |
+
+#### 🆕 Demandez la liste, n'écrivez pas les codes (v4.79.0)
+
+```
+GET /rides/transfer-reasons     → { "by": "driver", "items": [ { "code": "vehicle_breakdown", "grave": false }, … ] }
+```
+
+⚠️ **LA MÊME RÈGLE QUE LES MOTIFS D'ANNULATION, et le même piège évité.** Un
+motif ajouté côté serveur n'apparaîtrait **sur aucun téléphone non republié**,
+et un motif retiré continuerait d'être envoyé **puis refusé** — au moment
+précis où un chauffeur en panne essaie de passer la main. La liste servie est,
+par construction, celle que la validation accepte.
+
+⚠️ **`grave: true` SE DIT À L'ÉCRAN** (`accident`, `driver_unwell`, `unsafe`) :
+ces motifs ouvrent un **incident de support**. Dites-le — « quelqu'un va vous
+rappeler » n'est pas une sanction — et affichez-les à part. Les traiter comme
+un choix de liste ordinaire ferait d'un accident une ligne de formulaire.
+
+⚠️ **Au CHAUFFEUR seul** : le passager ne transfère rien. Les étiquettes
+françaises restent à votre charge (le serveur sert des **codes**, pas des
+phrases) — le tableau ci-dessous en donne une pour chacun.
 
 ⚠️ **LE MOTIF EST OBLIGATOIRE** (contrairement à l'annulation) : il est
 **traduit et montré au passager**. « Votre chauffeur ne peut pas continuer »
