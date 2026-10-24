@@ -143,6 +143,43 @@ func Message(ctx context.Context, err error) string {
 	return appErr.Message
 }
 
+// DecodeService parse le corps d'un RAPPEL DE SERVICE et le valide — sans
+// refuser les clés inconnues.
+//
+// ⚠️⚠️ LA RÈGLE DE `Decode` EST INVERSÉE ICI, ET IL FAUT QU'ELLE LE SOIT.
+// Refuser une clé inconnue protège un développeur d'application : il croirait
+// avoir enregistré un champ que la route ne lit pas. Mais quand l'appelant est
+// un SERVICE, cette même règle transforme un ajout ADDITIF en rupture — et une
+// rupture muette, puisque personne ne lit les réponses d'un rappel.
+//
+// C'est arrivé, et pendant un mois : le suivi a ajouté `attempt` au corps de
+// `POST /internal/dispatch/wave` (le numéro de la tentative, dont les courses
+// se servent pour appeler la classe exacte d'abord). Les courses l'ont lu ; la
+// LIVRAISON, qui ne s'en sert pas, l'a REFUSÉ — `422 unknown field: attempt`,
+// sur CHAQUE vague. Conséquences, toutes silencieuses :
+//
+//   - aucune livraison n'était plus RÉSERVÉE aux livreurs appelés : le
+//     classement par proximité ne servait plus à rien, le premier à ouvrir son
+//     application prenait la course ;
+//   - le PUSH aux appelés ne partait plus — il est écrit après la réservation —
+//     et un livreur qui attend une course a justement rangé son téléphone ;
+//   - et le transfert d'une commande ne pouvait JAMAIS passer la main, le
+//     remplaçant n'étant jamais dans la liste des appelés.
+//
+// Rien ne le signalait : les commandes étaient quand même livrées, parce que
+// le pot commun restait ouvert.
+//
+// Les deux verticales décodent donc leurs rappels de service avec celle-ci. Ce
+// qui est VALIDÉ ne change pas : les tags `validate` s'appliquent comme avant,
+// et un champ obligatoire manquant est toujours refusé.
+func DecodeService(r *http.Request, dst any) error {
+	if err := json.NewDecoder(r.Body).Decode(dst); err != nil {
+		return apperr.Validation("invalid JSON body").
+			WithMeta(map[string]any{"reason": "invalid_json"}).WithCause(err)
+	}
+	return validateStruct(dst)
+}
+
 // unknownFieldRe extrait la clé d'une erreur `json: unknown field "x"`.
 // encoding/json ne l'expose pas autrement que dans le texte.
 var unknownFieldRe = regexp.MustCompile(`json: unknown field "([^"]*)"`)
@@ -164,6 +201,13 @@ func Decode(r *http.Request, dst any) error {
 		return apperr.Validation("invalid JSON body").
 			WithMeta(map[string]any{"reason": "invalid_json"}).WithCause(err)
 	}
+	return validateStruct(dst)
+}
+
+// validateStruct applique les tags `validate` et NOMME les champs fautifs.
+// Partagée par `Decode` et `DecodeService` : les deux ne diffèrent que par le
+// traitement des clés inconnues.
+func validateStruct(dst any) error {
 	if err := validate.Struct(dst); err != nil {
 		var vErrs validator.ValidationErrors
 		if errors.As(err, &vErrs) && len(vErrs) > 0 {
