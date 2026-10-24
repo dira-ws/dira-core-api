@@ -77,6 +77,26 @@ tags:
       comptes, produits, dettes) et l'INTÉGRITÉ : un balayage recalcule
       chaque solde depuis ses mouvements, vérifie le journal, et alerte le
       staff (`staff_finance_alert`) — un solde modifié sans mouvement se voit.
+  - name: payroll
+    description: |
+      LA PAIE DES SALARIÉS : les gens que l'entreprise paie, leur fréquence de
+      versement, leurs primes, leurs retenues, et la trace de ce qui a été
+      versé.
+
+      ⚠️ CE N'EST PAS `staff`. Le staff porte des COMPTES et leurs
+      HABILITATIONS — qui a le droit de voir quoi ; la paie porte de l'ARGENT
+      DÛ À UNE PERSONNE. La plupart des salariés n'ont aucun compte, et le
+      rattachement entre les deux est FACULTATIF : il n'accorde rien.
+
+      ⚠️ AUCUNE SURFACE D'APPLICATION, et c'est une décision. Un salaire, un
+      motif de retenue et le nom de celui qui l'a posée sont parmi les données
+      les plus sensibles de la plateforme : il n'existe pas de route « ma
+      paie ». Ce qu'un salarié a le droit d'en lire reste à décider, et le
+      défaut d'une route ouverte aurait été « tout ».
+
+      ⚠️ LA PLATEFORME N'EXÉCUTE PAS LE VERSEMENT, elle l'ENREGISTRE : aucun
+      portefeuille n'est touché. Le moyen (`cash`, virement, mobile money) est
+      une DÉCLARATION, avec sa référence.
 paths:
   /auth/register:
     post:
@@ -2629,6 +2649,324 @@ paths:
       responses:
         "200": {description: "`{released_agent_app}` — ce qui vient d'être rendu (vide s'il n'y avait rien)"}
         "404": {description: user_not_found}
+  /admin/payroll/settings:
+    get:
+      tags: [payroll]
+      summary: Les réglages de la paie du pays
+      description: >-
+        Le défaut de fréquence et de jour de versement, et surtout les deux
+        BORNES des retenues : `max_deduction_percent` (la part maximale du brut
+        qu'une paie peut retenir, toutes retenues confondues) et `min_net` (le
+        plancher absolu laissé à la personne). La plus protectrice des deux
+        gagne.
+
+
+        ⚠️ **LE DÉFAUT DE 30 % EST UNE PRUDENCE DE PLATEFORME, PAS UNE RÈGLE DE
+        DROIT.** La quotité saisissable d'un salaire est fixée par le droit du
+        travail de chaque pays, et elle n'est pas la même partout ; ce réglage
+        existe précisément pour que l'exploitation inscrive la valeur légale du
+        pays au lieu de subir une constante écrite dans le code.
+
+
+        La réponse porte aussi le VOCABULAIRE (`frequencies`, `statuses`,
+        `methods`) : deux listes recopiées divergeraient au premier ajout.
+      responses:
+        "200": {description: "Réglages du pays de la requête, monnaie et vocabulaire"}
+    put:
+      tags: [payroll]
+      summary: Régler la paie du pays
+      description: >-
+        ⚠️ **PARTIEL : ce qui est absent ne bouge pas.** Une écriture « qui
+        remplace » aurait remis le plafond de retenue au défaut en changeant
+        seulement le jour de paie — et personne ne l'aurait vu avant la paie
+        suivante.
+      responses:
+        "200": {description: Réglages à jour}
+        "422": {description: validation_failed}
+  /admin/payroll/employees:
+    get:
+      tags: [payroll]
+      summary: Les salariés du pays
+      description: >-
+        Filtres `status`, `frequency`, `q` (nom ou poste). Chaque ligne porte
+        `max_deduction_per_run` — ce qu'une paie peut au plus retenir à cette
+        personne — et `next_pay_date`, calculés par le serveur : deux
+        arithmétiques de la même borne divergent au premier changement de
+        réglage, et c'est l'écran qui aurait tort.
+      responses:
+        "200": {description: Liste paginée}
+    post:
+      tags: [payroll]
+      summary: Déclarer un salarié
+      description: >-
+        `full_name`, `position`, `base_salary` (entier, dans la monnaie du
+        pays), `frequency` (`monthly` | `biweekly` | `weekly`), `hired_at`.
+
+
+        ⚠️ **`base_salary` EST LA RÉMUNÉRATION PAR PÉRIODE DE PAIE, pas par
+        mois.** Un salaire mensuel divisé par la fréquence demande une règle
+        cachée — quatre semaines, ou 4,33 ? — qui fait deux montants différents
+        selon qui calcule.
+
+
+        ⚠️ **`pay_day` (1..28) pour le mensuel, `pay_weekday` (1..7) pour
+        l'hebdomadaire et le quinzomadaire** : poser l'un sur la fréquence de
+        l'autre est REFUSÉ (422). Accepté en silence, le champ resterait affiché
+        et se lirait six mois plus tard comme la règle appliquée. Le 28 est le
+        dernier jour qui existe dans tous les mois.
+
+
+        ⚠️ **`user_id` est FACULTATIF et n'accorde RIEN** : la plupart des
+        salariés n'ouvrent aucune application. Quand il est posé, il est UNIQUE
+        (409 `payroll_account_taken`) et doit désigner un compte DU MÊME PAYS.
+      responses:
+        "201": {description: Fiche du salarié}
+        "409": {description: payroll_account_taken}
+        "422": {description: "validation_failed — fréquence et jour de versement incohérents, par exemple"}
+  /admin/payroll/employees/{id}:
+    get:
+      tags: [payroll]
+      summary: La fiche d'un salarié
+      parameters: [{name: id, in: path, required: true, schema: {type: string}}]
+      responses:
+        "200": {description: "Fiche, borne de retenue et `open_deductions` (ce qui reste à retenir)"}
+        "404": {description: payroll_employee_not_found}
+    patch:
+      tags: [payroll]
+      summary: Corriger une fiche de salarié
+      description: >-
+        Seuls les champs fournis changent. `status` ∈ `active` | `suspended` |
+        `left` ; `user_id` vide DÉTACHE le compte — un rattachement posé par
+        erreur doit pouvoir être défait sans supprimer la fiche, et avec elle
+        l'historique des paies.
+
+
+        ⚠️ Changer la fréquence EFFACE le jour qui n'a plus de sens, au lieu de
+        le laisser traîner sur la fiche.
+      parameters: [{name: id, in: path, required: true, schema: {type: string}}]
+      responses:
+        "200": {description: Fiche à jour}
+        "404": {description: payroll_employee_not_found}
+        "422": {description: validation_failed}
+  /admin/payroll/employees/{id}/adjustments:
+    get:
+      tags: [payroll]
+      summary: Les primes et retenues d'un salarié
+      description: >-
+        Filtre `status` (`open` | `settled` | `cancelled`). Les plus anciennes
+        d'abord : c'est l'ordre dans lequel elles passent sur une paie.
+      parameters: [{name: id, in: path, required: true, schema: {type: string}}]
+      responses:
+        "200": {description: "`{items}`"}
+  /admin/payroll/employees/{id}/bonuses:
+    post:
+      tags: [payroll]
+      summary: Accorder une prime
+      description: >-
+        `amount` OU `percent` — jamais les deux (422) : « 10 % et 5 000 F » n'a
+        pas de sens unique. Un `percent` de prime porte sur le SALAIRE DE BASE
+        (c'est une part de rémunération). `reason` est OBLIGATOIRE, et
+        `granted_by` est l'appelant : une prime sans motif ni auteur n'est pas
+        défendable six mois plus tard.
+
+
+        `recurring: true` la repasse sur CHAQUE paie (une prime de transport) ;
+        `installments` l'étale sur N paies. Les deux sont exclusifs — un
+        récurrent n'a pas de fin, donc pas d'échéances.
+      parameters: [{name: id, in: path, required: true, schema: {type: string}}]
+      responses:
+        "201": {description: La prime}
+        "404": {description: payroll_employee_not_found}
+        "422": {description: validation_failed}
+  /admin/payroll/employees/{id}/deductions:
+    post:
+      tags: [payroll]
+      summary: Poser une retenue
+      description: >-
+        Même corps qu'une prime. Un `percent` de retenue porte sur le BRUT
+        effectivement dû (primes comprises), sinon la retenue pourrait dépasser
+        ce qu'il y a à retenir.
+
+
+        ⚠️ **UNE RETENUE QUE LA PAIE NE POURRA JAMAIS HONORER EST REFUSÉE ICI**
+        (409 `payroll_deduction_too_large`) : acceptée, elle se reporterait de
+        mois en mois pendant que la console affiche « retenue en cours » sans
+        que rien ne bouge. Le refus porte ses chiffres dans **`reason`**
+        (`max_per_run=…;requested=…;min_installments=…`) et non dans son
+        message, qui est traduit : les montants auraient disparu avec la
+        traduction, et l'opérateur devrait calculer de tête.
+
+
+        ⚠️ **ET LA BORNE TIENT AUSSI AU CALCUL DE LA PAIE** : plusieurs retenues
+        légitimes ne peuvent pas se cumuler jusqu'à vider un salaire. Ce qui ne
+        passe pas est REPORTÉ (`carried` sur la fiche), jamais effacé.
+      parameters: [{name: id, in: path, required: true, schema: {type: string}}]
+      responses:
+        "201": {description: La retenue}
+        "409": {description: "payroll_deduction_too_large · payroll_deduction_impossible"}
+        "422": {description: validation_failed}
+  /admin/payroll/adjustments/{id}/cancel:
+    post:
+      tags: [payroll]
+      summary: Annuler une prime ou une retenue
+      description: >-
+        ⚠️ **CE QUI A DÉJÀ ÉTÉ VERSÉ OU RETENU RESTE** : `taken` n'est pas remis
+        à zéro. Annuler une retenue de 60 000 dont 15 000 ont été pris ne rend
+        pas ces 15 000 — il faut une correction pour cela, et c'est une décision
+        qu'on prend les yeux ouverts.
+
+
+        Refusé (409 `payroll_adjustment_on_run`) quand une paie en préparation
+        l'a déjà RÉSERVÉ : la fiche calculée porterait une ligne qui n'existe
+        plus, et c'est le montant calculé qui serait versé.
+      parameters: [{name: id, in: path, required: true, schema: {type: string}}]
+      responses:
+        "200": {description: L'ajustement annulé}
+        "409": {description: "payroll_adjustment_closed · payroll_adjustment_on_run"}
+  /admin/payroll/runs:
+    get:
+      tags: [payroll]
+      summary: Les paies du pays
+      description: "Filtres `status`, `frequency`, `employee_id` (les paies où figure une personne)."
+      responses:
+        "200": {description: Liste paginée}
+    post:
+      tags: [payroll]
+      summary: PRÉPARER une paie
+      description: >-
+        `frequency` obligatoire ; `on` est une date DANS la période à préparer —
+        absente, c'est la DERNIÈRE PÉRIODE CLOSE. Rend une fiche par salarié,
+        avec ses primes et ses retenues, et les totaux.
+
+
+        ⚠️ **ON NE PRÉPARE PAS UNE PÉRIODE OUVERTE** (409
+        `payroll_period_open`) : une paie préparée le 20 pour le mois en cours
+        ne porte ni les primes ni les retenues des dix jours qui restent, et
+        elle serait versée comme si elle était complète.
+
+
+        ⚠️ **UNE SEULE PAIE PAR PAYS, FRÉQUENCE ET PÉRIODE** (409
+        `payroll_run_exists`), garantie par un index unique qui couvre l'état de
+        NAISSANCE — sans quoi deux onglets prépareraient deux paies identiques
+        et les deux se verseraient. Une paie ANNULÉE sort du verrou : la période
+        redevient préparable.
+
+
+        ⚠️ **PAS DE PRORATA.** Découper une période au nombre de jours
+        travaillés demande une règle de droit du travail (jours ouvrés ?
+        calendaires ? trente par mois ?) : une entrée ou une sortie en cours de
+        période s'écrit comme une PRIME ou une RETENUE nommée. Les périodes
+        quinzomadaires sont comptées depuis une origine fixe, donc identiques
+        pour tout le pays.
+      responses:
+        "201": {description: "La paie préparée (`status: draft`, `editable: true`)"}
+        "409": {description: "payroll_period_open · payroll_run_exists · payroll_nobody_to_pay"}
+        "422": {description: validation_failed}
+  /admin/payroll/runs/{id}:
+    get:
+      tags: [payroll]
+      summary: Une paie et ses fiches
+      description: >-
+        `period_start` est inclusive, `period_end` EXCLUSIVE, et
+        `period_last_day` est la même borne écrite comme un humain la lit — un
+        écran qui affiche « du 1er au 1er avril » se fait corriger tous les
+        mois. `editable` dit si le document peut encore changer : la règle est
+        au serveur, et elle voyage avec le document.
+
+
+        Chaque ligne de fiche porte `planned` (ce qui était visé), `amount` (ce
+        qui est passé) et `capped` : sans eux, une retenue bornée serait
+        invisible pour qui lit la fiche.
+
+
+        ⚠️ **IL N'EXISTE AUCUN `PATCH`, `PUT` NI `DELETE` sur une paie.** C'est
+        ce qui rend tenable la promesse « une paie versée ne se modifie pas ».
+      parameters: [{name: id, in: path, required: true, schema: {type: string}}]
+      responses:
+        "200": {description: La paie}
+        "404": {description: payroll_run_not_found}
+  /admin/payroll/runs/{id}/approve:
+    post:
+      tags: [payroll]
+      summary: VÉRIFIER une paie
+      description: >-
+        Sans cette étape, « préparer » et « verser » sont le même clic, et une
+        paie se verse avant d'avoir été regardée.
+      parameters: [{name: id, in: path, required: true, schema: {type: string}}]
+      responses:
+        "200": {description: "La paie vérifiée (`status: approved`)"}
+        "409": {description: "payroll_run_paid · payroll_run_not_draft · payroll_run_moved"}
+  /admin/payroll/runs/{id}/pay:
+    post:
+      tags: [payroll]
+      summary: VERSER une paie
+      description: >-
+        `method` ∈ `cash` | `bank_transfer` | `mobile_money`, `reference`
+        facultative (l'avis de virement, le bordereau, le lot mobile money).
+
+
+        ⚠️ **LA PLATEFORME N'EXÉCUTE PAS LE VERSEMENT, ELLE L'ENREGISTRE** :
+        aucun portefeuille n'est touché. Imposer le solde Dira d'un livreur à
+        une gardienne de nuit l'aurait obligée à retirer son salaire par le
+        canal des agents.
+
+
+        ⚠️ **UN SEUL VERSEMENT**, garanti par une écriture CONDITIONNELLE : deux
+        clics simultanés passent tous les deux la lecture, seul le premier
+        trouve la paie « vérifiée » au moment d'écrire. Le second reçoit 409
+        (`payroll_run_paid`, ou `payroll_run_moved` quand elle a bougé sous
+        lui) — jamais une seconde confirmation, qui ferait croire à un second
+        virement.
+
+
+        ⚠️ **APRÈS, PLUS RIEN NE CHANGE.** Le geste part au journal d'audit
+        (`payroll.run_pay`) avec son auteur. Les salariés qui ont un compte
+        reçoivent `payroll_paid` ; les autres — la majorité — sont prévenus par
+        l'entreprise.
+      parameters: [{name: id, in: path, required: true, schema: {type: string}}]
+      responses:
+        "200": {description: "La paie versée (`status: paid`, `editable: false`)"}
+        "409": {description: "payroll_run_paid · payroll_run_not_approved · payroll_run_moved"}
+  /admin/payroll/runs/{id}/cancel:
+    post:
+      tags: [payroll]
+      summary: Abandonner une paie AVANT versement
+      description: >-
+        Libère les primes et retenues qu'elle avait réservées : une prime restée
+        réservée par un brouillon abandonné n'entrerait plus dans aucune paie —
+        elle disparaîtrait sans trace d'annulation, la pire façon de perdre de
+        l'argent dû à quelqu'un. IDEMPOTENT sur une paie déjà annulée.
+      parameters: [{name: id, in: path, required: true, schema: {type: string}}]
+      responses:
+        "200": {description: "La paie annulée (la période redevient préparable)"}
+        "409": {description: payroll_run_paid}
+  /admin/payroll/runs/{id}/corrections:
+    post:
+      tags: [payroll]
+      summary: CORRIGER une paie versée
+      description: >-
+        ⚠️ **C'EST LA RÉPONSE À « MODIFIER UNE PAIE », ET ELLE NE TOUCHE PAS LA
+        PAIE.** Rouvrir un versement aurait fait disparaître ce qui a réellement
+        été payé : le document de mars dirait ce qu'on en pense en mai, et plus
+        personne ne pourrait répondre à « qu'avez-vous versé le 28 ? ». La
+        correction est une pièce NOUVELLE — une prime (`kind: bonus`) ou une
+        retenue (`kind: deduction`) qui NOMME la paie corrigée
+        (`corrects_run`) et passe sur la paie SUIVANTE.
+
+
+        ⚠️ Elle ne couvre que les personnes qui FIGURAIENT sur cette paie
+        (422) : corriger au profit de quelqu'un qui n'y était pas n'est pas une
+        correction, c'est une prime, et elle doit s'écrire comme telle.
+
+
+        ⚠️ Reprendre un trop-versé en une fois vide la paie suivante — ce que le
+        plancher refusera de toute façon : `installments` est presque toujours
+        nécessaire.
+      parameters: [{name: id, in: path, required: true, schema: {type: string}}]
+      responses:
+        "201": {description: "L'ajustement de correction, avec `corrects_run`"}
+        "409": {description: "payroll_run_not_paid · payroll_deduction_too_large"}
+        "422": {description: "validation_failed — la personne n'était pas sur cette paie"}
 components:
   schemas:
     MapMarker:

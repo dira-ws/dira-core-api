@@ -685,3 +685,53 @@ other = "Dira's own fleet is not registered here: it is created once per country
 
 [errors.partner_fleet_internal]
 other = "This fleet belongs to Dira: it is managed from the internal fleet desk, not from the partner console"
+
+# PAYROLL (internal/payroll) — addressed to an operator, never to an employee:
+# payroll has no mobile surface. Each phrase names the way out.
+[errors.payroll_employee_not_found]
+other = "Employee not found"
+
+[errors.payroll_adjustment_not_found]
+other = "Bonus or deduction not found"
+
+[errors.payroll_run_not_found]
+other = "Payroll not found"
+
+[errors.payroll_account_taken]
+other = "This account already has a payroll record"
+
+[errors.payroll_period_open]
+other = "This pay period is not over yet: a payroll is prepared once the period is closed"
+
+[errors.payroll_run_exists]
+other = "A payroll already covers this period for this frequency"
+
+[errors.payroll_run_moved]
+other = "This payroll is no longer in the expected state: reload it before acting"
+
+[errors.payroll_run_not_draft]
+other = "Only a prepared payroll can be changed"
+
+[errors.payroll_run_not_approved]
+other = "A payroll is paid once it has been verified"
+
+[errors.payroll_run_paid]
+other = "A paid payroll is never modified: write a correction, it lands on the next payroll"
+
+[errors.payroll_run_not_paid]
+other = "Only a paid payroll is corrected"
+
+[errors.payroll_nobody_to_pay]
+other = "No active employee on this pay frequency for this period"
+
+[errors.payroll_adjustment_closed]
+other = "This bonus or deduction is already settled or cancelled"
+
+[errors.payroll_adjustment_on_run]
+other = "This bonus or deduction is on a payroll being prepared: cancel that payroll first"
+
+[errors.payroll_deduction_impossible]
+other = "The country settings leave nothing deductible: raise the deduction cap or lower the minimum left"
+
+[errors.payroll_deduction_too_large]
+other = "This deduction exceeds what a single payroll may deduct: spread it over several instalments"

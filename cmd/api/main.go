@@ -44,6 +44,7 @@ import (
 	"github.com/kgtech-org/dira-core-api/internal/ownfleet"
 	"github.com/kgtech-org/dira-core-api/internal/payment"
 	"github.com/kgtech-org/dira-core-api/internal/payout"
+	"github.com/kgtech-org/dira-core-api/internal/payroll"
 	"github.com/kgtech-org/dira-core-api/internal/promocode"
 	"github.com/kgtech-org/dira-core-api/internal/rating"
 	"github.com/kgtech-org/dira-core-api/internal/serviceapi"
@@ -566,6 +567,32 @@ func run(logger *slog.Logger) error {
 			}
 		}
 	}()
+	// LA PAIE DES SALARIÉS — les gens que l'entreprise paie, leur fréquence,
+	// leurs primes, leurs retenues, et la trace de ce qui a été versé.
+	//
+	// ⚠️ CE N'EST PAS `internal/staff`. Le staff porte des COMPTES et des
+	// HABILITATIONS — qui a le droit de voir quoi ; la paie porte de l'ARGENT DÛ
+	// À UNE PERSONNE. Un salarié peut n'avoir aucun compte (la plupart n'en ont
+	// pas), et un administrateur peut ne pas être sur cette paie : le
+	// rattachement entre les deux est FACULTATIF et n'accorde rien.
+	//
+	// ⚠️ ET LA PLATEFORME N'EXÉCUTE PAS LE VERSEMENT, elle l'enregistre : aucun
+	// portefeuille n'est touché, parce qu'imposer le solde Dira d'un livreur à
+	// une gardienne de nuit l'aurait obligée à retirer son salaire par le canal
+	// des agents.
+	payrollSvc := payroll.NewService(payroll.NewRepository(mongo), userSvc)
+	payrollSvc.SetAuditor(auditRec)
+	// Le salarié qui a un compte apprend que sa paie est partie. Les autres —
+	// la majorité — sont prévenus par l'entreprise, comme avant.
+	payrollSvc.SetNotifier(notifySvc)
+	// ⚠️ LA COUTURE COMPTABLE N'EST PAS BRANCHÉE, ET C'EST VOLONTAIRE.
+	// `payrollSvc.SetLedger(...)` attend une implémentation qui porte une paie
+	// versée au journal comptable (`internal/finance`) ; elle sera posée ICI,
+	// au câblage, quand la déclaration des entrées et sorties d'argent aura
+	// fusionné. Coudre les deux modules l'un à l'autre aurait fait dépendre
+	// deux chantiers menés en parallèle, et une paie ne doit pas attendre un
+	// journal pour être versée.
+
 	// LE BOUTON D'ALERTE — voir `internal/sos`.
 	//
 	// ⚠️ AU SOCLE, et pas dans une verticale : un passager de course et un
@@ -789,6 +816,15 @@ func run(logger *slog.Logger) error {
 		// redevances. ⚠️ AUCUNE route de cycle de vie ici — accepter, remettre,
 		// rendre, payer passent par le module du matériel, une seule fois.
 		ownfleet.NewHandler(ownFleetSvc).Mount(r, authMW)
+
+		// LA PAIE DES SALARIÉS : `/admin/payroll/...`, exploitation seulement.
+		//
+		// ⚠️ AUCUNE SURFACE D'APPLICATION, délibérément — il n'existe pas de
+		// route « ma paie ». Un salaire, un motif de retenue et le nom de celui
+		// qui l'a posée sont parmi les données les plus sensibles de la
+		// plateforme : ce qu'un salarié a le droit d'en lire est une décision à
+		// prendre, et le défaut d'une route ouverte aurait été « tout ».
+		payroll.NewHandler(payrollSvc).Mount(r, authMW)
 		// LE BOUTON D'ALERTE : `POST /sos` pour qui est en danger,
 		// `/admin/sos` pour l'exploitation qui doit le voir dans la seconde.
 		sos.NewHandler(sosSvc).Mount(r, authMW)

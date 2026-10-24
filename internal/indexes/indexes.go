@@ -255,6 +255,43 @@ var applicationIndexes = []db.Index{
 	// interne. ⚠️ C'est la lecture qui décore une page de parc en UNE requête :
 	// sans index, l'écran du parc balaye tous les contrats du pays.
 	{Collection: "equipment_contracts", Keys: db.K("asset_id", 1, "_id", -1)},
+
+	// --- la paie des salariés (internal/payroll) ---
+	{Collection: "payroll_employees", Keys: db.K("country", 1, "status", 1, "_id", -1)},
+	{Collection: "payroll_employees", Keys: db.K("country", 1, "frequency", 1, "status", 1)},
+	// Un COMPTE ne porte qu'une fiche de paie : deux fiches sur un même compte
+	// auraient payé deux fois la même personne. Partiel plutôt que `sparse` :
+	// la plupart des salariés n'ont pas de compte, et `sparse` n'écarte que les
+	// champs ABSENTS — un `user_id: null` écrit par une mise à jour entrerait en
+	// collision avec le suivant.
+	{
+		Collection:    "payroll_employees",
+		Keys:          db.K("user_id", 1),
+		Unique:        true,
+		PartialFilter: bson.D{{Key: "user_id", Value: bson.D{{Key: "$type", Value: "objectId"}}}},
+	},
+	{Collection: "payroll_adjustments", Keys: db.K("employee_id", 1, "status", 1, "created_at", 1)},
+	{Collection: "payroll_adjustments", Keys: db.K("country", 1, "status", 1, "_id", -1)},
+	{Collection: "payroll_adjustments", Keys: db.K("run_id", 1)},
+	// ⚠️ LE VERROU DE PÉRIODE : une seule paie par pays, fréquence et période.
+	//
+	// ⚠️ ET IL COUVRE L'ÉTAT DE NAISSANCE (`draft`). Un index unique partiel qui
+	// ne couvrirait que `paid` ne verrouillerait RIEN : le second brouillon
+	// s'insérerait sans heurt, et le doublon n'éclaterait qu'au versement —
+	// l'argent déjà parti. C'est la leçon du verrou des rapports, qui réservait
+	// en `sending` hors de son propre index.
+	//
+	// `cancelled` en sort exprès : une paie abandonnée doit pouvoir être
+	// repréparée.
+	{
+		Collection: "payroll_runs",
+		Keys:       db.K("country", 1, "frequency", 1, "period_start", 1),
+		Unique:     true,
+		PartialFilter: bson.D{{Key: "status", Value: bson.D{{Key: "$in",
+			Value: bson.A{"draft", "approved", "paid"}}}}},
+	},
+	{Collection: "payroll_runs", Keys: db.K("country", 1, "status", 1, "_id", -1)},
+	{Collection: "payroll_runs", Keys: db.K("slips.employee_id", 1, "_id", -1)},
 }
 
 // Ensure pose les index du socle. Idempotent : Mongo ignore un index déjà
