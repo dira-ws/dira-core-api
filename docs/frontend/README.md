@@ -1,6 +1,6 @@
 # Specs frontend — par rôle
 
-> **Version 4.79.0** · 24 octobre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics`
+> **Version 4.80.0** · 24 octobre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics`
 
 **Cinq** documents, un par application. Chacun est **autonome** : tout ce qu'un frontend doit savoir pour son rôle, sans avoir à ouvrir les vingt specs de modules.
 
@@ -355,6 +355,40 @@ Chaque document porte la même version en en-tête, et son propre journal des ch
 - [ ] ⚠️ **`TRACKING_JWT_SECRET` renseigné dans chaque environnement déployé.** Vide, l'authentification du service de suivi est **désactivée** : n'importe qui connaissant un `delivery_id` suit la course. Le secret doit valoir **exactement** le `JWT_SECRET` de `dira-food-api`.
 
 ## Journal
+
+### 4.80.0 — 24 octobre 2026
+
+🔔 **« VOTRE LIVREUR ARRIVE » — le préavis** — `FOOD-CLIENT.md`. Demandé par le
+propriétaire : « notification quand le livreur est à 2 min du client ».
+
+```
+push delivery_nearby   { courier, minutes }
+```
+
+- ⚠️ **LE DÉLAI EST DANS LE MESSAGE, PAS DANS LE CODE DE L'APPLICATION** : la
+  variable `minutes` vaut ce que l'exploitation a réglé **par pays**. « Il
+  arrive » sans délai ne fait descendre personne de son appartement — c'est
+  tout l'intérêt de ce message.
+- ⚠️ **UNE SEULE FOIS PAR COMMANDE**, garanti par le serveur : rien à
+  dédupliquer côté application.
+- ⚠️ **SEULEMENT APRÈS LES COLLECTES.** Pendant qu'il récupère les plats, le
+  livreur peut passer à cent mètres de chez le client : le dire alors ferait
+  descendre quelqu'un pour un repas encore au four.
+- ⚠️ **ET IL PEUT NE JAMAIS ARRIVER** sans que rien n'aille mal (pays qui ne
+  l'a pas ouvert, réseau coupé au franchissement) : ce n'est **pas une étape**
+  de l'écran, c'est un bonus. L'état de la commande reste la vérité.
+- Sous le capot : le suivi guette le point de dépôt et calcule le rayon sur la
+  **vitesse réelle** du véhicule — deux minutes valent 800 m pour une moto en
+  ville et 230 m pour un vélo chargé.
+
+⚠️ **UNE COURSE VTC PEUT AVOIR ÉTÉ PORTÉE PAR DEUX VOITURES** —
+`PARTNER-FLEET.md`. Depuis le transfert (4.77.0), la part d'une société est
+figée **au moment où sa voiture lâche la course**, sur ce que son chauffeur a
+réellement gagné. Le relevé de paie et le grand livre portent déjà les deux
+cas ; le compte de **courses**, lui, n'inclut pas une course portée en partie —
+« 12 courses » dirait faux si l'une des douze était un quart de trajet. ⚠️ Et
+une part ne se recalcule pas depuis le prix de la course : elle peut
+légitimement valoir le quart de ce que la grille donnerait.
 
 ### 4.79.0 — 24 octobre 2026
 
