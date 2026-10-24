@@ -71,6 +71,16 @@ var (
 	}
 	// feedTypes : le feed prend les deux.
 	feedTypes = merge(photoTypes, VideoTypes)
+	// soundTypes : un SON DE FOND pour un carrousel du feed.
+	//
+	// ⚠️ TROIS FORMATS COMPRESSÉS, ET PAS DE WAV. Trente secondes de WAV
+	// pèsent cinq mégaoctets ; en AAC, trois cents kilooctets. Sur les
+	// réseaux d'Afrique de l'Ouest, le premier ne se télécharge pas pendant
+	// qu'on fait défiler un feed — autant ne pas avoir de son.
+	soundTypes = map[string]string{
+		"audio/mpeg": ".mp3", "audio/mp4": ".m4a", "audio/aac": ".aac",
+		"audio/ogg": ".ogg",
+	}
 )
 
 // Les plafonds, nommés par ce qu'ils bornent.
@@ -87,6 +97,12 @@ const (
 	// MaxVideoBytes : une vidéo promo dure quelques secondes mais pèse des
 	// dizaines de mégaoctets.
 	MaxVideoBytes = 60 << 20 // 60 Mio
+	// MaxSoundBytes : trente secondes d'AAC pèsent trois cents kilooctets.
+	//
+	// ⚠️ SERRÉ EXPRÈS, à deux mégaoctets : c'est dix fois ce qu'il faut, et
+	// c'est ce qui empêche qu'un album entier entre par cette porte. Un son de
+	// fond de feed se télécharge pendant qu'on fait défiler.
+	MaxSoundBytes = 2 << 20 // 2 Mio
 )
 
 // Kinds : le genre préfixe la clé de l'objet, et dit ce qu'il accepte.
@@ -108,6 +124,14 @@ var Kinds = map[string]Kind{
 
 	// Le FEED : photos et vidéos courtes.
 	"feed": {feedTypes, MaxVideoBytes, "jpeg, png, webp — vidéos : mp4, webm, mov"},
+
+	// LE SON DE FOND d'un carrousel du feed.
+	//
+	// ⚠️ UN GENRE À LUI, et non `feed` élargi : les plafonds n'ont rien à voir
+	// (deux mégaoctets contre soixante), et surtout une photo de plat n'a
+	// aucune raison d'être un fichier audio. Élargir `feed` aurait ouvert le
+	// dépôt de sons sur tous les points d'entrée qui acceptent une image.
+	"sound": {soundTypes, MaxSoundBytes, "mp3, m4a, aac, ogg"},
 
 	// LES PREUVES. ⚠️ LES DEUX SEULS GENRES QUI PRENNENT LE PDF, et c'est
 	// pour cela qu'ils sont séparés des photos :

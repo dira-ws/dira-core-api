@@ -49,15 +49,48 @@ func TestOnlyTheFeedTakesVideo(t *testing.T) {
 	}
 }
 
-// Le JPEG passe partout sauf sur un pictogramme : une icône en JPEG est une
-// icône floue sur un fond blanc.
+// Le JPEG passe partout sauf sur un pictogramme — une icône en JPEG est une
+// icône floue sur un fond blanc — et sauf sur un SON, qui n'est pas une image.
+//
+// ⚠️ LES TROIS FAMILLES SONT NOMMÉES, ET C'EST VOLONTAIRE : un genre ajouté
+// sans être classé ici fait TOMBER cette épreuve. Un motif large (« tout ce qui
+// n'est pas un pictogramme est une photo ») aurait accepté en silence le
+// premier genre d'une quatrième nature — et c'est exactement ce qui est arrivé
+// en ajoutant `sound`.
 func TestEveryPhotoKindTakesJPEG(t *testing.T) {
+	pictos := map[string]bool{"class": true, "marker": true}
+	sounds := map[string]bool{"sound": true}
 	for kind := range Kinds {
 		_, ok := Accepts(kind, "image/jpeg")
-		picto := kind == "class" || kind == "marker"
-		if picto == ok {
-			t.Errorf("%s : jpeg accepté = %v (pictogramme = %v)", kind, ok, picto)
+		image := !pictos[kind] && !sounds[kind]
+		if image != ok {
+			t.Errorf("%s : jpeg accepté = %v, attendu %v (pictogramme = %v, son = %v)",
+				kind, ok, image, pictos[kind], sounds[kind])
 		}
+	}
+}
+
+// ⚠️⚠️ UN SON NE PASSE QUE PAR LE GENRE `sound`, ET JAMAIS EN WAV.
+//
+// Trente secondes de WAV pèsent cinq mégaoctets ; en AAC, trois cents
+// kilooctets. Sur les réseaux d'Afrique de l'Ouest, le premier ne se
+// télécharge pas pendant qu'on fait défiler un feed — autant ne pas avoir de
+// son du tout. Et le plafond serré (deux mégaoctets) est ce qui empêche qu'un
+// album entier entre par cette porte.
+func TestOnlyTheSoundKindTakesAudioAndNeverWav(t *testing.T) {
+	for kind := range Kinds {
+		for _, audio := range []string{"audio/mpeg", "audio/mp4", "audio/aac", "audio/ogg"} {
+			_, ok := Accepts(kind, audio)
+			if (kind == "sound") != ok {
+				t.Errorf("%s : %s accepté = %v, attendu %v", kind, audio, ok, kind == "sound")
+			}
+		}
+		if _, ok := Accepts(kind, "audio/wav"); ok {
+			t.Errorf("%s accepte le WAV : cinq mégaoctets pour trente secondes", kind)
+		}
+	}
+	if max := Kinds["sound"].Max; max != MaxSoundBytes || max > 4<<20 {
+		t.Errorf("le plafond du son est %d : serré exprès, un son de fond n'est pas un album", max)
 	}
 }
 
