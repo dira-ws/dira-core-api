@@ -276,6 +276,23 @@ const (
 	// sinon trois personnes appellent le même chauffeur pendant que la
 	// suivante attend.
 	KeyStaffSOSClosed = "staff_sos_closed"
+	// KeyStaffSpeeding : un EXCÈS DE VITESSE GRAVE vient d'être constaté sur
+	// une course en cours.
+	//
+	// ⚠️ SEULEMENT LE GRAVE, ET C'EST TOUT LE SENS DE CETTE CLÉ UNIQUE. Le
+	// registre des excès tient aussi les dépassements ordinaires, et ils
+	// attendent dans la file du support — qui est faite pour ça. Un gabarit
+	// pour eux aurait fait sonner un téléphone à chaque dépassement du pays :
+	// au bout d'une semaine, personne ne regarde plus, y compris quand le
+	// message est le bon.
+	//
+	// ⚠️ ET IL NE PART QU'AU STAFF. Prévenir le passager À BORD a été écarté,
+	// et pour une bonne raison : quelqu'un enfermé dans une voiture qui roule
+	// trop vite ne peut rien faire de cette information sinon avoir peur — la
+	// seule action qui lui resterait serait de demander au chauffeur de
+	// s'arrêter sur une route où il roule déjà mal. C'est le service client qui
+	// appelle, comme pour le SOS.
+	KeyStaffSpeeding = "staff_speeding_grave"
 	// LA COMPTABILITÉ (`internal/finance`) : le balayage d'intégrité a
 	// trouvé un écart — un solde qui ne vaut plus ses mouvements, une
 	// écriture déséquilibrée, un mouvement sans écriture.
@@ -830,6 +847,37 @@ var defaults = map[string]Template{
 			LocaleEN: {Title: "SOS — [who]", Body: "[trigger] · [where]. CALL THEM: [phone]. Then Safety › SOS."},
 		},
 	},
+	KeyStaffSpeeding: {
+		Key: KeyStaffSpeeding,
+		Description: "STAFF — EXCÈS DE VITESSE GRAVE constaté sur une course en cours. " +
+			"Appelez le chauffeur ; l'incident est dans la file Vitesse.",
+		Enabled: true,
+		Locales: map[string]Text{
+			// ⚠️ LE TITRE PORTE LA VITESSE ET LE NOM, parce que c'est tout ce
+			// qu'une bannière de notification montre avant qu'on la touche.
+			// « Excès de vitesse » tout court aurait obligé à ouvrir pour savoir
+			// si ça pouvait attendre — et la réponse dépend entièrement du
+			// chiffre.
+			//
+			// ⚠️ ET `speed` PORTE LE COUPLE « 118 km/h sur 60 », jamais la seule
+			// vitesse atteinte. « 118 » ne dit rien sans le seuil : sur une voie
+			// rapide c'est ordinaire, en ville c'est un appel immédiat.
+			//
+			// ⚠️ LE CORPS DIT LE GESTE, et pas seulement le fait. C'est le
+			// service client qui appelle — le chauffeur, sur-le-champ : « APPELEZ-
+			// LE » est l'instruction, et un opérateur ne doit pas avoir à s'en
+			// souvenir. Le registre, lui, ne sanctionne rien : il n'y a pas
+			// d'autre geste que cette conversation.
+			LocaleFR: {
+				Title: "Vitesse — [who] à [speed]",
+				Body:  "Tenu [held]. APPELEZ-LE : [phone]. Puis Sécurité › Vitesse.",
+			},
+			LocaleEN: {
+				Title: "Speeding — [who] at [speed]",
+				Body:  "Held [held]. CALL THEM: [phone]. Then Safety › Speeding.",
+			},
+		},
+	},
 	KeyStaffSOSClosed: {
 		Key:         KeyStaffSOSClosed,
 		Description: "STAFF — une alerte SOS a été refermée : dénouement et qui l'a traitée.",
@@ -996,8 +1044,13 @@ var provided = map[string][]string{
 	KeyVehicleTakenBack:      {"vehicle", "fleet"},
 	KeyStaffSOS:              {"who", "trigger", "where", "phone"},
 	KeyStaffSOSClosed:        {"who", "outcome", "by"},
-	KeyStaffEquipRequested:   {"who", "item", "mode"},
-	KeyStaffFinanceAlert:     {"kind", "who", "detail"},
+	// ⚠️ `speed` EST LE COUPLE « 118 km/h sur 60 », pas la seule pointe : un
+	// chiffre sans son seuil n'aide personne à décider s'il faut appeler. Et
+	// `phone`, parce que c'est le service client qui APPELLE — comme pour le
+	// SOS, il n'y a pas d'autre geste.
+	KeyStaffSpeeding:       {"who", "speed", "held", "phone"},
+	KeyStaffEquipRequested: {"who", "item", "mode"},
+	KeyStaffFinanceAlert:   {"kind", "who", "detail"},
 	// ⚠️ CE QUE LA SUPERVISION SAIT REMPLIR, et rien de plus. `what` porte la
 	// phrase qui dit QUOI FAIRE — pas seulement ce qui ne va pas : une alerte
 	// qui annonce « taux d'erreur élevé » à trois heures du matin laisse celui

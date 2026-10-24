@@ -3,6 +3,7 @@ package notify
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -296,4 +297,76 @@ func defaultTmpl(t *testing.T, key string) Template {
 	}
 	t.Fatalf("gabarit %s absent", key)
 	return Template{}
+}
+
+// --- L'EXCÈS DE VITESSE GRAVE ---------------------------------------------
+
+// ⚠️ LE GABARIT PORTE LE COUPLE VITESSE/SEUIL ET LE TÉLÉPHONE, et l'épreuve
+// lit LE TEXTE RENDU — pas la structure du gabarit. Un gabarit dont une
+// variable n'est pas substituée part quand même : l'opérateur reçoit
+// « [speed] » entre crochets à deux heures du matin, et n'a aucun moyen de
+// savoir s'il doit appeler.
+func TestTheGraveSpeedingAlertRendersTheSpeedAndTheNumber(t *testing.T) {
+	var tpl Template
+	for _, d := range Defaults() {
+		if d.Key == KeyStaffSpeeding {
+			tpl = d
+		}
+	}
+	require.NotEmpty(t, tpl.Key, "le gabarit de l'excès grave doit être compilé")
+
+	vars := map[string]string{
+		"who": "Kossi Amegan", "speed": "118 km/h sur 60",
+		"held": "22 s", "phone": "+24106000000",
+	}
+	for _, loc := range []string{LocaleFR, LocaleEN} {
+		txt := tpl.Locales[loc]
+		title, missTitle := Render(txt.Title, vars)
+		body, missBody := Render(txt.Body, vars)
+
+		// ⚠️ UNE VARIABLE MANQUANTE NE FAIT PAS ÉCHOUER L'ENVOI (c'est un choix
+		// produit de `Render`) : elle part VIDE. Donc l'épreuve doit la
+		// chercher ici, sinon le défaut ne se verrait que sur le téléphone d'un
+		// opérateur réveillé à deux heures du matin.
+		assert.Empty(t, missTitle, "variables non fournies dans le titre (%s)", loc)
+		assert.Empty(t, missBody, "variables non fournies dans le corps (%s)", loc)
+		assert.NotContains(t, title+body, "[", "une variable n'a pas été remplie (%s)", loc)
+		// ⚠️ LA VITESSE EST DANS LE TITRE : c'est tout ce qu'une bannière
+		// montre avant qu'on la touche, et c'est le chiffre qui décide s'il
+		// faut appeler maintenant.
+		assert.Contains(t, title, "118 km/h sur 60", "la vitesse doit être dans le TITRE (%s)", loc)
+		assert.Contains(t, title, "Kossi Amegan", "le nom doit être dans le titre (%s)", loc)
+		// ⚠️ ET LE NUMÉRO EST DANS LE CORPS : c'est le service client qui
+		// APPELLE — il n'y a pas d'autre geste, le registre ne sanctionne rien.
+		assert.Contains(t, body, "+24106000000", "le numéro doit sortir (%s)", loc)
+	}
+}
+
+// ⚠️ IL N'EXISTE AUCUN GABARIT POUR LES EXCÈS ORDINAIRES, ni pour le passager.
+// Les deux absences sont des décisions :
+//
+//   - un gabarit « excès ordinaire » aurait fait sonner un téléphone à chaque
+//     dépassement du pays, et au bout d'une semaine personne ne regarde plus ;
+//   - prévenir le passager À BORD a été écarté : enfermé dans une voiture qui
+//     roule trop vite, il ne peut rien faire de l'information sinon avoir peur.
+func TestSpeedingHasExactlyOneTemplateAndItIsForTheStaff(t *testing.T) {
+	var keys []string
+	for _, d := range Defaults() {
+		if strings.Contains(d.Key, "speed") {
+			keys = append(keys, d.Key)
+		}
+	}
+	assert.Equal(t, []string{KeyStaffSpeeding}, keys,
+		"un seul gabarit de vitesse, et il va au staff")
+	assert.True(t, strings.HasPrefix(KeyStaffSpeeding, "staff_"),
+		"la clé doit se nommer `staff_` : c'est ce qui la range hors des catégories coupables")
+}
+
+// ⚠️ ET ELLE N'EST PAS COUPABLE. Un poste de supervision qui peut éteindre les
+// alertes de sécurité n'en est plus un — et contrairement au SOS, le chauffeur
+// concerné n'a rien demandé : personne d'autre que l'exploitation ne sait que
+// ça vient d'arriver.
+func TestTheGraveSpeedingAlertCannotBeMutedAway(t *testing.T) {
+	assert.Equal(t, CategoryStaff, categoryOf(KeyStaffSpeeding))
+	assert.False(t, Muteable(categoryOf(KeyStaffSpeeding)))
 }
