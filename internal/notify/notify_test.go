@@ -473,3 +473,34 @@ func TestTheDeliveryTransferMessagesSpeakOfAParcelAndNotOfAnotherCar(t *testing.
 		t.Fatal("le message d'ouverture doit nommer la COMMANDE : c'est elle que le client attend")
 	}
 }
+
+// ⚠️⚠️ « VOTRE LIVREUR ARRIVE » SANS DÉLAI NE FAIT DESCENDRE PERSONNE.
+//
+// C'est toute la valeur de ce message : quelqu'un qui lit « il arrive » dans
+// son appartement continue ce qu'il faisait ; « environ 2 minutes » le fait
+// bouger, réunir son argent, ouvrir le portail. Et le délai est RÉGLABLE par
+// l'exploitation — un « 2 » écrit dans le gabarit aurait menti le jour où le
+// réglage change, sans que personne ne relise la phrase.
+func TestTheCourierIsCloseMessageCarriesTheDelay(t *testing.T) {
+	var tpl Template
+	for _, d := range Defaults() {
+		if d.Key == KeyDeliveryNearby {
+			tpl = d
+		}
+	}
+	require.Equal(t, KeyDeliveryNearby, tpl.Key, "gabarit absent des défauts")
+	require.True(t, tpl.Enabled)
+	for _, loc := range []string{LocaleFR, LocaleEN} {
+		txt, ok := tpl.Locales[loc]
+		require.True(t, ok, "pas de phrase en %s", loc)
+		for _, v := range []string{"courier", "minutes"} {
+			assert.Contains(t, txt.Body, "["+v+"]",
+				"%s doit porter [%s] DANS sa phrase : hors de la phrase, la variable est perdue", loc, v)
+		}
+		// ⚠️ Et AUCUN nombre en dur : le délai vient du réglage.
+		for _, n := range []string{"2 min", "deux minutes", "5 min"} {
+			assert.NotContains(t, txt.Body, n,
+				"%s écrit un délai en dur : il mentira au premier changement de réglage", loc)
+		}
+	}
+}

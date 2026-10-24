@@ -233,6 +233,17 @@ const (
 	//     ⚠️ La bonne nouvelle est dans la phrase : son livreur continue ;
 	//   - `delivery_transfer_done` : à L'ANCIEN LIVREUR, avec sa part. Son
 	//     écran se ferme sur une course qu'il n'a pas terminée.
+	// KeyDeliveryNearby : LE LIVREUR EST À QUELQUES MINUTES — message au
+	// CLIENT, pour qu'il descende, ouvre le portail, réunisse son argent.
+	//
+	// ⚠️ LE DÉLAI EST DANS LA PHRASE, parce qu'il est RÉGLABLE par
+	// l'exploitation : « il arrive » ne fait pas descendre quelqu'un de son
+	// appartement, « environ 2 minutes » si. Un délai écrit en dur dans le
+	// gabarit aurait menti le jour où le réglage change.
+	//
+	// ⚠️ UNE SEULE FOIS PAR COURSE. Deux fois, c'est une application qui
+	// harcèle — et la seconde arriverait quand il est déjà à la porte.
+	KeyDeliveryNearby          = "delivery_nearby"
 	KeyDeliveryTransferStarted = "delivery_transfer_started"
 	KeyDeliveryTransferred     = "delivery_transferred"
 	KeyDeliveryTransferFailed  = "delivery_transfer_failed"
@@ -1029,6 +1040,15 @@ var defaults = map[string]Template{
 			LocaleEN: {Title: "Delivery cancelled", Body: "Order [order_ref] was cancelled. You are free for another delivery."},
 		},
 	},
+	KeyDeliveryNearby: {
+		Key:         KeyDeliveryNearby,
+		Description: "Le livreur est à quelques minutes — message au CLIENT, pour qu'il descende et réunisse son argent. Une seule fois par course.",
+		Enabled:     true,
+		Locales: map[string]Text{
+			LocaleFR: {Title: "Votre livreur arrive", Body: "[courier] est à environ [minutes] min de chez vous. Préparez-vous à le recevoir."},
+			LocaleEN: {Title: "Your courier is close", Body: "[courier] is about [minutes] min away. Get ready to receive your order."},
+		},
+	},
 	KeyDeliveryTransferStarted: {
 		Key:         KeyDeliveryTransferStarted,
 		Description: "Le livreur en place passe la main — message au CLIENT, avec le motif. Une attente qui s'allonge sans explication se lit comme une commande perdue.",
@@ -1148,6 +1168,9 @@ var provided = map[string][]string{
 	// LE TRANSFERT D'UNE COMMANDE : le MOTIF, puis QUI reprend. ⚠️ Pas la
 	// référence de la commande — le client n'en a qu'une en cours, et ces
 	// quatre phrases arrivent pendant qu'il la regarde.
+	// ⚠️ LE DÉLAI EST UNE VARIABLE : il est réglable par pays, et un « 2 »
+	// écrit dans le gabarit aurait menti le jour où l'exploitation le change.
+	KeyDeliveryNearby:          {"courier", "minutes"},
 	KeyDeliveryTransferStarted: {"reason"},
 	KeyDeliveryTransferred:     {"courier", "vehicle"},
 	KeyDeliveryTransferFailed:  {"courier"},
