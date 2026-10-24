@@ -1,6 +1,6 @@
 # App / console MARCHAND — LIVRAISON — contrat d'API
 
-> **Version 4.80.0** · 24 octobre 2026
+> **Version 4.81.0** · 24 octobre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Livraison : `https://api-staging.dira.llc/api/v1/food`
 
 
@@ -927,6 +927,7 @@ POST   /stores/{id}/videos
 GET    /stores/{id}/videos
 DELETE /stores/{id}/videos/{video_id}
 PATCH  /stores/{id}/videos/{video_id}/schedule   { published_at }
+GET    /feed/sounds                              → les sons de fond proposés   🆕 v4.81.0
 ```
 
 La **génération de vidéo par IA** débite le portefeuille **de ce point de vente**.
@@ -934,6 +935,51 @@ La **génération de vidéo par IA** débite le portefeuille **de ce point de ve
 Une vidéo **fournie** se téléverse d'abord — `POST /api/v1/uploads?kind=feed&entity={store_id}`, au **socle** (v3.0.0) — puis se déclare avec `source: "upload"`, `video_url` et le `duration_seconds` rendu par l'envoi. `feed` est le seul `kind` qui accepte une vidéo (mp4, webm, mov ; ≤ 60 MiB **et ≤ 60 s**, lus dans le fichier : `422 video_too_long` ou `video_unreadable` sinon). Le serveur réencode ensuite en arrière-plan et pose la vignette.
 
 **Publication programmée** : `published_at` porte une date **et une heure**. Une vidéo dont `published_at` est dans le futur n'apparaît pas dans le feed — elle est **filtrée**, pas classée en dernier.
+
+### 🆕 🎵 UN SON DE FOND SUR UN CARROUSEL (v4.81.0)
+
+```
+GET  /feed/sounds              → { items: [ { id, title, url, duration_s, license } ] }
+POST /stores/{id}/videos       { format: "pics", images: [...], sound_id: "…" }
+```
+
+⚠️⚠️ **VOUS CHOISISSEZ DANS LA BIBLIOTHÈQUE, VOUS NE DÉPOSEZ PAS UN FICHIER.**
+La publication prend un **`sound_id`** de `GET /feed/sounds` ; il n'y a aucun
+champ pour une URL de son, et il n'y en aura pas. La raison est juridique : un
+son déposé librement sur un feed public engage la plateforme **et vous**.
+
+⚠️ **REFUSÉ SUR UNE VIDÉO** (`422`) : elle porte déjà sa bande-son, et en
+superposer une seconde fait deux sons que personne ne peut couper séparément.
+Le son de fond est pour `pic` et `pics`.
+
+⚠️ **LE SON EST FIGÉ À LA PUBLICATION.** Le contenu rend `sound: { id, title,
+url }` — l'URL **comprise**. Un son retiré de la bibliothèque dans six mois ne
+rend pas muets vos carrousels déjà publiés ; il disparaît simplement du choix.
+
+⚠️ **`duration_s` SERT À BOUCLER.** Un carrousel de huit photos dure plus
+longtemps qu'un son de trente secondes : l'application reboucle, elle ne
+s'arrête pas en silence au milieu du défilement.
+
+### 🆕 📸 PLUSIEURS PHOTOS PAR PLAT, ET UN CARROUSEL AUTOMATIQUE (v4.81.0)
+
+Un plat porte **jusqu'à dix** images (`images: []`, chacune téléversée par
+`POST /uploads?kind=dish`). Ce n'était pas nouveau côté serveur — ce qui est
+nouveau, c'est ce qu'on en fait :
+
+⚠️ **METTRE UN PLAT EN VENTE PUBLIE UN CARROUSEL, TOUT SEUL.** Quand vous
+appelez `PUT /stores/{id}/dishes/{dish_id}` avec `available: true`, la
+plateforme publie un contenu `pics` avec les photos du plat, dans le feed de
+**cette** boutique. Vous n'avez rien à faire.
+
+| ⚠️ | |
+|---|---|
+| **une seule fois** par plat et par boutique | une rupture suivie d'un retour n'est pas une nouveauté : votre menu ne se republie pas chaque semaine |
+| **trois par jour** et par boutique | importer une carte de trente plats ne fait pas trente nouvelles. Au-delà, rien n'est publié — et **rien n'est mis en file** : publiez vous-même ce que vous voulez mettre en avant |
+| **sans photo, rien** | un carrousel vide est une carte grise au milieu du feed |
+| **muet** | la plateforme ne choisit pas de son à votre place. Ajoutez-en un en publiant vous-même |
+
+> **Ce carrousel est à vous** : il apparaît dans `GET /stores/{id}/videos` et se
+> supprime comme les autres.
 
 Le feed public et ses interactions :
 
