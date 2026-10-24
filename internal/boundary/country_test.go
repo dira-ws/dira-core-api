@@ -37,6 +37,12 @@ var collections = []string{
 	"audit.col",       // pkg/audit — le journal des actions
 	"sos.col",         // internal/sos — les appels au secours
 	"challenge.col",   // internal/challenge — les objectifs à atteindre
+	// internal/payroll — la paie des salariés. Les noms sont QUALIFIÉS :
+	// `runs` ou `employees` seuls finiraient par désigner la collection d'un
+	// autre module, et l'exemption posée pour l'un couvrirait l'autre.
+	"payroll.employees",
+	"payroll.adjustments",
+	"payroll.runs",
 }
 
 // Les lectures légitimement SANS pays, et pourquoi. Chacune se relit à

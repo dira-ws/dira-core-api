@@ -767,3 +767,64 @@ other = "La flotte de Dira ne s'enregistre pas ici : elle est créée une fois p
 
 [errors.partner_fleet_internal]
 other = "Cette flotte appartient à Dira : elle se gère depuis la flotte interne, pas depuis la console partenaire"
+
+# LA PAIE DES SALARIÉS (internal/payroll).
+#
+# ⚠️ CES PHRASES S'ADRESSENT À UN OPÉRATEUR, pas à un salarié : la paie n'a
+# aucune surface mobile. Elles disent donc QUOI FAIRE — « étalez la retenue »,
+# « écrivez une correction » — parce que celui qui les lit peut corriger son
+# geste tout de suite.
+[errors.payroll_employee_not_found]
+other = "Salarié introuvable"
+
+[errors.payroll_adjustment_not_found]
+other = "Prime ou retenue introuvable"
+
+[errors.payroll_run_not_found]
+other = "Paie introuvable"
+
+[errors.payroll_account_taken]
+other = "Ce compte porte déjà une fiche de salarié"
+
+[errors.payroll_period_open]
+other = "Cette période n'est pas terminée : une paie se prépare quand la période est close"
+
+[errors.payroll_run_exists]
+other = "Une paie couvre déjà cette période pour cette fréquence"
+
+# ⚠️ C'EST LE REFUS DU DOUBLE VERSEMENT. Il dit de RECHARGER plutôt que de
+# réessayer : quelqu'un d'autre vient d'agir sur cette paie, et réessayer à
+# l'aveugle est exactement ce qu'il ne faut pas faire.
+[errors.payroll_run_moved]
+other = "Cette paie n'est plus dans l'état attendu : rechargez-la avant d'agir"
+
+[errors.payroll_run_not_draft]
+other = "Seule une paie préparée peut être modifiée"
+
+[errors.payroll_run_not_approved]
+other = "Une paie se verse après avoir été vérifiée"
+
+# ⚠️ UNE PAIE VERSÉE NE SE MODIFIE PAS, et la phrase dit par quoi la remplacer :
+# sans cela, l'opérateur cherche un bouton « Modifier » qui n'existera jamais.
+[errors.payroll_run_paid]
+other = "Une paie versée ne se modifie jamais : écrivez une correction, elle passera sur la paie suivante"
+
+[errors.payroll_run_not_paid]
+other = "Seule une paie versée se corrige"
+
+[errors.payroll_nobody_to_pay]
+other = "Aucun salarié actif sur cette fréquence pour cette période"
+
+[errors.payroll_adjustment_closed]
+other = "Cette prime ou cette retenue est déjà soldée ou annulée"
+
+[errors.payroll_adjustment_on_run]
+other = "Cette prime ou cette retenue est sur une paie en préparation : annulez d'abord cette paie"
+
+[errors.payroll_deduction_impossible]
+other = "Les réglages du pays ne laissent rien de retenable : relevez le plafond de retenue ou abaissez le minimum laissé"
+
+# ⚠️ LA BORNE QUI PROTÈGE UNE PAIE. Le message serveur porte les montants
+# exacts ; cette phrase-ci est le repli, et elle nomme la sortie : étaler.
+[errors.payroll_deduction_too_large]
+other = "Cette retenue dépasse ce qu'une seule paie peut retenir : étalez-la sur plusieurs échéances"

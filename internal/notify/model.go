@@ -324,6 +324,16 @@ const (
 	// La clé est déclarée dans `internal/user` (`user.KeySessionSuperseded`),
 	// qui l'émet ; recopiée ici avec son gabarit, comme celles du support.
 	KeySessionSuperseded = "session_superseded"
+	// LA PAIE D'UN SALARIÉ (`internal/payroll`) — « votre paie a été versée ».
+	//
+	// ⚠️ ELLE NE PART QU'À CEUX QUI ONT UN COMPTE, et la plupart des salariés
+	// n'en ont pas : ce n'est donc PAS le canal par lequel l'entreprise annonce
+	// une paie, c'est un confort pour ceux qui sont déjà sur la plateforme.
+	//
+	// ⚠️ ET ELLE NE DIT NI LE DÉTAIL NI LES RETENUES. Le net versé et la
+	// période suffisent à reconnaître de quoi on parle ; le motif d'une retenue
+	// sur un écran verrouillé se lit par-dessus l'épaule.
+	KeyPayrollPaid = "payroll_paid"
 )
 
 // defaults sont les gabarits COMPILÉS, servis tant que la base n'en porte pas.
@@ -959,6 +969,15 @@ var defaults = map[string]Template{
 			LocaleEN: {Title: "Still searching", Body: "We are still looking for a driver for your order [order_ref]. Thanks for waiting."},
 		},
 	},
+	KeyPayrollPaid: {
+		Key:         KeyPayrollPaid,
+		Description: "La paie d'un salarié a été versée — au salarié qui a un compte.",
+		Enabled:     true,
+		Locales: map[string]Text{
+			LocaleFR: {Title: "Paie versée", Body: "Votre paie de [period] a été versée : [amount]."},
+			LocaleEN: {Title: "Pay sent", Body: "Your pay for [period] has been sent: [amount]."},
+		},
+	},
 }
 
 // provided déclare, par clé, les variables que la PLATEFORME sait remplir.
@@ -1058,6 +1077,8 @@ var provided = map[string][]string{
 	KeyPlatformAlert:         {"alert", "severity", "summary", "what", "service"},
 	KeyPlatformAlertResolved: {"alert", "severity", "summary", "what", "service"},
 	KeySessionSuperseded:     {"device"},
+	// La période et le NET versé — rien du détail : voir `KeyPayrollPaid`.
+	KeyPayrollPaid: {"period", "amount"},
 }
 
 // Provided rend les variables que la plateforme remplit pour une clé.

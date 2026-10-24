@@ -98,6 +98,12 @@ func categoryOf(key string) string {
 		return CategorySupport
 	case KeySessionSuperseded:
 		return CategorySecurity
+	case KeyPayrollPaid:
+		// ⚠️ RANGÉE DANS `support`, DONC NON COUPABLE. C'est le SALAIRE de
+		// quelqu'un : un salarié qui aurait coupé les offres commerciales ne
+		// doit pas cesser d'apprendre qu'il a été payé. La ranger dans les
+		// promotions aurait fait disparaître l'annonce la plus attendue du mois.
+		return CategorySupport
 	case KeyMerchantNewOrder:
 		// Rangée avec les mises à jour de commande : c'est ce que c'est pour
 		// le marchand, et lui donner une catégorie à part lui offrirait un
