@@ -1,6 +1,6 @@
 # Specs frontend — par rôle
 
-> **Version 4.80.0** · 24 octobre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics`
+> **Version 4.81.0** · 24 octobre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics`
 
 **Cinq** documents, un par application. Chacun est **autonome** : tout ce qu'un frontend doit savoir pour son rôle, sans avoir à ouvrir les vingt specs de modules.
 
@@ -355,6 +355,48 @@ Chaque document porte la même version en en-tête, et son propre journal des ch
 - [ ] ⚠️ **`TRACKING_JWT_SECRET` renseigné dans chaque environnement déployé.** Vide, l'authentification du service de suivi est **désactivée** : n'importe qui connaissant un `delivery_id` suit la course. Le secret doit valoir **exactement** le `JWT_SECRET` de `dira-food-api`.
 
 ## Journal
+
+### 4.81.0 — 24 octobre 2026
+
+🎵 **UN SON DE FOND SUR LES CARROUSELS** — `FOOD-MERCHANT.md`,
+`FOOD-CLIENT.md`.
+
+```
+GET  /food/feed/sounds         → { items: [ { id, title, url, duration_s, license } ] }
+POST /food/stores/{id}/videos  { format: "pics", images, sound_id }
+```
+
+- ⚠️⚠️ **LE MARCHAND CHOISIT DANS LA BIBLIOTHÈQUE, IL NE DÉPOSE PAS UN
+  FICHIER.** La publication prend un `sound_id` ; il n'y a aucun champ pour une
+  URL de son, et il n'y en aura pas — la raison est juridique, un son déposé
+  librement sur un feed public engage la plateforme et le marchand.
+- ⚠️ **REFUSÉ SUR UNE VIDÉO** : elle porte déjà sa bande-son, et en superposer
+  une seconde fait deux sons que personne ne peut couper séparément.
+- ⚠️ **LE SON EST FIGÉ À LA PUBLICATION** — le contenu rend `sound: { id,
+  title, url }`, l'URL comprise. Un son retiré de la bibliothèque ne rend pas
+  muets les carrousels déjà publiés.
+- ⚠️ **CÔTÉ CLIENT, QUATRE RÈGLES QUI ÉVITENT UN FEED QU'ON FERME** : jouer
+  seulement la carte ACTIVE, respecter le silencieux et offrir une coupure
+  visible, jamais en arrière-plan, et **ne pas précharger** dix sons pour un
+  feed parcouru en dix secondes. Et un son qui ne charge pas n'est pas une
+  erreur à afficher.
+- La base de la plateforme : **huit boucles de trente secondes**, synthétisées
+  (donc libres de droits par construction, licence inscrite sur chaque ligne).
+
+📸 **PLUSIEURS PHOTOS PAR PLAT, ET UN CARROUSEL AUTOMATIQUE** —
+`FOOD-MERCHANT.md`. Un plat porte jusqu'à **dix** images (ce qui existait
+déjà) ; ce qui est nouveau, c'est que **mettre un plat en vente publie un
+carrousel tout seul**, dans le feed de cette boutique.
+
+- ⚠️ **à la mise en vente, pas à la création au catalogue** : un plat de
+  catalogue n'a pas de lieu, et un plat que personne ne vend n'est pas une
+  nouvelle ;
+- ⚠️ **une seule fois** par plat et par boutique (une rupture suivie d'un
+  retour n'est pas une nouveauté), **trois par jour** au plus (importer trente
+  plats ne fait pas trente nouvelles), et ce qui dépasse est **écarté, pas mis
+  en file** ;
+- sans photo, rien ; et **muet** — la plateforme ne choisit pas de son à la
+  place du marchand.
 
 ### 4.80.0 — 24 octobre 2026
 

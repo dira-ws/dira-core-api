@@ -1,6 +1,6 @@
 # App CLIENT — LIVRAISON — contrat d'API
 
-> **Version 4.80.0** · 24 octobre 2026
+> **Version 4.81.0** · 24 octobre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Livraison : `https://api-staging.dira.llc/api/v1/food` · Suivi : `wss://tracking-staging.dira.llc`
 
 
@@ -2499,6 +2499,47 @@ relisez `GET /tickets/{id}` à l'ouverture et sur chaque notification.
 Un crédit tombola en attente est appliqué **automatiquement** en remise à la commande suivante — il apparaît dans `discount`.
 
 Un rapport de bug doit joindre `app_version`, `platform` et l'écran courant.
+
+---
+
+## 🆕 🎵 LE SON DE FOND D'UN CARROUSEL (v4.81.0)
+
+Un contenu du feed au format `pic` ou `pics` peut porter un son choisi par le
+marchand :
+
+```jsonc
+{ "format": "pics", "images": [ … ],
+  "sound": { "id": "…", "title": "Afro léger", "url": "https://…/afro.m4a", "duration_s": 30 } }
+```
+
+`sound` **absent** = le carrousel est muet, et c'est le cas le plus fréquent.
+
+### ⚠️ Comment le jouer, et ce qu'il ne faut pas faire
+
+⚠️⚠️ **JAMAIS QUAND LE CONTENU N'EST PAS CELUI QU'ON REGARDE.** Le son
+commence quand la carte devient **active** dans le défilement et s'arrête dès
+qu'elle sort — sinon deux sons se superposent au milieu d'un balayage, et
+l'utilisateur ne sait plus lequel couper.
+
+⚠️ **RESPECTEZ LE SILENCIEUX DE L'APPAREIL**, et offrez un bouton de coupure
+**visible sur la carte**. Un feed qui se met à chanter dans un bus est un feed
+qu'on ferme — et qu'on ne rouvre pas.
+
+⚠️ **JAMAIS EN ARRIÈRE-PLAN.** L'application quittée ou l'écran éteint, le son
+s'arrête : ce n'est pas un lecteur de musique.
+
+⚠️ **BOUCLEZ SUR `duration_s`.** Un carrousel de huit photos dure plus
+longtemps que trente secondes de son : rebouclez, ne laissez pas le silence
+tomber au milieu du défilement.
+
+⚠️ **ET NE LE TÉLÉCHARGEZ PAS D'AVANCE POUR TOUTE LA PAGE.** Dix sons de trois
+cents kilooctets chargés pour un feed qu'on parcourt en dix secondes, c'est
+trois mégaoctets de données de quelqu'un, dépensés pour un son qu'il n'entendra
+pas. Chargez celui de la carte active, au plus celui de la suivante.
+
+> **Un son peut ne pas charger** — réseau coupé, fichier retiré. Le carrousel
+> se regarde très bien sans : **n'affichez pas d'erreur**, ne bloquez pas le
+> défilement.
 
 ---
 
