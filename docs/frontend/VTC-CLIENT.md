@@ -1,6 +1,6 @@
 # App CLIENT — COURSES (VTC) — contrat d'API
 
-> **Version 4.71.0** · 18 octobre 2026
+> **Version 4.72.0** · 24 octobre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Courses : `https://api-staging.dira.llc/api/v1/vtc` · Suivi : `wss://tracking-staging.dira.llc`
 
 ---
@@ -2098,7 +2098,11 @@ Le passager n'a rien à répondre : le bon écran est celui de la course, avec
 le nom et la plaque **en grand**. C'est ce qu'il cherche des yeux en sortant.
 
 Le chauffeur ne peut klaxonner **qu'une fois arrivé**, et son application
-grise le bouton une minute après chaque coup. `honk_count` reste sur la
+grise le bouton entre deux coups. ⚠️ **Les deux délais se règlent par pays
+depuis la v4.72.0** — le temps qu'on lui demande d'attendre après son arrivée
+avant le premier coup, et l'intervalle entre les suivants. Vous n'avez rien à
+régler : sachez seulement que la cadence que vous observez n'est pas la même
+d'un pays à l'autre, et qu'elle n'est pas celle de son doigt. `honk_count` reste sur la
 course : un passager qui se plaint d'avoir été harcelé doit pouvoir être cru.
 
 #### 📍 Ce que le chauffeur a roulé pour venir (v4.24.0)
