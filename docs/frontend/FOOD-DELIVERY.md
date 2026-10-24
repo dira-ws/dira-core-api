@@ -1,6 +1,6 @@
 # App LIVREUR — LIVRAISON — contrat d'API
 
-> **Version 4.77.0** · 24 octobre 2026
+> **Version 4.78.0** · 24 octobre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Livraison : `https://api-staging.dira.llc/api/v1/food` · Suivi : `wss://tracking-staging.dira.llc` · SIG : `https://maps.dira.llc/api`
 
 
@@ -1354,6 +1354,8 @@ Elle est calculée **une fois, à la création**, et figée sur la course : la r
 POST /deliveries/{id}/accept
 POST /deliveries/{id}/pickups/{pickup_id}/done
 POST /deliveries/{id}/complete
+POST /deliveries/{id}/transfer              { "reason": "vehicle_breakdown", "note": "…" }   🆕 v4.78.0
+POST /deliveries/{id}/transfer/cancel                                                        🆕 v4.78.0
 GET  /deliveries/{id}
 GET  /deliveries?status=&limit=&cursor=     # VOS courses, les plus récentes d'abord (v4.12.1)
 ```
@@ -1504,6 +1506,140 @@ Depuis la v1.2.0, une course **attribuée** porte :
 **En espèces**, le livreur paie le marchand **de la main à la main**, du montant de ses lignes, et se rembourse à l'arrivée. L'écran de collecte doit rappeler la somme à sortir.
 
 **Terminer** n'est accepté qu'en `in_transit` — toutes les collectes faites. La réponse porte **`distance_source`** : `tracked` (positions réellement poussées) ou `planned` (repli). **Affichez la mention quand c'est `planned`** : c'est cette distance qui rémunère, et le livreur doit pouvoir la contester avant de la découvrir sur sa paie.
+
+---
+
+## 🆕 🤝 PASSER LA MAIN — un autre livreur reprend votre commande (v4.78.0)
+
+> Demandé par le propriétaire, dans la même phrase que le transfert d'une
+> course : « transfert de course **ou de commande** », « rappelle un chauffeur
+> **ou un livreur** ». Une panne, un malaise, une route coupée, la fin de votre
+> service : vous ne pouvez pas continuer, **et le client ne doit pas rester
+> sans son repas**.
+
+```
+POST /deliveries/{id}/transfer         { "reason": "vehicle_breakdown", "note": "courroie cassée" }
+POST /deliveries/{id}/transfer/cancel
+```
+
+### ⚠️⚠️ DEMANDER UN REMPLAÇANT NE VOUS ENLÈVE PAS LA COMMANDE
+
+**Rien ne change pour vous à cet instant.** La course reste la vôtre, avec son
+statut, ses collectes et son suivi — et **vous pouvez continuer à rouler**. La
+plateforme ouvre, **en parallèle**, un appel pour trouver quelqu'un.
+
+Trois suites possibles, et votre écran doit les tenir **toutes les trois** :
+
+| | Ce qui se passe | Votre écran |
+|---|---|---|
+| **quelqu'un reprend** | la commande passe à lui, votre part est **figée et versée** | `delivery_transfer_done` avec **votre montant**, et la course quitte votre écran |
+| **personne ne reprend** | `transfer.state: "failed"` — **la commande est toujours la vôtre** | « personne n'a pu reprendre : la livraison continue avec vous ». ⚠️ **Ne fermez pas l'écran** |
+| **vous changez d'avis** | `POST /deliveries/{id}/transfer/cancel` | retour à l'état normal |
+
+⚠️ **NE FERMEZ PAS LA COURSE EN DEMANDANT UN TRANSFERT.** Un livreur qui range
+son téléphone en croyant avoir rendu la commande laisse **un repas dans un sac
+que plus personne ne suit** — et, en espèces, l'argent du marchand avec.
+
+### Les huit motifs, et ce qu'ils déclenchent
+
+| `reason` | |
+|---|---|
+| `vehicle_breakdown` | panne, pneu, batterie |
+| `out_of_fuel` | plus de carburant ou de charge |
+| `road_blocked` | route coupée, inondation — vous ne passerez pas |
+| `wrong_vehicle` | **le paquet n'entre pas** : carton de traiteur sur un vélo, six pizzas sans sac isotherme |
+| `shift_end` | fin de service, vous rendez le véhicule |
+| `courier_unwell` | malaise, urgence personnelle — ⚠️ **ouvre un incident** |
+| `accident` | ⚠️ **ouvre un incident** |
+| `unsafe` | la sécurité de quelqu'un — ⚠️ **ouvre un incident** |
+| `other` | aucun des précédents — **mettez la phrase dans `note`** |
+
+⚠️ **LE MOTIF EST OBLIGATOIRE** : il est **traduit et montré au client**.
+« Votre livreur ne peut pas continuer » sans la moitié de la phrase se lit
+comme une panne de la plateforme.
+
+⚠️ **`note` EST POUR L'EXPLOITATION, PAS POUR LE CLIENT.** Écrivez-y ce qu'un
+opérateur doit savoir ; le client ne la verra jamais. Un code inventé est
+refusé — `422 transfer_reason_unknown`, **et la phrase nomme les acceptés**.
+
+### Ce que vous touchez, et ce qui vous revient
+
+Trois mouvements, et ils ne se remplacent pas :
+
+| | |
+|---|---|
+| **votre part des frais de livraison** | au prorata de la distance **réellement parcourue**, rapportée à la distance prévue, **versée immédiatement** — pas à la fin, vous n'y serez plus |
+| **votre avance aux marchands** | ⚠️ **RENDUE ENTIÈRE**, sans prorata : ce n'est pas un salaire, c'est **votre argent**, sorti de votre poche au comptoir. Vous ne verrez jamais ce client |
+| **votre jeton** | rendu **seulement si votre part est nulle** — voir ci-dessous |
+
+⚠️⚠️ **LE JETON NE REVIENT QUE SI VOUS N'AVEZ RIEN PORTÉ.** Vous avez payé
+l'entrée de cette course : si vous avez roulé, vous êtes payé pour cette
+distance et le jeton est acquis. Si vous passez la main **avant d'avoir bougé**
+— `wrong_vehicle` constaté au comptoir, par exemple —, il vous est **rendu** :
+vous auriez payé pour une course que vous n'avez pas faite. N'annoncez donc pas
+un remboursement dans l'écran de confirmation : **lisez `transfer`** après la
+reprise, c'est le serveur qui tranche.
+
+⚠️ **SANS PARCOURS MESURÉ, LA PART EST NULLE.** Si le suivi n'a rien gardé
+(réseau coupé toute la course), la plateforme ne devine pas ce que vous avez
+porté — elle vous rend le jeton et le signale au support. Le client, lui, paie
+les mêmes frais qu'avant : un transfert ne lui coûte rien de plus.
+
+### Et si c'est VOUS qui reprenez une commande
+
+L'appel arrive comme un autre, avec **`meta.transfer: "1"`** et le motif.
+
+⚠️⚠️ **DEUX CAS, ET ILS N'ENVOIENT PAS AU MÊME ENDROIT :**
+
+| `meta.meet_courier` | Où vous allez | Pourquoi |
+|---|---|---|
+| **absent** | **chez les marchands**, comme une course ordinaire | rien n'a été collecté : les plats vous attendent |
+| **`"1"`** | ⚠️ **REJOINDRE LE LIVREUR** | **le repas est déjà dans son sac** — le marchand a servi, il ne servira pas deux fois. Allez au restaurant et vous ne trouverez rien |
+
+Dans le second cas, l'appel part de **la position du livreur** et non d'un point
+de collecte, et l'écran doit le dire : « reprise de commande — rejoignez le
+livreur ». Vous suivez ensuite sa **position vivante** : il peut rouler
+pendant que vous approchez.
+
+⚠️ **VOUS NE PAYEZ AUCUN JETON** (`meta.token_cost: 0`) : la plateforme encaisse
+l'entrée **une fois par course**, pas une fois par livreur.
+
+⚠️ **ET `meta.cash_required_xof` N'EST PAS CELUI DE LA COURSE** : ce que le
+premier livreur a déjà payé aux marchands, vous n'avez pas à l'avancer une
+seconde fois. Une commande de 8 500 F déjà collectée peut se reprendre **avec
+zéro franc en poche**. Affichez ce que la méta dit, jamais le montant de la
+commande.
+
+⚠️ **ACCEPTER SE FAIT COMME TOUJOURS** (`POST /deliveries/{id}/accept`) : c'est
+le serveur qui échange les livreurs. La commande arrive **dans l'état où elle
+est** — collectée, en route — et non en `accepted` : ne remettez pas le
+compteur des collectes à zéro.
+
+⚠️ **UNE COMMANDE TRANSFÉRÉE N'EST DANS AUCUNE LISTE.** Elle n'est pas
+`searching` : elle a un livreur. Elle n'apparaîtra donc **pas** dans
+`GET /deliveries/available` — ouvrez-la par **`GET /deliveries/{id}`** avec
+l'identifiant de l'appel. Cette lecture vous est ouverte **parce que vous êtes
+appelé**, et elle ne porte **pas** le client : son nom et son téléphone
+n'arrivent qu'une fois la commande à vous.
+
+### Le champ `transfer`, sur la course
+
+```json
+"transfer": {
+  "state": "searching" | "done" | "failed" | "cancelled",
+  "reason": "vehicle_breakdown",
+  "by": "courier" | "support",
+  "grave": false,
+  "meet_courier": true,
+  "requested_at": "2026-10-24T15:12:00Z",
+  "ended_at": null
+}
+```
+
+⚠️ **`by: "support"` ARRIVE SANS QUE VOUS AYEZ RIEN DEMANDÉ.** L'exploitation
+peut ouvrir un transfert depuis la console — vous ne bougez plus, le client a
+appelé, vos papiers ne sont plus valides. Votre écran doit l'afficher comme
+l'autre : la commande reste la vôtre jusqu'à ce que quelqu'un la reprenne.
 
 ---
 
