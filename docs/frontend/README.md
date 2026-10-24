@@ -1,6 +1,6 @@
 # Specs frontend — par rôle
 
-> **Version 4.77.0** · 24 octobre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics`
+> **Version 4.78.0** · 24 octobre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics`
 
 **Cinq** documents, un par application. Chacun est **autonome** : tout ce qu'un frontend doit savoir pour son rôle, sans avoir à ouvrir les vingt specs de modules.
 
@@ -355,6 +355,59 @@ Chaque document porte la même version en en-tête, et son propre journal des ch
 - [ ] ⚠️ **`TRACKING_JWT_SECRET` renseigné dans chaque environnement déployé.** Vide, l'authentification du service de suivi est **désactivée** : n'importe qui connaissant un `delivery_id` suit la course. Le secret doit valoir **exactement** le `JWT_SECRET` de `dira-food-api`.
 
 ## Journal
+
+### 4.78.0 — 24 octobre 2026
+
+🤝 **PASSER LA MAIN — UNE COMMANDE confiée à un autre livreur** —
+`FOOD-DELIVERY.md`, `FOOD-CLIENT.md`. La seconde moitié de la demande du
+propriétaire : « transfert de course **ou de commande** », « rappelle un
+chauffeur **ou un livreur** ».
+
+```
+POST /food/deliveries/{id}/transfer         { reason, note? }   (livreur)
+POST /food/deliveries/{id}/transfer/cancel
+"transfer": { state, reason, by, grave, meet_courier, requested_at }
+```
+
+- ⚠️⚠️ **CE N'EST PAS LE TRANSFERT D'UNE COURSE AVEC D'AUTRES MOTS.** Trois
+  choses diffèrent, et chacune a coûté une décision.
+- ⚠️ **LE PAQUET.** Un passager descend d'une voiture et monte dans une autre ;
+  un repas, non. Dès qu'une collecte est faite, **le repas est dans le sac** :
+  `transfer.meet_courier` vaut `true`, l'appel part de **la position du
+  livreur**, et le remplaçant va **le rejoindre**. Envoyé au restaurant, il n'y
+  trouverait rien — le marchand a servi et ne servira pas deux fois.
+- ⚠️ **L'AVANCE.** En espèces, le livreur paie les marchands **de sa poche** et
+  se rembourse sur le client. S'il passe la main après avoir payé, cette somme
+  n'est pas un salaire : c'est **son argent**, et elle lui revient **entière**,
+  sans prorata. Le dernier livreur, qui encaissera le client pour tout le
+  monde, la doit.
+- ⚠️ **LE JETON.** Rendu **seulement si sa part est nulle** : s'il a roulé, il
+  est payé pour cette distance et l'entrée est acquise ; s'il passe la main
+  avant d'avoir bougé — `wrong_vehicle` constaté au comptoir —, il aurait payé
+  pour rien. Et le remplaçant ne paie **aucun** jeton (`meta.token_cost: 0`) :
+  la plateforme encaisse l'entrée **une fois par course**, pas une fois par
+  livreur.
+- ⚠️ **`meta.cash_required_xof` DE L'APPEL N'EST PAS CELUI DE LA COURSE** : ce
+  que le premier a déjà payé, le remplaçant n'a pas à l'avancer. Une commande
+  de 8 500 F déjà collectée se reprend **avec zéro franc en poche**.
+- ⚠️ **LA COMMANDE RESTE AU LIVREUR EN PLACE** jusqu'à ce que quelqu'un
+  reprenne, statut inchangé : le client ne doit pas voir sa barre de
+  progression repartir à zéro. Trois suites — repris, personne, annulé — et la
+  troisième phrase est **une bonne nouvelle** : « votre livreur continue ».
+- ⚠️ **UNE COMMANDE TRANSFÉRÉE N'EST DANS AUCUNE LISTE** (elle n'est pas
+  `searching`) : le remplaçant appelé l'ouvre par `GET /food/deliveries/{id}`,
+  lecture qui lui est ouverte **parce qu'il est appelé** — et qui ne porte
+  **pas** le client. Le nom et le téléphone n'arrivent qu'avec la commande.
+- Quatre messages neufs : `delivery_transfer_started` (le CLIENT, avec le motif
+  **en phrase traduite**), `delivery_transferred` (le CLIENT : qui arrive),
+  `delivery_transfer_failed` (le CLIENT : son livreur continue),
+  `delivery_transfer_done` (l'ANCIEN LIVREUR, avec son montant). ⚠️ **Pas les
+  clés du VTC** : « restez où vous êtes, votre course continue » n'a aucun sens
+  pour quelqu'un qui attend un repas chez lui.
+- Huit motifs côté livreur — dont `wrong_vehicle`, **le paquet n'entre pas**,
+  qui n'existe pas en VTC — et quatre côté exploitation
+  (`POST /food/admin/deliveries/{id}/transfer`). Trois ouvrent un **incident de
+  support** : `accident`, `courier_unwell`, `unsafe`.
 
 ### 4.77.0 — 24 octobre 2026
 

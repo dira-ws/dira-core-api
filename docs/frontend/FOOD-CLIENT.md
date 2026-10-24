@@ -1,6 +1,6 @@
 # App CLIENT — LIVRAISON — contrat d'API
 
-> **Version 4.77.0** · 24 octobre 2026
+> **Version 4.78.0** · 24 octobre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Livraison : `https://api-staging.dira.llc/api/v1/food` · Suivi : `wss://tracking-staging.dira.llc`
 
 
@@ -1521,6 +1521,73 @@ et personne ne s'y trouve encore. Quand votre commande est collectée chez **plu
 enseignes**, chaque point de collecte prend un pin numéroté du **marchand**,
 dans l'ordre où le livreur y passe — c'est ce qui permet de suivre sa
 tournée au lieu de voir trois pastilles identiques.
+
+## 🆕 🤝 ON CHANGE DE LIVREUR — le transfert (v4.78.0)
+
+> Demandé par le propriétaire : « le client doit être prévenu du transfert
+> **ainsi que de la raison** ». Une panne, un malaise, une route coupée : votre
+> livreur ne peut pas continuer, et quelqu'un vient prendre sa place.
+
+### ⚠️⚠️ VOTRE COMMANDE N'EST PAS ANNULÉE, ET ELLE N'EST PAS EN ATTENTE
+
+Elle **garde son statut** et son livreur jusqu'à ce que quelqu'un reprenne. Ce
+qui change est **un champ de plus** sur la course :
+
+```jsonc
+"delivery": {
+  "status": "picking_up",              // ← INCHANGÉ : votre repas est toujours en route
+  "transfer": {
+    "state": "searching",              // searching | done | failed | cancelled
+    "reason": "vehicle_breakdown",
+    "by": "courier",                   // ou "support" : l'exploitation l'a décidé
+    "grave": false,                    // accident, malaise, sécurité
+    "meet_courier": true,              // le remplaçant va REJOINDRE le livreur
+    "requested_at": "2026-10-24T15:12:00Z"
+  }
+}
+```
+
+⚠️ **NE REMETTEZ PAS VOTRE ÉCRAN À ZÉRO.** Le statut ne bouge pas : une barre
+de progression qui repart au début pour un changement de livreur fait croire
+que la commande recommence — et ce n'est pas le cas, les plats sont parfois
+déjà dans le sac.
+
+### Les trois messages, et ce qu'ils disent
+
+| Clé | Quand | Ce que votre écran doit dire |
+|---|---|---|
+| `delivery_transfer_started` | la recherche s'ouvre | « votre livreur ne peut pas continuer : **[la raison]** » — la variable `reason` est **une phrase déjà traduite**, affichez-la telle quelle |
+| `delivery_transferred` | quelqu'un a repris | « **[nom]** reprend votre commande en **[véhicule]** » — ⚠️ **relisez la course** : le livreur a changé, sa photo, sa note et sa conversation avec |
+| `delivery_transfer_failed` | personne n'a repris | ⚠️ **C'est une BONNE nouvelle** : « votre livreur **[nom]** poursuit votre livraison ». Sans cette phrase, vous laissez le client sur « nous cherchons quelqu'un » pendant que la moto roule vers chez lui |
+
+⚠️ **LA RAISON EST UNE PHRASE, PAS UN CODE.** `reason` vaut « son véhicule est
+en panne », jamais `vehicle_breakdown` : n'essayez pas de la traduire ni de la
+mettre en table. Le code technique, lui, est dans `delivery.transfer.reason`
+si vous voulez une icône.
+
+⚠️ **`grave: true`** (accident, malaise, sécurité) : **changez le ton**. Un
+« changement de livreur » annoncé de la même façon après un accident
+qu'après une fin de service est ce qui fait écrire des avis à une étoile. Un
+incident de support est déjà ouvert — ne proposez pas d'appeler le livreur.
+
+### Ce que vous payez : rien de plus
+
+⚠️ **LES FRAIS DE LIVRAISON NE CHANGENT PAS.** Un transfert est un problème de
+la plateforme, pas une raison de vous demander plus — et le partage entre les
+deux livreurs se fait **sur sa part à elle**. N'affichez aucun supplément, et
+n'invitez pas à « payer le nouveau livreur » : en espèces, vous réglez **le
+même total**, à la personne qui vous remet le repas.
+
+### `meet_courier` — pourquoi il n'y a qu'une moto sur la carte
+
+Quand le repas est **déjà dans le sac** du premier livreur, le remplaçant ne va
+pas au restaurant : il va **le rejoindre**. Pendant ce temps, la position que
+vous suivez reste celle du **livreur en place** — c'est elle qui porte votre
+commande. Après la reprise, le socket du suivi vous donne la nouvelle moto.
+
+⚠️ **N'ESSAYEZ PAS D'AFFICHER LES DEUX.** Le suivi ne diffuse qu'**une**
+position par mission ; deux motos sur la carte seraient une invention de
+l'application, et l'une des deux serait fausse.
 
 ## 🔒 CE QUE VOUS AVEZ LE DROIT D'AFFICHER DE L'AUTRE PARTIE (v4.49.0)
 
