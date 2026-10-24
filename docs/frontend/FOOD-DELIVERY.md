@@ -3297,13 +3297,39 @@ s'affiche dans aucune liste.
 règle unique écrite pour toute la plateforme. Un SVG peut porter du script, et
 il n'a aucune raison d'être une photo.
 
-⚠️ **AFFICHEZ LA PHRASE DU REFUS, N'ÉCRIVEZ PAS LA LISTE EN DUR.** Le `422` dit
-`unsupported type for kind document (accepted: jpeg, png, webp, pdf)` : une
-liste recopiée dans l'application vieillit en silence au premier format ajouté.
+### 🆕 Les trois refus de la porte d'envoi, NOMMÉS (v4.73.0)
 
-⚠️ **UN `kind` INCONNU EST REFUSÉ** (`422`, la liste des genres dans la phrase).
-N'en inventez pas, et ne réutilisez pas celui d'un autre écran parce qu'il
-« passe » : le plafond et les formats suivent le genre.
+| Code | Statut | Ce que la phrase porte | `fields` |
+|---|---|---|---|
+| `upload_kind_unknown` | `422` | la liste des genres acceptés | `kind` |
+| `upload_format_rejected` | `422` | les formats de **ce** genre | `file` |
+| `upload_too_large` | `422` | le plafond de **ce** genre, en Mio | `file` |
+
+⚠️ **AFFICHEZ LA PHRASE SERVIE, N'ÉCRIVEZ PAS LA LISTE EN DUR** : une liste
+recopiée dans l'application vieillit en silence au premier format ajouté.
+
+> ## ⚠️⚠️ CES TROIS CODES SONT NEUFS PARCE QUE LE REFUS ÉTAIT MUET
+>
+> Jusqu'au 24 octobre 2026, les trois répondaient
+> `{"code":"validation_failed","message":"Requête invalide"}` — **en français
+> comme en anglais**. Le détail (« kind must be one of… », « accepted: jpeg,
+> png, webp, pdf ») vivait dans le message de l'erreur, et **l'enveloppe
+> remplace ce message par la phrase traduite du code** : tout ce qui n'y figure
+> pas est perdu en route. C'était du texte mort, lisible seulement dans les
+> journaux du serveur, pendant que quelqu'un au comptoir cherchait pourquoi son
+> attestation d'assurance ne passait pas.
+>
+> **Si votre écran affiche encore « Requête invalide » sur un envoi refusé,
+> c'est qu'il lit l'ancien code.**
+
+⚠️ **`upload_too_large` COUVRE AUSSI UN CORPS MULTIPART ILLISIBLE**, et le dit
+comme une taille — c'est indiscernable côté serveur. Entre « votre fichier est
+trop gros » sur un corps cassé et « requête invalide » sur un fichier trop gros,
+**la première se corrige**.
+
+⚠️ **UN `kind` INCONNU EST REFUSÉ.** N'en inventez pas, et ne réutilisez pas
+celui d'un autre écran parce qu'il « passe » : le plafond et les formats suivent
+le genre.
 
 ---
 

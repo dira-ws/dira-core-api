@@ -421,6 +421,38 @@ speed_grave_kmh   le second seuil, celui qui prévient le support   (0 = jamais)
   trompe s'apprend à ignorer en une journée. **Vide ⇒ `banner`, jamais
   `silent`.**
 
+🔗 **LE LIEN DE PARTAGE DE TRAJET EXISTE VRAIMENT** — `VTC-CLIENT.md`,
+`DIRA-CLIENT.md`. Signalé par le propriétaire depuis la préproduction, qui a
+reçu ceci en partageant sa course :
+
+```
+Code de suivi de mon trajet Dira (l'adresse du lien n'est pas disponible) :
+fDj3MQoA-XC0ycce69moVV4RID-FaN3SYaISSpe05xY
+```
+
+- ⚠️⚠️ **CE CONTRAT DEMANDAIT CE REPLI** (« quand `url` est absente, partagez le
+  jeton brut et signalez-le »). L'application faisait exactement ce qu'on lui
+  demandait ; **la demande était fausse** — le domaine public de la plateforme
+  n'est pas une donnée qu'un téléphone connaît, et aucun déploiement ne l'avait
+  posée. La racine a désormais un défaut côté serveur : **`url` est toujours
+  servie**. Retirez le repli.
+- 🆕 **`deep_link` (`dira://trip/<jeton>`)** arrive à côté de `url`. Deux formes,
+  deux usages : `url` dans **la conversation** (s'ouvre chez tout le monde, avec
+  ou sans l'application — la seule forme qu'un proche sans compte peut suivre),
+  `deep_link` dans **le QR code**. ⚠️ Jamais l'inverse : un `https` scanné ouvre
+  un navigateur **par-dessus** l'application qui vient de le lire, et un
+  `dira://` collé dans une conversation n'ouvre **rien** chez qui n'a pas
+  l'application.
+- ⚠️ **LE QR SE DESSINE DANS L'APPLICATION**, à partir de `deep_link` : le
+  serveur ne sert aucune image. Net à toutes les tailles, sans réseau, et
+  enregistrable comme image dans une conversation.
+- **La page qu'ouvre le lien est neuve** (`https://dira.llc/t/<jeton>`) : elle
+  respecte les distinctions que le serveur sert déjà — une position **absente**
+  n'est pas une voiture arrêtée, un `eta_at` absent n'affiche **aucun** chiffre,
+  et **expiré** / **retiré** / **inconnu** sont trois phrases différentes.
+- ⚠️ **`token` n'apparaît toujours qu'une fois** : le serveur ne le garde que
+  haché. Partagez immédiatement.
+
 📎 **UN GENRE DE TÉLÉVERSEMENT, SES FORMATS, SON PLAFOND** — les huit contrats.
 Demandé par le propriétaire : accepter le PDF **pour les reçus et les preuves
 seulement**, et contrôler les formats cas par cas.
@@ -441,8 +473,21 @@ seulement**, et contrôler les formats cas par cas.
 - ⚠️ **LE SVG N'EST PLUS ACCEPTÉ HORS PICTOGRAMMES.** Il l'était partout, par
   une règle unique écrite pour toute la plateforme : un SVG peut porter du
   script, et il n'a aucune raison d'être une photo de profil.
-- ⚠️ **AFFICHEZ LA PHRASE DU REFUS** (`422 unsupported type for kind document
-  (accepted: jpeg, png, webp, pdf)`) **plutôt qu'une liste écrite en dur** : la
+- 🆕 **TROIS REFUS NOMMÉS** — `upload_kind_unknown` (la liste des genres),
+  `upload_format_rejected` (les formats de **ce** genre),
+  `upload_too_large` (le plafond, en Mio), tous `422` et tous avec leur
+  `fields`.
+- ⚠️⚠️ **ILS SONT NEUFS PARCE QUE LE REFUS ÉTAIT MUET.** Vérifié sur la
+  préproduction le jour même : les trois répondaient
+  `{"code":"validation_failed","message":"Requête invalide"}`, en français
+  **comme en anglais**. Le détail vivait dans le message de l'erreur, et
+  l'enveloppe **remplace** ce message par la phrase traduite du code — du texte
+  mort, lisible seulement dans les journaux. **Quatrième fois que ce piège se
+  présente** (après `meta.cooldown_s`, `pool_too_short` et
+  `rental_out_of_range`), et la première où il emportait une règle écrite le
+  jour même. Si un écran affiche encore « Requête invalide » sur un envoi
+  refusé, c'est qu'il lit l'ancien code.
+- ⚠️ **AFFICHEZ LA PHRASE SERVIE plutôt qu'une liste écrite en dur** : une
   liste recopiée dans une application vieillit en silence au premier format
   ajouté. ⚠️ Et `FOOD-CLIENT.md` annonçait une liste de genres **incomplète**
   depuis des mois — elle est retirée.

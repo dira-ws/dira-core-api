@@ -2867,7 +2867,8 @@ togolais à Dakar lit les règles du Togo.
 ```json
 { "id": "…", "kind": "ride", "label": "Maman",
   "token": "<JETON-EN-CLAIR-UNE-SEULE-FOIS>",
-  "url": "https://suivi.dira.llc/t/<JETON-EN-CLAIR-UNE-SEULE-FOIS>",
+  "url": "https://dira.llc/t/<JETON-EN-CLAIR-UNE-SEULE-FOIS>",
+  "deep_link": "dira://trip/<JETON-EN-CLAIR-UNE-SEULE-FOIS>",
   "expires_at": "2026-10-12T23:05:02Z", "live": true,
   "created_at": "…", "views": 0 }
 ```
@@ -2890,9 +2891,55 @@ ce qui approche la base.
 
 ⚠️ **`url` EST COMPOSÉE PAR LE SERVEUR. NE LA FABRIQUEZ PAS.** Trois
 applications qui composeraient le lien chacune de leur côté sont trois endroits
-à corriger le jour où le domaine change, et deux seront oubliés. Quand `url`
-est absente (aucune adresse publique configurée), partagez le jeton brut et
-signalez-le — n'inventez pas un domaine.
+à corriger le jour où le domaine change, et deux seront oubliés.
+
+### 🆕 ⚠️⚠️ `url` EST TOUJOURS SERVIE — ET CE CONTRAT DISAIT LE CONTRAIRE (v4.73.0)
+
+Ce document demandait, quand `url` était absente, de « partager le jeton brut et
+le signaler ». **Voici ce que cela donnait**, reçu par un passager de la
+préproduction le 24 octobre 2026 :
+
+```
+Code de suivi de mon trajet Dira (l'adresse du lien n'est pas disponible) :
+fDj3MQoA-XC0ycce69moVV4RID-FaN3SYaISSpe05xY
+```
+
+Quarante-trois caractères de hasard, envoyés à quelqu'un qui n'a **rien** pour
+les ouvrir. L'application faisait exactement ce qu'on lui demandait ; la demande
+était fausse. Le domaine public de la plateforme n'est pas une donnée qu'un
+téléphone connaît, et aucun déploiement ne l'avait posée.
+
+**La racine a désormais un défaut côté serveur : `url` et `deep_link` sont
+toujours là.**
+
+- **RETIREZ CE REPLI.** Plus de « code de suivi », plus de phrase entre
+  parenthèses, plus de jeton collé dans une conversation.
+- Si les deux champs manquaient quand même (déploiement d'essai), **ne partagez
+  rien** et dites « le partage n'est pas disponible ici » : un jeton nu n'a
+  jamais aidé personne.
+
+### 🆕 DEUX FORMES DU MÊME LIEN, ET CHACUNE A SON USAGE (v4.73.0)
+
+| Champ | Où ça va |
+|---|---|
+| `url` (`https://…`) | **la conversation** : WhatsApp, SMS, n'importe quoi. S'ouvre chez tout le monde, avec ou sans l'application — la **seule** forme qu'un proche sans compte Dira peut suivre |
+| `deep_link` (`dira://trip/…`) | **le QR code**, et lui seul |
+
+⚠️ **NE METTEZ PAS `url` DANS LE QR CODE.** Scanné par l'application Dira, un
+`https` ouvrirait un navigateur **par-dessus** l'application qui vient de le
+lire. Et **ne collez pas `deep_link` dans une conversation** : chez qui n'a pas
+l'application, un `dira://` n'ouvre **rien** — pas même un message d'erreur
+compréhensible.
+
+⚠️ **LE QR CODE SE DESSINE DANS L'APPLICATION, À PARTIR DE `deep_link`.** Le
+serveur ne sert aucune image : un QR tracé sur place reste net à toutes les
+tailles, fonctionne sans réseau, et peut être **enregistré ou envoyé comme
+image** dans une conversation — ce qu'une URL d'image ne permet pas sans
+re-télécharger.
+
+⚠️ **LE QR CODE SERT AU PROCHE QUI EST EN FACE DE VOUS** — on se montre un
+écran, on ne s'envoie pas un lien. Pour tous les autres cas, c'est `url` qu'il
+faut, et c'est elle qui doit être proposée en premier.
 
 ### LA DURÉE — `minutes`, et pourquoi `0` est le bon défaut
 
