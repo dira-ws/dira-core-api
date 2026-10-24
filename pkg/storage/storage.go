@@ -7,7 +7,9 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"math"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -174,6 +176,22 @@ func MaxBytesFor(kind string) int64 {
 		return k.Max
 	}
 	return MaxUploadBytes
+}
+
+// MaxMiBFor rend le plafond d'un genre en mébioctets, prêt à entrer dans une
+// phrase de refus : « 5 », « 15 », « 60 », « 0.5 ».
+//
+// ⚠️ UN NOMBRE, ET SANS SON UNITÉ : l'unité s'écrit dans la phrase TRADUITE
+// (« Mio » en français, « MiB » en anglais), parce qu'une valeur servie avec
+// son unité aurait imposé le mot français à la phrase anglaise — et c'est
+// exactement le genre de détail qu'on ne voit qu'en relisant une capture
+// d'écran d'un utilisateur.
+func MaxMiBFor(kind string) string {
+	mib := float64(MaxBytesFor(kind)) / float64(1<<20)
+	if mib == math.Trunc(mib) {
+		return strconv.FormatInt(int64(mib), 10)
+	}
+	return strconv.FormatFloat(mib, 'f', -1, 64)
 }
 
 type Config struct {

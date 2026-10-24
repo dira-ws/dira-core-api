@@ -828,3 +828,19 @@ other = "Les réglages du pays ne laissent rien de retenable : relevez le plafon
 # exacts ; cette phrase-ci est le repli, et elle nomme la sortie : étaler.
 [errors.payroll_deduction_too_large]
 other = "Cette retenue dépasse ce qu'une seule paie peut retenir : étalez-la sur plusieurs échéances"
+
+# --- LE TÉLÉVERSEMENT (internal/upload) ---
+#
+# ⚠️ LES LISTES SONT DANS LA PHRASE, et c'est tout l'objet de ces trois codes :
+# le `message` d'un refus est REMPLACÉ par la phrase traduite, donc ce qui n'y
+# figure pas n'arrive jamais sur un écran. Les genres et les formats viennent de
+# `WithMeta` (`kinds`, `formats`, `max_mib`).
+
+[errors.upload_kind_unknown]
+other = "Genre de fichier inconnu — les genres acceptés sont : {{.kinds}}"
+
+[errors.upload_format_rejected]
+other = "Ce genre de fichier n'accepte que {{.formats}}"
+
+[errors.upload_too_large]
+other = "Ce fichier dépasse {{.max_mib}} Mio, la limite de ce genre de fichier"

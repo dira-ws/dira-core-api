@@ -13,6 +13,10 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/kgtech-org/dira-core-api/pkg/httpx"
+	"github.com/kgtech-org/dira-core-api/pkg/i18n"
+	"github.com/kgtech-org/dira-core-api/pkg/storage"
 )
 
 // fakeStore records what actually reached storage: la question la plus
@@ -138,4 +142,91 @@ func TestUploadRejectsVideoOutsideTheFeed(t *testing.T) {
 func TestUploadWithoutStorageAnswers503(t *testing.T) {
 	rec := upload(t, NewHandler(nil), "feed", "short.mp4", "video/mp4", mp4OfSeconds(10))
 	assert.Equal(t, http.StatusServiceUnavailable, rec.Code)
+}
+
+// ⚠️⚠️ CE QUE LE REFUS DIT VRAIMENT, LU DANS LE JSON SERVI ET TRADUIT.
+//
+// Le 24 octobre 2026, la préproduction répondait « Requête invalide » à un
+// genre inconnu comme à un format refusé : les listes vivaient dans le
+// `message` de l'erreur, et le `message` est REMPLACÉ par la phrase traduite du
+// code. Du texte mort, visible seulement dans les journaux du serveur — pendant
+// que le contrat mobile, écrit le matin même, demandait d'afficher cette phrase.
+//
+// Cette épreuve lit donc la SORTIE, traducteur branché, en français comme en
+// anglais : c'est le seul endroit où le piège se voit.
+func servedRefusal(t *testing.T, rec *httptest.ResponseRecorder) (string, string) {
+	t.Helper()
+	var out struct {
+		Error struct {
+			Code    string `json:"code"`
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &out))
+	return out.Error.Code, out.Error.Message
+}
+
+func withTranslator(t *testing.T, lang string, r *http.Request) *http.Request {
+	t.Helper()
+	tr, err := i18n.New("../../locales")
+	require.NoError(t, err)
+	httpx.SetTranslator(tr)
+	t.Cleanup(func() { httpx.SetTranslator(nil) })
+	return r.WithContext(i18n.WithLang(r.Context(), lang))
+}
+
+func refuse(t *testing.T, lang, kind, contentType string) (string, string) {
+	t.Helper()
+	var buf bytes.Buffer
+	mw := multipart.NewWriter(&buf)
+	hdr := make(map[string][]string)
+	hdr["Content-Disposition"] = []string{`form-data; name="file"; filename="x"`}
+	hdr["Content-Type"] = []string{contentType}
+	part, err := mw.CreatePart(hdr)
+	require.NoError(t, err)
+	_, err = part.Write([]byte("xx"))
+	require.NoError(t, err)
+	require.NoError(t, mw.Close())
+
+	req := httptest.NewRequest(http.MethodPost, "/uploads?kind="+kind, &buf)
+	req.Header.Set("Content-Type", mw.FormDataContentType())
+	req = withTranslator(t, lang, req)
+	rec := httptest.NewRecorder()
+	NewHandler(&storage.Store{}).upload(rec, req)
+	return servedRefusal(t, rec)
+}
+
+func TestAnUnknownKindIsServedWithTheListOfKinds(t *testing.T) {
+	code, msg := refuse(t, "fr", "papiers", "image/jpeg")
+	assert.Equal(t, "upload_kind_unknown", code)
+	assert.Contains(t, msg, "Genre de fichier inconnu")
+	for _, kind := range []string{"avatar", "document", "receipt", "feed"} {
+		assert.Contains(t, msg, kind, "la phrase servie doit NOMMER les genres")
+	}
+
+	_, en := refuse(t, "en", "papiers", "image/jpeg")
+	assert.Contains(t, en, "Unknown file kind")
+	assert.Contains(t, en, "document")
+}
+
+func TestARefusedFormatIsServedWithTheFormatsOfThatKind(t *testing.T) {
+	code, msg := refuse(t, "fr", "avatar", "application/pdf")
+	assert.Equal(t, "upload_format_rejected", code)
+	assert.Contains(t, msg, "jpeg, png, webp", "les formats DE CE GENRE, dans la phrase")
+	assert.NotContains(t, msg, "pdf", "une photo de profil ne prend pas le PDF")
+
+	// Et le même refus sur une preuve nomme le PDF, lui.
+	_, proof := refuse(t, "fr", "document", "image/gif")
+	assert.Contains(t, proof, "pdf")
+}
+
+func TestTheCeilingIsServedAsANumberOfMiB(t *testing.T) {
+	assert.Equal(t, "5", storage.MaxMiBFor("avatar"))
+	assert.Equal(t, "15", storage.MaxMiBFor("document"))
+	assert.Equal(t, "60", storage.MaxMiBFor("feed"))
+	assert.Equal(t, "0.5", storage.MaxMiBFor("marker"), "un pictogramme tient en 512 Kio")
+
+	err := errTooLarge("document")
+	assert.Equal(t, "upload_too_large", err.Code)
+	assert.Equal(t, "15", err.Meta["max_mib"], "le gabarit de la phrase lit `max_mib`")
 }

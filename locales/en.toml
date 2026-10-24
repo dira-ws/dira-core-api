@@ -735,3 +735,14 @@ other = "The country settings leave nothing deductible: raise the deduction cap 
 
 [errors.payroll_deduction_too_large]
 other = "This deduction exceeds what a single payroll may deduct: spread it over several instalments"
+
+# --- THE UPLOAD GATE (internal/upload) ---
+
+[errors.upload_kind_unknown]
+other = "Unknown file kind — the accepted kinds are: {{.kinds}}"
+
+[errors.upload_format_rejected]
+other = "This kind of file only accepts {{.formats}}"
+
+[errors.upload_too_large]
+other = "This file is over {{.max_mib}} MiB, the limit for this kind of file"

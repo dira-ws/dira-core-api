@@ -57,6 +57,56 @@ func (h *Handler) Mount(r chi.Router, authMW func(http.Handler) http.Handler) {
 	})
 }
 
+// ⚠️⚠️ TROIS REFUS NOMMÉS, ET CE QU'ILS DISENT EST DANS LA PHRASE TRADUITE.
+//
+// Vérifié sur la préproduction le 24 octobre 2026 : `apperr.Validation("kind
+// must be one of …")` répondait **« Requête invalide »**, et rien d'autre — en
+// français comme en anglais. L'enveloppe de refus ne sert que `code`,
+// `message`, `fields` et `reason`, et le `message` est REMPLACÉ par la phrase
+// traduite du code : tout ce qui n'est pas dans cette phrase est perdu en
+// route. La liste des genres et les formats acceptés étaient donc du texte
+// mort, lisible seulement dans les journaux du serveur.
+//
+// ⚠️ C'est la QUATRIÈME fois que ce piège se présente sur cette plateforme
+// (après `meta.cooldown_s` du klaxon, `pool_too_short` et
+// `rental_out_of_range`) — et la première où il emportait une règle écrite le
+// jour même. La règle tient maintenant : un code à soi, et les listes passées
+// en `WithMeta` pour que le gabarit les insère DANS la phrase.
+//
+// ⚠️ ET LES LISTES SE LISENT DE LA TABLE, elles ne se recopient pas : une liste
+// écrite à la main dans une phrase de refus vieillit en silence à chaque genre
+// ajouté, et personne ne relit un message d'erreur.
+func errUnknownKind() *apperr.Error {
+	kinds := strings.Join(storage.KindNames(), ", ")
+	return apperr.New("upload_kind_unknown", "kind must be one of "+kinds,
+		http.StatusUnprocessableEntity).
+		WithMeta(map[string]any{"kinds": kinds, "fields": []string{"kind"}})
+}
+
+func errBadFormat(kind string) *apperr.Error {
+	formats := storage.LabelFor(kind)
+	return apperr.New("upload_format_rejected",
+		"unsupported type for kind "+kind+" (accepted: "+formats+")",
+		http.StatusUnprocessableEntity).
+		WithMeta(map[string]any{"formats": formats, "fields": []string{"file"}})
+}
+
+// errTooLarge : le plafond DU GENRE, dit à qui vient de perdre son envoi.
+//
+// ⚠️ IL COUVRE AUSSI LE CORPS MULTIPART ILLISIBLE, et le dit comme une taille.
+// `MaxBytesReader` coupe la lecture : l'erreur qui remonte est une erreur
+// d'analyse, indiscernable d'un vrai corps malformé. Entre « votre fichier est
+// trop gros » sur un corps cassé et « requête invalide » sur un fichier trop
+// gros, la première se corrige — un corps multipart malformé n'arrive que d'un
+// client qu'on écrit, jamais de quelqu'un qui envoie une photo.
+func errTooLarge(kind string) *apperr.Error {
+	mib := storage.MaxMiBFor(kind)
+	return apperr.New("upload_too_large",
+		"file too large for kind "+kind+" (max "+mib+" MiB) or invalid multipart body",
+		http.StatusUnprocessableEntity).
+		WithMeta(map[string]any{"max_mib": mib, "fields": []string{"file"}})
+}
+
 func (h *Handler) upload(w http.ResponseWriter, r *http.Request) {
 	if h.store == nil {
 		httpx.Error(w, r, apperr.New("storage_unavailable", "object storage is not configured", http.StatusServiceUnavailable))
@@ -64,10 +114,7 @@ func (h *Handler) upload(w http.ResponseWriter, r *http.Request) {
 	}
 	kind := r.URL.Query().Get("kind")
 	if !storage.Known(kind) {
-		// ⚠️ LA LISTE SE LIT DE LA TABLE, elle ne se recopie pas ici : une
-		// liste écrite à la main dans la phrase de refus a vieilli en silence
-		// à chaque genre ajouté, et personne ne relit un message d'erreur.
-		httpx.Error(w, r, apperr.Validation("kind must be one of "+strings.Join(storage.KindNames(), "|")))
+		httpx.Error(w, r, errUnknownKind())
 		return
 	}
 	// Le plafond dépend du kind : une vidéo de feed pèse bien plus qu'une
@@ -75,7 +122,7 @@ func (h *Handler) upload(w http.ResponseWriter, r *http.Request) {
 	maxBytes := storage.MaxBytesFor(kind)
 	r.Body = http.MaxBytesReader(w, r.Body, maxBytes)
 	if err := r.ParseMultipartForm(maxBytes); err != nil {
-		httpx.Error(w, r, apperr.Validation("file too large or invalid multipart body").WithCause(err))
+		httpx.Error(w, r, errTooLarge(kind).WithCause(err))
 		return
 	}
 	file, header, err := r.FormFile("file")
@@ -87,12 +134,11 @@ func (h *Handler) upload(w http.ResponseWriter, r *http.Request) {
 
 	contentType := header.Header.Get("Content-Type")
 	if _, ok := storage.Accepts(kind, contentType); !ok {
-		// ⚠️ LA PHRASE DIT LES FORMATS DE *CE* GENRE. Un message générique
-		// (« jpeg, png, webp, svg ») envoyait chercher pourquoi un SVG
-		// refusé figurait dans la liste des formats acceptés — et ne disait
-		// pas qu'un reçu prend le PDF.
-		httpx.Error(w, r, apperr.Validation(
-			"unsupported type for kind "+kind+" (accepted: "+storage.LabelFor(kind)+")"))
+		// ⚠️ LA PHRASE DIT LES FORMATS DE *CE* GENRE — et elle les dit
+		// VRAIMENT, depuis le 24 octobre 2026 : voir `errBadFormat`. Un
+		// message générique ne disait ni pourquoi un SVG est refusé ici, ni
+		// qu'un reçu prend le PDF.
+		httpx.Error(w, r, errBadFormat(kind))
 		return
 	}
 	// Une vidéo de feed est un SHORT : la durée est lue dans le conteneur, pas
