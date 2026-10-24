@@ -1,6 +1,6 @@
 # App / console MARCHAND — LIVRAISON — contrat d'API
 
-> **Version 4.72.0** · 24 octobre 2026
+> **Version 4.73.0** · 24 octobre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Livraison : `https://api-staging.dira.llc/api/v1/food`
 
 
@@ -968,6 +968,76 @@ POST /uploads?kind=dish&entity={id}                (SOCLE, sans /food)
 POST /me/devices · GET /me/notifications           (SOCLE, sans /food)
 POST /tickets · GET /tickets · GET /tickets/{id} · POST /tickets/{id}/messages · POST /bug-reports
 ```
+
+### 🆕 LES FORMATS DE TÉLÉVERSEMENT — un genre, ses formats, son plafond (v4.73.0)
+
+`POST /uploads?kind=…` n'accepte plus « des images » : **chaque genre a ses
+formats et son plafond**, et le refus nomme ceux **de ce genre-là**.
+
+| Genre | Formats acceptés | Plafond |
+|---|---|---|
+| `avatar` · `vehicle` · `dish` · `store` · `brand` · `banner` · `equipment` | jpeg, png, webp | **5 Mio** |
+| `feed` | jpeg, png, webp — vidéos : mp4, webm, mov (⚠️ **≤ 60 s**) | **60 Mio** |
+| `receipt` · `document` | jpeg, png, webp, **pdf** | **15 Mio** |
+| `class` · `marker` (pictogrammes, **exploitation seule**) | png, webp, **svg** | **512 Kio** |
+
+**Ce que cette application envoie : `dish`, `store`, `brand`, `banner` (les photos) et `feed` (une photo ou une vidéo courte).**
+
+🆕 ⚠️ **`kind=document` MANQUAIT, ET C'EST LE CHANGEMENT QUI VOUS CONCERNE.** Les
+pièces de conformité n'avaient aucun genre à elles : elles passaient par un
+genre prévu pour des **photographies**, donc **sans PDF possible** — alors
+qu'une attestation d'assurance est un PDF neuf fois sur dix. Envoyez désormais
+toute pièce de conformité avec `?kind=document`.
+
+⚠️ **LE PDF N'EST ACCEPTÉ QUE LÀ** — `receipt` (pièce comptable) et `document`
+(pièce de conformité). Nulle part ailleurs : une photo de profil en PDF ne
+s'affiche dans aucune liste.
+
+⚠️ **LE SVG N'EST PLUS ACCEPTÉ HORS PICTOGRAMMES.** Il l'était partout, par une
+règle unique écrite pour toute la plateforme. Un SVG peut porter du script, et
+il n'a aucune raison d'être une photo.
+
+### 🆕 Les trois refus de la porte d'envoi, NOMMÉS (v4.73.0)
+
+| Code | Statut | Ce que la phrase porte | `fields` |
+|---|---|---|---|
+| `upload_kind_unknown` | `422` | la liste des genres acceptés | `kind` |
+| `upload_format_rejected` | `422` | les formats de **ce** genre | `file` |
+| `upload_too_large` | `422` | le plafond de **ce** genre, en Mio | `file` |
+
+⚠️ **AFFICHEZ LA PHRASE SERVIE, N'ÉCRIVEZ PAS LA LISTE EN DUR** : une liste
+recopiée dans l'application vieillit en silence au premier format ajouté.
+
+> ## ⚠️⚠️ CES TROIS CODES SONT NEUFS PARCE QUE LE REFUS ÉTAIT MUET
+>
+> Jusqu'au 24 octobre 2026, les trois répondaient
+> `{"code":"validation_failed","message":"Requête invalide"}` — **en français
+> comme en anglais**. Le détail (« kind must be one of… », « accepted: jpeg,
+> png, webp, pdf ») vivait dans le message de l'erreur, et **l'enveloppe
+> remplace ce message par la phrase traduite du code** : tout ce qui n'y figure
+> pas est perdu en route. C'était du texte mort, lisible seulement dans les
+> journaux du serveur, pendant que quelqu'un au comptoir cherchait pourquoi son
+> attestation d'assurance ne passait pas.
+>
+> **Si votre écran affiche encore « Requête invalide » sur un envoi refusé,
+> c'est qu'il lit l'ancien code.**
+
+⚠️ **`upload_too_large` COUVRE AUSSI UN CORPS MULTIPART ILLISIBLE**, et le dit
+comme une taille — c'est indiscernable côté serveur. Entre « votre fichier est
+trop gros » sur un corps cassé et « requête invalide » sur un fichier trop gros,
+**la première se corrige**.
+
+⚠️ **UN `kind` INCONNU EST REFUSÉ.** N'en inventez pas, et ne réutilisez pas
+celui d'un autre écran parce qu'il « passe » : le plafond et les formats suivent
+le genre.
+
+⚠️ **ET `feed` RESTE LE SEUL GENRE QUI ACCEPTE UNE VIDÉO** — avec sa double
+borne : **60 Mio** et **60 secondes**, lues dans le fichier lui-même
+(`422 video_too_long` ou `video_unreadable`). Ce plafond est celui de `feed` et
+de personne d'autre : une photo de plat de 40 Mio est refusée.
+
+---
+
 
 > ### 🔢 Sur iPhone, les notifications d'un même objet se REMPLACENT (v4.71.0)
 >

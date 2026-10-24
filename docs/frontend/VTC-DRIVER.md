@@ -1,6 +1,6 @@
 # App CHAUFFEUR — COURSES (VTC) — contrat d'API
 
-> **Version 4.72.0** · 24 octobre 2026
+> **Version 4.73.0** · 24 octobre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Courses : `https://api-staging.dira.llc/api/v1/vtc` · Suivi : `wss://tracking-staging.dira.llc` · SIG : `https://maps.dira.llc/api`
 
 ---
@@ -2664,6 +2664,7 @@ défendre quand elle est contestée.
 GET /settings/dispatch → { chain_calls, chain_radius_m, call_mode, call_radius_m,
                            call_ranking, call_ttl_s, max_drivers, max_minutes,
                            max_attempts, search_expiry_min, speed_limit_kmh,
+                           speed_over_s, speed_alert, speed_grave_kmh,
                            honk_delay_s, honk_interval_s }
 ```
 
@@ -2673,9 +2674,68 @@ seuil : celui d'un autre pays ferait sonner l'application dans une ville où il
 ne veut rien dire, et une alerte qui se déclenche à tort s'apprend à ignorer en
 une journée.
 
-⚠️ **CE N'EST PAS UNE SANCTION.** La plateforme ne coupe rien, ne signale rien,
-ne facture rien : elle vous donne le seuil, vous alertez sur place — au moment
-où cela sert encore.
+⚠️ **CE N'EST PAS UNE SANCTION.** La plateforme ne coupe rien et ne facture
+rien : elle vous donne le seuil, vous alertez sur place — au moment où cela sert
+encore.
+
+> ## ⚠️⚠️ CE CONTRAT DISAIT ICI « NE SIGNALE RIEN », ET CE N'EST PLUS VRAI (v4.73.0)
+>
+> Rien n'est coupé, rien n'est facturé, **et rien n'est dit au passager** — mais
+> **le serveur CONSTATE désormais** les dépassements, et il prévient le support
+> quand l'un d'eux est **grave**. Un écran qui promet « personne n'est prévenu »
+> tient un engagement que le serveur ne tient plus.
+>
+> ⚠️ **ET VOUS N'AVEZ RIEN À ENVOYER POUR CELA : il n'existe AUCUNE route pour
+> déclarer un excès.** Le constat se fait depuis les trames de suivi que vous
+> émettez déjà. L'application **alerte**, le serveur **constate**, et les deux
+> sont indépendants — c'est ce qui permet à un pays de mesurer avant d'alerter.
+
+#### 🆕 Les trois réglages qui accompagnent le seuil (v4.73.0)
+
+| Champ | Ce qu'il dit | Zéro / vide |
+|---|---|---|
+| `speed_limit_kmh` | le seuil du pays | **0 = rien du tout** : pas d'alerte, pas de constat |
+| `speed_over_s` | **combien de temps** le dépassement doit tenir avant de compter | retombe sur **10 s** |
+| `speed_alert` | **comment** alerter : `silent` · `banner` · `sound` · `voice` | vide = **`banner`** |
+| `speed_grave_kmh` | le second seuil, celui qui **prévient le support** | **0 = jamais grave** |
+
+⚠️ **`speed_over_s` EXISTE PARCE QUE LA VITESSE GPS EST BRUITÉE.** Un point
+aberrant, un rebond de signal entre deux immeubles, un tunnel dont on sort trop
+vite : un pic d'une seconde affiche 94 km/h à quelqu'un qui roule à 48.
+**N'alertez pas sur un pic** — tenez un compteur, et n'alertez que si le
+dépassement **tient** la durée servie. Une alerte qui se trompe s'apprend à
+ignorer en une journée.
+
+⚠️ **ET `speed_over_s` À 0 NE VEUT PAS DIRE « ALERTER SUR CHAQUE PIC »** : le
+serveur retombe sur **10 secondes**. Un document de réglages écrit avant ce
+champ porte zéro, et lire ce zéro comme une décision retirerait le garde-fou à
+tous les pays. **Lisez la valeur servie, pas le zéro.**
+
+⚠️ **`speed_alert` EST UN ENSEMBLE FERMÉ** — quatre formes, et un pays n'en
+choisit qu'une :
+
+| Valeur | Ce que l'application fait |
+|---|---|
+| `silent` | **rien à l'écran.** ⚠️ Ce n'est pas « aucun réglage » : le serveur constate quand même. C'est le choix d'un pays qui veut mesurer avant d'alerter |
+| `banner` | un bandeau, silencieux — le **défaut** |
+| `sound` | le bandeau **plus** un son bref : pour qui ne regarde pas l'écran, c'est-à-dire pour qui conduit |
+| `voice` | le bandeau **plus** une phrase dite — la seule forme qui n'oblige pas à quitter la route des yeux, **et la seule que le passager à bord entend** |
+
+⚠️ **VIDE = `banner`, ET SURTOUT PAS `silent`.** Le silence par défaut rejouerait
+le défaut du 26 septembre 2026 : une alerte présente dans l'application, testée,
+et qui ne se déclenche **jamais** — sauf que cette fois personne ne s'en
+apercevrait, puisque le registre se remplirait quand même.
+
+⚠️ **`speed_grave_kmh` NE SE MONTRE PAS AU CHAUFFEUR.** C'est le seuil qui
+réveille le support, pas un second niveau d'alerte à dessiner. **N'écrivez pas
+« le support a été prévenu »** : la plateforme ne sanctionne rien, et une
+menace qui n'arrive jamais use la crédibilité des alertes qui comptent. Il est
+**toujours au-dessus** de `speed_limit_kmh` — le serveur refuse l'inverse à
+l'écriture.
+
+⚠️ **ET RIEN DU REGISTRE NE VOUS EST SERVI** : ni la liste des constats, ni un
+compteur, ni une route pour les lire. Ce que le support voit n'a aucune surface
+d'application, et ce n'est pas un oubli.
 
 #### Les deux formes que le contrat nommait sans les décrire (v4.33.0)
 
@@ -3836,6 +3896,151 @@ Reste dû : 0 F »). Un contrat rendu où rien ne reste dû passe `completed`.
 
 ---
 
+## 🚗 LA VOITURE DE DIRA — la flotte interne (v4.73.0) — **SOCLE** (sans `/vtc`)
+
+> Dira **possède** des véhicules et les **confie** contre une **redevance**.
+>
+> ⚠️ **CE N'EST PAS UNE SOCIÉTÉ PARTENAIRE.** Un véhicule de Dira ne prélève
+> **aucune part** sur ce que vous gagnez : son revenu est sa redevance, et elle
+> seule. Si un écran affiche les deux, il compte deux fois la même chose.
+>
+> ⚠️ **ET CE N'EST PAS UN ACHAT.** C'est une **location**, tenue par le **même**
+> contrat et le **même** échéancier que le matériel (§6 bis) : ce que vous
+> devez est **retenu sur vos gains**, dans la **même** enveloppe et sous le
+> **même** plafond. Pas une seconde dette.
+
+```
+GET /me/fleet-vehicles → { items: [ … ] }      le véhicule qui m'est confié, et ce que je dois
+```
+
+Rôle `driver`. ⚠️ **Sans borne de pays** : c'est le compte connecté qui désigne
+ses véhicules — quelqu'un en déplacement doit pouvoir lire ce qu'il doit.
+
+```jsonc
+{ "items": [ {
+  "id": "…", "country": "GA", "fleet_id": "…", "class_key": "berline",
+  "verticals": [ "vtc" ],          // vide = les deux métiers
+  "plate": "GA-1234-AB", "brand": "Toyota", "model": "Corolla",
+  "color": "gris", "year": 2019, "seats": 4, "odometer_km": 182400,
+  "photos": [ "https://…" ],
+  "insurance_expires_at": "2027-02-01T00:00:00Z",
+  "technical_expires_at": "2026-11-30T00:00:00Z",
+  "status": "assigned",                 // available · assigned · maintenance · retired
+  "label": "Toyota Corolla · GA-1234-AB",
+  "terms": { "fee_xof": 7000, "period": "weekly", "deposit_xof": 50000, "days": 90,
+             "included": [ "maintenance", "insurance" ],
+             "excluded": [ "repairs", "fuel", "tracker" ] },
+  "contract_id": "…", "assigned_at": "2026-10-01T08:12:00Z",
+  "fee": { "contract_id": "…", "status": "active",
+           "fee_xof": 7000, "period": "weekly", "deposit_xof": 50000,
+           "paid_xof": 21000, "outstanding_xof": 7000, "due_xof": 7000,
+           "overdue_since": null, "blocked": false,
+           "ends_at": "2026-12-30T00:00:00Z", "term_over": false,
+           "included": [ "maintenance", "insurance" ],
+           "handed_at": "2026-10-01T09:40:00Z" },
+  "attention": [ ]
+} ] }
+```
+
+### ⚠️⚠️ `terms` N'EST PAS CE QUE VOUS PAYEZ — `fee` l'est
+
+`terms` sont les conditions **de la fiche du véhicule** : un **défaut**, pour la
+prochaine attribution. `fee` est ce que **votre contrat** porte, figé le jour où
+on vous l'a confié.
+
+**Affichez `fee`.** Le jour où l'exploitation met le parc à jour, un écran qui
+lit `terms` annonce un loyer que personne ne vous demande — et c'est le genre de
+chiffre qu'on croit, puis qu'on conteste.
+
+⚠️ **`fee` PEUT ÊTRE ABSENT alors que le véhicule vous est confié.** Ce n'est
+pas « rien à payer » : c'est le signe qu'un contrat manque. Le serveur le dit
+dans `attention` (`assigned_no_fee`) — **ne l'affichez pas comme un solde à
+zéro**, dites « redevance introuvable, contactez Dira ».
+
+### `attention[]` — ce qui demande un geste, **calculé par le serveur**
+
+| Code | Ce que ça veut dire |
+|---|---|
+| `fee_overdue` | une échéance de redevance est en retard |
+| `agent_blocked` | votre mise en ligne est bloquée — ⚠️ **le MÊME blocage que le matériel** (`402 equipment_overdue`), pas un second |
+| `term_over` | la durée convenue est passée |
+| `not_handed` | confié, **jamais remis** : la redevance n'a pas commencé |
+| `insurance_expired` | assurance périmée |
+| `technical_expired` | visite technique périmée |
+| `assigned_no_fee` | confié sans redevance lisible — anomalie, à signaler |
+
+⚠️ **NE LE RECALCULEZ PAS.** Deux écrans qui comptent eux-mêmes ne comptent
+jamais pareil, et l'exploitation doit dire à la même personne la même chose que
+son téléphone. Liste vide = rien à faire.
+
+### ⚠️ `included` ET `excluded` : LES DEUX FACES VIENNENT DU SERVEUR
+
+`maintenance` · `repairs` · `insurance` · `fuel` · `tracker`.
+
+**Affichez les deux listes**, pas seulement ce qui est inclus. « Inclus :
+entretien » laisse croire que l'assurance l'est aussi, et la question se pose
+pour de bon le jour de la panne — devant quelqu'un qui n'a pas écrit la liste.
+Ce qui est dans `excluded` est **à votre charge**.
+
+### ⚠️ LA REDEVANCE COMMENCE À LA REMISE, PAS À L'ATTRIBUTION
+
+Une voiture ne se tend pas par-dessus un comptoir : elle se remet avec un état
+des lieux, des clés et des papiers. La remise est donc le **même geste prouvé**
+que le matériel — le **QR scanné au comptoir** (`POST /equipment/handover
+{ code }`) —, et c'est elle qui lance l'échéancier.
+
+Tant que `handed_at` est nul, **vous ne devez rien** : `attention` porte
+`not_handed`. N'affichez pas d'échéance à payer sur un véhicule qu'on ne vous a
+pas encore remis.
+
+Le retour se scanne de la même façon (`POST /equipment/return { code }`).
+
+### Le contrat lui-même est dans `GET /me/equipment`
+
+Un véhicule de Dira y est un contrat de location **comme un autre**, avec ses
+lignes, ses paiements et ses retenues — **deux nouveautés seulement** :
+
+```jsonc
+{ "item_kind": "vehicle",        // ⚠️ et PAS d'`item_id` : un véhicule n'est pas un article
+   "asset_id": "…",
+   "asset_label": "Toyota Corolla · GA-1234-AB",   // figé à l'ouverture
+   "included": [ "maintenance", "insurance" ],
+   "term_over": false }
+```
+
+⚠️ **NE CHERCHEZ PAS LE VÉHICULE DANS LE CATALOGUE** (`GET
+/equipment/catalogue`) : il n'y est pas, et c'est délibéré. Il n'y a pas « des
+Corolla » en stock, il y a **LA** Corolla GA-1234-AB. Un écran qui attend un
+`item_id` affichera un contrat vide.
+
+⚠️ **`asset_label` EST FIGÉ À L'OUVERTURE DU CONTRAT.** Une plaque change
+(réimmatriculation, revente) et un contrat se relit deux ans plus tard : c'est
+le libellé du contrat qui fait foi, pas la fiche du parc.
+
+⚠️ **`term_over` NE FERME RIEN.** La durée convenue est passée, le véhicule
+reste le vôtre jusqu'à ce que l'exploitation le reprenne — et la redevance
+continue de courir. N'écrivez **pas** « contrat terminé » : écrivez « durée
+dépassée, Dira va reprendre le véhicule ».
+
+### Ce que vous **ne** faites **pas** depuis l'application
+
+Confier, rendre au parc, changer un état, écrire des notes : **rien de tout
+cela** n'a de route pour vous. Les refus ci-dessous existent côté exploitation
+et **n'arriveront jamais** sur votre écran — ils sont nommés ici pour que
+personne ne les implémente :
+`own_fleet_vehicle_not_found` · `own_fleet_plate_taken` ·
+`own_fleet_vehicle_busy` · `own_fleet_vehicle_not_assigned` ·
+`own_fleet_vehicle_assigned` · `own_fleet_vehicle_retired` ·
+`own_fleet_vertical_not_offered` · `own_fleet_not_a_driver` ·
+`own_fleet_contract_open` · `own_fleet_unavailable`.
+
+⚠️ **ET `holder_name` ET `notes` NE VOUS SONT PAS SERVIS.** Vous savez qui vous
+êtes, et les notes du parc sont des échanges internes (« à surveiller », « rendu
+sale ») : les servir aurait fait lire à quelqu'un ce qu'on écrit sur lui. Un
+champ absent n'est pas un champ vide à afficher.
+
+---
+
 ## 7. Ce que le SOCLE sert (sans `/vtc`)
 
 | | |
@@ -3843,7 +4048,7 @@ Reste dû : 0 F »). Un contrat rendu où rien ne reste dû passe `completed`.
 | `POST /auth/login` · `/auth/refresh` · `/auth/logout` | la session — ⚠️ la connexion porte `app: "driver"` depuis la v4.26.0 |
 | `GET · PATCH /me` | le profil |
 | `PATCH /me/preferences` | `locale` ∈ `fr` · `en` (autre : 422), `theme` |
-| `POST /uploads?kind=vehicle` · `?kind=avatar` | les photos — **v3.0.0** : les courses n'avaient **aucune** porte d'envoi, c'est désormais celle du socle, pour tout le monde |
+| `POST /uploads?kind=vehicle` · `?kind=avatar` · `?kind=document` | les photos et les pièces — **v3.0.0** : les courses n'avaient **aucune** porte d'envoi, c'est désormais celle du socle, pour tout le monde. ⚠️ **`document` est neuf (v4.73.0)** : c'est le seul genre de pièce qui accepte le **PDF** — voir les formats, §8 |
 | `GET /wallet` · `/wallet/transactions` | le portefeuille Dira |
 | `GET /equipment/catalogue` · `GET /me/equipment` · `POST /me/equipment/{id}/accept` | le **matériel** vendu, loué ou prêté par Dira — §6 bis (v4.11.0) |
 | `GET /me/notifications` · `POST /me/devices` | les notifications |
@@ -4408,6 +4613,12 @@ GET  /driver/documents                                       mon état de confor
 POST /driver/documents   { kind, file_url, vehicle_id?, expires_at? }
 ```
 
+🆕 ⚠️ **`file_url` VIENT DE `POST /uploads?kind=document` (v4.73.0), ET C'EST
+NOUVEAU.** Ce genre **n'existait pas** : les pièces partaient sous un genre
+prévu pour des photographies, donc **sans PDF possible** — alors qu'une
+attestation d'assurance ou un casier est un PDF neuf fois sur dix. Les formats
+de chaque genre sont au tableau ci-dessous.
+
 La réponse porte **quatre** champs, et il faut les quatre :
 
 ```json
@@ -4621,6 +4832,70 @@ quoi refaire — **affichez-le**).
 ⚠️ **Tout chauffeur déjà inscrit devient `compliant: false`** à l'arrivée des
 cinq pièces nouvelles. Prévoyez un écran qui liste ce qui manque et permette de
 tout envoyer en une fois.
+
+### 🆕 LES FORMATS DE TÉLÉVERSEMENT — un genre, ses formats, son plafond (v4.73.0)
+
+`POST /uploads?kind=…` n'accepte plus « des images » : **chaque genre a ses
+formats et son plafond**, et le refus nomme ceux **de ce genre-là**.
+
+| Genre | Formats acceptés | Plafond |
+|---|---|---|
+| `avatar` · `vehicle` · `dish` · `store` · `brand` · `banner` · `equipment` | jpeg, png, webp | **5 Mio** |
+| `feed` | jpeg, png, webp — vidéos : mp4, webm, mov (⚠️ **≤ 60 s**) | **60 Mio** |
+| `receipt` · `document` | jpeg, png, webp, **pdf** | **15 Mio** |
+| `class` · `marker` (pictogrammes, **exploitation seule**) | png, webp, **svg** | **512 Kio** |
+
+**Ce que cette application envoie : `avatar` (la photo de profil), `vehicle` (les photos d'une voiture), `document` (les pièces de conformité).**
+
+🆕 ⚠️ **`kind=document` MANQUAIT, ET C'EST LE CHANGEMENT QUI VOUS CONCERNE.** Les
+pièces de conformité n'avaient aucun genre à elles : elles passaient par un
+genre prévu pour des **photographies**, donc **sans PDF possible** — alors
+qu'une attestation d'assurance est un PDF neuf fois sur dix. Envoyez désormais
+toute pièce de conformité avec `?kind=document`.
+
+⚠️ **LE PDF N'EST ACCEPTÉ QUE LÀ** — `receipt` (pièce comptable) et `document`
+(pièce de conformité). Nulle part ailleurs : une photo de profil en PDF ne
+s'affiche dans aucune liste.
+
+⚠️ **LE SVG N'EST PLUS ACCEPTÉ HORS PICTOGRAMMES.** Il l'était partout, par une
+règle unique écrite pour toute la plateforme. Un SVG peut porter du script, et
+il n'a aucune raison d'être une photo.
+
+### 🆕 Les trois refus de la porte d'envoi, NOMMÉS (v4.73.0)
+
+| Code | Statut | Ce que la phrase porte | `fields` |
+|---|---|---|---|
+| `upload_kind_unknown` | `422` | la liste des genres acceptés | `kind` |
+| `upload_format_rejected` | `422` | les formats de **ce** genre | `file` |
+| `upload_too_large` | `422` | le plafond de **ce** genre, en Mio | `file` |
+
+⚠️ **AFFICHEZ LA PHRASE SERVIE, N'ÉCRIVEZ PAS LA LISTE EN DUR** : une liste
+recopiée dans l'application vieillit en silence au premier format ajouté.
+
+> ## ⚠️⚠️ CES TROIS CODES SONT NEUFS PARCE QUE LE REFUS ÉTAIT MUET
+>
+> Jusqu'au 24 octobre 2026, les trois répondaient
+> `{"code":"validation_failed","message":"Requête invalide"}` — **en français
+> comme en anglais**. Le détail (« kind must be one of… », « accepted: jpeg,
+> png, webp, pdf ») vivait dans le message de l'erreur, et **l'enveloppe
+> remplace ce message par la phrase traduite du code** : tout ce qui n'y figure
+> pas est perdu en route. C'était du texte mort, lisible seulement dans les
+> journaux du serveur, pendant que quelqu'un au comptoir cherchait pourquoi son
+> attestation d'assurance ne passait pas.
+>
+> **Si votre écran affiche encore « Requête invalide » sur un envoi refusé,
+> c'est qu'il lit l'ancien code.**
+
+⚠️ **`upload_too_large` COUVRE AUSSI UN CORPS MULTIPART ILLISIBLE**, et le dit
+comme une taille — c'est indiscernable côté serveur. Entre « votre fichier est
+trop gros » sur un corps cassé et « requête invalide » sur un fichier trop gros,
+**la première se corrige**.
+
+⚠️ **UN `kind` INCONNU EST REFUSÉ.** N'en inventez pas, et ne réutilisez pas
+celui d'un autre écran parce qu'il « passe » : le plafond et les formats suivent
+le genre.
+
+---
 
 ### ❌ Les statistiques « depuis », « taux d'acceptation », « heures en ligne »
 

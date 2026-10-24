@@ -1,6 +1,6 @@
 # PARTENAIRE — PROPRIÉTAIRE DE FLOTTE PRIVÉE — contrat d'API
 
-> **Version 4.72.0** · 24 octobre 2026
+> **Version 4.73.0** · 24 octobre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Courses : `https://api-staging.dira.llc/api/v1/vtc`
 > Console en service : `https://partner-staging.dira.llc`
 >
@@ -455,13 +455,36 @@ GET /partner/me        (socle)
 }
 ```
 
-**Appelez-la en premier, après la connexion, et traitez ses deux refus comme des
+**Appelez-la en premier, après la connexion, et traitez ses refus comme des
 écrans pleins — pas comme des pannes :**
 
 | Code | Statut | Ce que l'écran doit dire |
 |---|---|---|
 | `partner_no_fleet` | `403` | « Aucune flotte n'est encore rattachée à ce compte. Demandez à Dira d'y rattacher votre contrat. » |
 | `partner_fleet_suspended` | `403` | « Le contrat de cette flotte est suspendu : contactez Dira. **Vos chauffeurs, eux, continuent de travailler.** » |
+| 🆕 `partner_fleet_internal` | `403` | « Cette flotte appartient à Dira : elle se gère depuis la flotte interne, pas depuis cette console. » (v4.73.0) |
+
+### 🆕 ⚠️ `partner_fleet_internal` — la flotte de Dira n'est pas une société partenaire (v4.73.0)
+
+Dira possède désormais des véhicules **en propre**, confiés à des chauffeurs
+contre une **redevance**. Ils vivent dans une flotte marquée *interne*, créée une
+fois par pays, **sans contrat et sans commission**.
+
+⚠️ **UN COMPTE PARTENAIRE RATTACHÉ À CETTE FLOTTE SE VOIT REFUSER TOUTE LA
+SURFACE**, et pas seulement un écran : la porte elle-même refuse, donc chaque
+route de cette console répond `403`. **Traitez-le comme `partner_no_fleet`** —
+un écran plein, une phrase, aucun bouton — et surtout **ne réessayez pas en
+boucle**.
+
+⚠️ **CE REFUS VAUT PLUS QU'UN CLOISONNEMENT D'ÉCRANS.** Cette surface porte
+`PUT /vtc/partner/drivers/{driverID}/pay`, le **seul** chemin d'écriture des termes de
+paie. Ouverte sur une flotte interne, elle aurait fait prélever à Dira **une
+part de chaque course en plus de la redevance du véhicule** — deux fois le même
+revenu, et rien pour le signaler puisque les deux nombres sont plausibles. Le
+revenu d'un véhicule de Dira est **sa redevance, et elle seule**.
+
+⚠️ **ET IL PASSE AVANT LE CONTRÔLE DE SUSPENSION** : une flotte interne est
+`active`, donc le contrôle de statut l'aurait laissée entrer.
 
 ⚠️ **LA SECONDE PHRASE DE `partner_fleet_suspended` N'EST PAS DÉCORATIVE.** Un
 propriétaire qui lit « contrat suspendu » croit que ses voitures sont arrêtées et
@@ -1108,6 +1131,76 @@ POST /vtc/partner/compliance/documents
   "expires_at": "2027-03-31"
 }
 ```
+
+🆕 ⚠️ **`file_url` VIENT DE `POST /uploads?kind=document` (v4.73.0), ET C'EST
+NOUVEAU.** Ce genre **n'existait pas** : les pièces partaient sous un genre
+prévu pour des **photographies**, donc **sans PDF possible** — alors qu'une
+attestation d'assurance ou une carte grise scannée est un PDF neuf fois sur dix.
+
+### 🆕 LES FORMATS DE TÉLÉVERSEMENT — un genre, ses formats, son plafond (v4.73.0)
+
+`POST /uploads?kind=…` n'accepte plus « des images » : **chaque genre a ses
+formats et son plafond**, et le refus nomme ceux **de ce genre-là**.
+
+| Genre | Formats acceptés | Plafond |
+|---|---|---|
+| `avatar` · `vehicle` · `dish` · `store` · `brand` · `banner` · `equipment` | jpeg, png, webp | **5 Mio** |
+| `feed` | jpeg, png, webp — vidéos : mp4, webm, mov (⚠️ **≤ 60 s**) | **60 Mio** |
+| `receipt` · `document` | jpeg, png, webp, **pdf** | **15 Mio** |
+| `class` · `marker` (pictogrammes, **exploitation seule**) | png, webp, **svg** | **512 Kio** |
+
+**Ce que cette application envoie : `document` (les pièces de la société et de ses véhicules), `vehicle` (les photos d'une voiture), `avatar` (la photo du compte).**
+
+🆕 ⚠️ **`kind=document` MANQUAIT, ET C'EST LE CHANGEMENT QUI VOUS CONCERNE.** Les
+pièces de conformité n'avaient aucun genre à elles : elles passaient par un
+genre prévu pour des **photographies**, donc **sans PDF possible** — alors
+qu'une attestation d'assurance est un PDF neuf fois sur dix. Envoyez désormais
+toute pièce de conformité avec `?kind=document`.
+
+⚠️ **LE PDF N'EST ACCEPTÉ QUE LÀ** — `receipt` (pièce comptable) et `document`
+(pièce de conformité). Nulle part ailleurs : une photo de profil en PDF ne
+s'affiche dans aucune liste.
+
+⚠️ **LE SVG N'EST PLUS ACCEPTÉ HORS PICTOGRAMMES.** Il l'était partout, par une
+règle unique écrite pour toute la plateforme. Un SVG peut porter du script, et
+il n'a aucune raison d'être une photo.
+
+### 🆕 Les trois refus de la porte d'envoi, NOMMÉS (v4.73.0)
+
+| Code | Statut | Ce que la phrase porte | `fields` |
+|---|---|---|---|
+| `upload_kind_unknown` | `422` | la liste des genres acceptés | `kind` |
+| `upload_format_rejected` | `422` | les formats de **ce** genre | `file` |
+| `upload_too_large` | `422` | le plafond de **ce** genre, en Mio | `file` |
+
+⚠️ **AFFICHEZ LA PHRASE SERVIE, N'ÉCRIVEZ PAS LA LISTE EN DUR** : une liste
+recopiée dans l'application vieillit en silence au premier format ajouté.
+
+> ## ⚠️⚠️ CES TROIS CODES SONT NEUFS PARCE QUE LE REFUS ÉTAIT MUET
+>
+> Jusqu'au 24 octobre 2026, les trois répondaient
+> `{"code":"validation_failed","message":"Requête invalide"}` — **en français
+> comme en anglais**. Le détail (« kind must be one of… », « accepted: jpeg,
+> png, webp, pdf ») vivait dans le message de l'erreur, et **l'enveloppe
+> remplace ce message par la phrase traduite du code** : tout ce qui n'y figure
+> pas est perdu en route. C'était du texte mort, lisible seulement dans les
+> journaux du serveur, pendant que quelqu'un au comptoir cherchait pourquoi son
+> attestation d'assurance ne passait pas.
+>
+> **Si votre écran affiche encore « Requête invalide » sur un envoi refusé,
+> c'est qu'il lit l'ancien code.**
+
+⚠️ **`upload_too_large` COUVRE AUSSI UN CORPS MULTIPART ILLISIBLE**, et le dit
+comme une taille — c'est indiscernable côté serveur. Entre « votre fichier est
+trop gros » sur un corps cassé et « requête invalide » sur un fichier trop gros,
+**la première se corrige**.
+
+⚠️ **UN `kind` INCONNU EST REFUSÉ.** N'en inventez pas, et ne réutilisez pas
+celui d'un autre écran parce qu'il « passe » : le plafond et les formats suivent
+le genre.
+
+---
+
 
 ### ⚠️ Six types, et SIX SEULEMENT
 
