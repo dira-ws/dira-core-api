@@ -118,6 +118,17 @@ func settledAfter(a *Adjustment, take int) bool {
 	if a.Recurring {
 		return false
 	}
+	// ⚠️⚠️ UNE LIGNE QUI N'A RIEN PRIS NE SOLDE RIEN, ET C'ÉTAIT UN DÉFAUT
+	// D'ARGENT. Une retenue en POURCENTAGE se solde au nombre d'échéances
+	// déclaré, sans regarder ce qu'elle a réellement pris : bornée à zéro par
+	// le plancher, elle se refermait en ayant tout reporté sur une fiche que
+	// plus aucune paie n'allait lire. La personne lisait « reporté : 10 000 »
+	// et ne devait plus rien — ce qui est la bonne nouvelle du mauvais côté :
+	// c'est l'entreprise qui perdait la retenue, en silence, et le mot
+	// « reporté » devenait faux.
+	if take <= 0 {
+		return false
+	}
 	if a.Percent > 0 {
 		// Un pourcentage n'a pas de total : il s'épuise au nombre de paies
 		// déclaré.

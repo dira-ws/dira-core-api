@@ -297,6 +297,21 @@ func (r *Repository) ReleaseAdjustments(ctx context.Context, runID primitive.Obj
 // ⚠️ AU VERSEMENT, ET NON À LA PRÉPARATION. Un brouillon peut être abandonné :
 // une retenue comptée comme « prise » par une paie jamais versée aurait disparu
 // des suivantes, et la dette se serait effacée toute seule.
+// incOf rend ce qu'un passage de paie incrémente sur son ajustement.
+//
+// ⚠️ UNE ÉCHÉANCE NE SE CONSOMME QUE SI ELLE A PRIS QUELQUE CHOSE. Le compteur
+// `runs` est ce qui épuise une retenue en pourcentage (`eligible`) et ce qui
+// répartit le reste d'un échéancier (`plannedShare`) : l'incrémenter sur un
+// passage borné à zéro par le plancher faisait disparaître une retenue qui
+// n'avait rien prélevé — voir `settledAfter`.
+func incOf(ap Applied) bson.M {
+	inc := bson.M{"taken": ap.Amount}
+	if ap.Amount > 0 {
+		inc["runs"] = 1
+	}
+	return inc
+}
+
 func (r *Repository) ConsumeAdjustments(ctx context.Context, applied []Applied, at time.Time) error {
 	for _, ap := range applied {
 		set := bson.M{"updated_at": at}
@@ -305,7 +320,7 @@ func (r *Repository) ConsumeAdjustments(ctx context.Context, applied []Applied, 
 			set["settled_at"] = at
 		}
 		update := bson.M{
-			"$inc": bson.M{"taken": ap.Amount, "runs": 1},
+			"$inc": incOf(ap),
 			"$set": set,
 			// La réservation est consommée : l'ajustement n'appartient plus à
 			// une paie en cours.

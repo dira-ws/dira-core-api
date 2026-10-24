@@ -261,3 +261,50 @@ func TestARunTotalsItsOwnSlips(t *testing.T) {
 }
 
 func mustSlip(slip Payslip, _ []Applied) Payslip { return slip }
+
+// ⚠️⚠️ UNE RETENUE BORNÉE À ZÉRO NE SE REFERME PAS, ET C'ÉTAIT UN DÉFAUT.
+//
+// Une retenue en POURCENTAGE s'épuise au nombre d'échéances déclaré. Quand le
+// plancher ne laisse aucune place — parce qu'une retenue plus ancienne a pris
+// toute la marge —, elle passait quand même pour consommée : la fiche disait
+// « reporté », l'ajustement se soldait, et plus aucune paie ne revenait le
+// chercher. L'entreprise perdait la retenue sans qu'une ligne ne le dise.
+func TestADeductionThatTookNothingIsNotSettled(t *testing.T) {
+	set := DefaultSettings("GA") // 30 % au plus → 30 000 de place sur 100 000
+	e := employee(100_000)
+	older := adjustment(KindDeduction, 30_000, 0, day(2026, 3, 2)) // prend toute la place
+	percent := adjustment(KindDeduction, 0, 10, day(2026, 3, 3))   // 10 000 visés, rien de disponible
+
+	slip, applied := buildPayslip(e, []Adjustment{older, percent}, &set, march)
+
+	require.Len(t, applied, 2)
+	assert.EqualValues(t, 30_000, slip.Deductions)
+	assert.EqualValues(t, 10_000, slip.Carried, "les 10 000 sont reportés")
+
+	var floored Applied
+	for _, ap := range applied {
+		if ap.AdjustmentID == percent.ID {
+			floored = ap
+		}
+	}
+	assert.Equal(t, 10_000, floored.Planned)
+	assert.Zero(t, floored.Amount, "le plancher n'a rien laissé passer")
+	assert.False(t, floored.Settled, "une retenue qui n'a rien pris ne se solde pas")
+
+	// Et elle revient sur la paie suivante : ce que `ConsumeAdjustments` écrit
+	// d'un passage à zéro ne touche ni le compteur d'échéances ni le statut.
+	percent.Taken += floored.Amount
+	assert.True(t, eligible(&percent, day(2026, 5, 1)), "la retenue reportée revient")
+}
+
+// Et le compteur d'échéances ne bouge pas non plus : c'est lui qui épuise une
+// retenue en pourcentage, et le document écrit est ce qui compte.
+func TestAZeroPassDoesNotBurnAnInstalment(t *testing.T) {
+	inc := incOf(Applied{AdjustmentID: primitive.NewObjectID(), Planned: 10_000, Amount: 0})
+	assert.NotContains(t, inc, "runs", "rien n'a été pris : aucune échéance consommée")
+	assert.EqualValues(t, 0, inc["taken"])
+
+	inc = incOf(Applied{AdjustmentID: primitive.NewObjectID(), Planned: 10_000, Amount: 4_000})
+	assert.EqualValues(t, 1, inc["runs"])
+	assert.EqualValues(t, 4_000, inc["taken"])
+}
