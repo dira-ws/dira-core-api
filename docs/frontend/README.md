@@ -1,6 +1,6 @@
 # Specs frontend — par rôle
 
-> **Version 4.73.0** · 24 octobre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics`
+> **Version 4.74.0** · 24 octobre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics`
 
 **Cinq** documents, un par application. Chacun est **autonome** : tout ce qu'un frontend doit savoir pour son rôle, sans avoir à ouvrir les vingt specs de modules.
 
@@ -355,6 +355,46 @@ Chaque document porte la même version en en-tête, et son propre journal des ch
 - [ ] ⚠️ **`TRACKING_JWT_SECRET` renseigné dans chaque environnement déployé.** Vide, l'authentification du service de suivi est **désactivée** : n'importe qui connaissant un `delivery_id` suit la course. Le secret doit valoir **exactement** le `JWT_SECRET` de `dira-food-api`.
 
 ## Journal
+
+### 4.74.0 — 24 octobre 2026
+
+🛰️ **LE RADAR DU PASSAGER — les voitures libres autour de lui, AVANT la
+commande** — `VTC-CLIENT.md`, `DIRA-CLIENT.md`. Demandé par le propriétaire :
+« si un config est activé sur le dashboard, afficher en temps réel la position
+des chauffeurs dans son rayon d'appel sur la map du client, de façon
+automatique ou à la demande ».
+
+```
+GET /vtc/nearby-drivers?lng=&lat=
+→ { enabled, mode, refresh_s, radius_m,
+    drivers: [ { position, type, distance_m } ], count, as_of }
+```
+
+- ⚠️⚠️ **CE SONT LES VOITURES QUE LE DISPATCH APPELLERAIT, pas celles du
+  quartier** : même vivier, même rayon — et le rayon **maximum** quand il est
+  fluide, sans quoi l'écran cacherait des voitures que l'appel finira par
+  joindre. Ne dessinez aucune autre source.
+- ⚠️⚠️ **ET L'INVERSE EST FAUX : une liste vide n'est pas « personne ne
+  viendra ».** Le dispatch cherche plus loin et plus longtemps que le radar ne
+  montre. **Laissez commander.**
+- ⚠️⚠️ **AUCUN CHAUFFEUR N'EST IDENTIFIÉ**, pas même par un identifiant
+  d'affichage : un point porte `position`, `type`, `distance_m` et rien
+  d'autre. Deux balayages **ne se recollent pas** — dessinez un **état**, jamais
+  un mouvement, et ne suivez pas « la voiture la plus proche ». Un radar qui
+  numérote ses points est un traceur de chauffeurs, et les chauffeurs n'ont
+  rien choisi : c'est l'exact inverse du partage de trajet.
+- ⚠️ **`enabled: false` → l'écran n'existe pas** : ni carte vide, ni bouton
+  grisé. C'est le **défaut de la plateforme**, et la route répond `200` pour que
+  l'application cache l'écran **sans** traiter de panne.
+- ⚠️ **Trois champs qui se lisent de travers** : `type` sert au **pictogramme**
+  (ce n'est ni la classe tarifaire ni le mode — une voiture libre n'a pas de
+  mode) ; `distance_m` est à **vol d'oiseau** et n'autorise aucune durée ;
+  `count` est le nombre **servi**, borné — « 12 voitures disponibles » est faux
+  dès la treizième.
+- `mode: "auto"` → balayez en respectant **`refresh_s`** (un minimum, pas une
+  cadence) et **suspendez** quand la carte n'est pas à l'écran ;
+  `mode: "on_demand"` → **aucun** balayage spontané.
+- `403` pour un **chauffeur** : il verrait ses concurrents en direct.
 
 ### 4.73.0 — 24 octobre 2026
 
