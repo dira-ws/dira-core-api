@@ -41,6 +41,7 @@ import (
 	"github.com/kgtech-org/dira-core-api/internal/indexes"
 	"github.com/kgtech-org/dira-core-api/internal/marker"
 	"github.com/kgtech-org/dira-core-api/internal/notify"
+	"github.com/kgtech-org/dira-core-api/internal/ownfleet"
 	"github.com/kgtech-org/dira-core-api/internal/payment"
 	"github.com/kgtech-org/dira-core-api/internal/payout"
 	"github.com/kgtech-org/dira-core-api/internal/promocode"
@@ -525,6 +526,32 @@ func run(logger *slog.Logger) error {
 	equipmentSvc.SetFleets(equipFleets{svc: fleetSvc})
 	// La base des liens profonds du QR de remise — vide = lien relatif.
 	equipmentSvc.SetHandoverLinkBase(cfg.AppLinkBase)
+
+	// LA FLOTTE INTERNE — les véhicules que DIRA POSSÈDE et confie à un
+	// chauffeur ou à un livreur contre une REDEVANCE.
+	//
+	// ⚠️⚠️ TROIS BRANCHEMENTS, ET CHACUN DIT LA CONCEPTION :
+	//
+	//  1. `SetFleets` : une flotte interne EST une flotte, marquée `internal`.
+	//     Le propriétaire d'un véhicule de Dira est donc une société comme une
+	//     autre pour le reste de la plateforme — `vehicles.fleet_id` suffit, et
+	//     rien n'a été dupliqué.
+	//  2. `SetRedevance(equipmentSvc)` : la redevance EST un contrat de
+	//     location du matériel. Il n'y a qu'un moteur de retenue sur les gains
+	//     sur cette plateforme, et une voiture n'en mérite pas un second — deux
+	//     moteurs auraient chacun respecté le minimum laissé à l'agent, et
+	//     l'agent serait rentré avec zéro.
+	//  3. `equipmentSvc.SetAssets(ownFleetSvc)` : LE CHEMIN INVERSE. Quand le
+	//     contrat se termine — rendu, impayé, annulé —, le véhicule revient au
+	//     parc. C'est la branche qui manquait au rattachement de flotte des
+	//     courses, et son absence est restée invisible longtemps parce que les
+	//     écrans paraissaient normaux.
+	ownFleetSvc := ownfleet.NewService(ownfleet.NewRepository(mongo))
+	ownFleetSvc.SetFleets(ownFleetFleets{svc: fleetSvc})
+	ownFleetSvc.SetRedevance(equipmentSvc)
+	ownFleetSvc.SetAccounts(ownFleetAccounts{svc: userSvc})
+	ownFleetSvc.SetAuditor(auditRec)
+	equipmentSvc.SetAssets(ownFleetSvc)
 	go func() {
 		t := time.NewTicker(time.Minute)
 		defer t.Stop()
@@ -758,6 +785,10 @@ func run(logger *slog.Logger) error {
 		// société possédera des motos de livraison, cette ligne devra lire la
 		// verticale de la flotte — et c'est ici qu'on le verra.
 		equipHandler.MountPartner(r, authMW, "vtc")
+		// LA FLOTTE INTERNE : le parc de Dira, les attributions et les
+		// redevances. ⚠️ AUCUNE route de cycle de vie ici — accepter, remettre,
+		// rendre, payer passent par le module du matériel, une seule fois.
+		ownfleet.NewHandler(ownFleetSvc).Mount(r, authMW)
 		// LE BOUTON D'ALERTE : `POST /sos` pour qui est en danger,
 		// `/admin/sos` pour l'exploitation qui doit le voir dans la seconde.
 		sos.NewHandler(sosSvc).Mount(r, authMW)
@@ -990,6 +1021,42 @@ func (f equipFleets) MemberFleet(ctx context.Context, userID string) (string, st
 		return "", "", "", err
 	}
 	return fl.ID.Hex(), fl.Name, role, nil
+}
+
+// ownFleetFleets répond à la FLOTTE INTERNE : quel propriétaire pour les
+// véhicules de Dira.
+//
+// ⚠️ LA TRADUCTION VIT AU CÂBLAGE, comme pour le matériel : `internal/ownfleet`
+// ignore ce qu'est une flotte, `internal/fleet` ignore qu'une redevance existe.
+type ownFleetFleets struct{ svc *fleet.Service }
+
+func (f ownFleetFleets) EnsureInternal(ctx context.Context) (string, error) {
+	fl, err := f.svc.EnsureInternal(ctx)
+	if err != nil {
+		return "", err
+	}
+	return fl.ID, nil
+}
+
+// ownFleetAccounts : ce que la flotte interne doit savoir d'une personne — son
+// pays (la monnaie de la redevance), son rôle (on confie une voiture à un
+// conducteur) et son nom (la ligne d'un écran).
+type ownFleetAccounts struct{ svc *user.Service }
+
+func (a ownFleetAccounts) CountryOf(ctx context.Context, userID string) (string, error) {
+	return a.svc.CountryOf(ctx, userID)
+}
+
+func (a ownFleetAccounts) RoleOf(ctx context.Context, userID string) (string, error) {
+	row, err := a.svc.AccountByID(ctx, userID)
+	if err != nil || row == nil {
+		return "", err
+	}
+	return row.Role, nil
+}
+
+func (a ownFleetAccounts) UserNames(ctx context.Context, ids []string) (map[string]string, error) {
+	return a.svc.UserNames(ctx, ids)
 }
 
 // fleetIdentities nomme le personnel d'une flotte.

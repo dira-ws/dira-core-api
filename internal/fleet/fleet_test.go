@@ -1,8 +1,10 @@
 package fleet
 
 import (
-	"github.com/go-chi/chi/v5"
+	"encoding/json"
 	"net/http"
+
+	"github.com/go-chi/chi/v5"
 	"sort"
 	"strings"
 	"testing"
@@ -202,4 +204,65 @@ func TestTheFleetIsFoundByOwnerOrByStaff(t *testing.T) {
 	require.Len(t, clauses, 2)
 	assert.Equal(t, uid, clauses[0]["owner_user_id"])
 	assert.Equal(t, uid, clauses[1]["members.user_id"])
+}
+
+// --- LA FLOTTE INTERNE — la flotte de Dira elle-même -------------------------
+
+// ⚠️⚠️ L'ÉPREUVE DE LA PORTE FERMÉE. Une flotte interne est une flotte, pour
+// que la propriété d'un véhicule reste un seul sujet — mais son ARGENT n'est pas
+// celui d'une société partenaire. La console partenaire porte
+// `PUT /partner/drivers/{id}/pay`, le SEUL chemin d'écriture des termes de
+// paie : ouverte sur la flotte de Dira, elle aurait fait prendre une part de
+// CHAQUE COURSE en plus de la redevance du véhicule. Deux fois le même revenu,
+// et rien pour le signaler puisque les deux nombres sont plausibles.
+func TestThePartnerConsoleIsClosedOnDirasOwnFleet(t *testing.T) {
+	t.Run("la porte de lecture", func(t *testing.T) {
+		// ⚠️ UNE FLOTTE INTERNE EST `active` : le contrôle de suspension la
+		// laisserait passer, donc L'ORDRE DES GARDES EST LA GARDE.
+		err := partnerGate(&Fleet{Internal: true, Status: StatusActive})
+		require.Error(t, err)
+		assert.Equal(t, "partner_fleet_internal", apperr.From(err).Code)
+		assert.Equal(t, http.StatusForbidden, apperr.From(err).HTTPStatus,
+			"« interdit » et non « introuvable » : la flotte existe, elle ne se gère pas ici")
+
+		// Et les deux autres cas n'ont pas bougé.
+		assert.NoError(t, partnerGate(&Fleet{Status: StatusActive}))
+		assert.Equal(t, "partner_fleet_suspended",
+			apperr.From(partnerGate(&Fleet{Status: StatusSuspended})).Code)
+	})
+	t.Run("la fabrique de la clé", func(t *testing.T) {
+		// Ouvrir un accès, c'est provisionner un compte `partner` : sur la
+		// flotte de Dira, le geste est refusé là où il se décide.
+		_, err := accessPlan(&Fleet{
+			Internal: true, Name: "Dira GA",
+			ContactPhone: "+24101020304", ContactEmail: "ops@dira.llc",
+		})
+		require.Error(t, err, "⚠️ même avec un contact complet : ce n'est pas un problème de saisie")
+		assert.Equal(t, "fleet_internal_reserved", apperr.From(err).Code)
+	})
+}
+
+// ⚠️ LE MARQUEUR VOYAGE JUSQU'À LA CONSOLE, et elle en a besoin AVANT de
+// dessiner : la fiche d'une flotte interne n'a ni commission, ni contrat, ni
+// bouton « ouvrir l'accès ». Un bouton affiché puis refusé par le serveur a déjà
+// promis quelque chose.
+func TestTheInternalMarkerIsServed(t *testing.T) {
+	assert.False(t, toResponse(&Fleet{}).Internal, "une société ordinaire n'est pas la flotte de Dira")
+	assert.True(t, toResponse(&Fleet{Internal: true}).Internal)
+
+	raw, err := json.Marshal(toResponse(&Fleet{Internal: true, Status: StatusActive}))
+	require.NoError(t, err)
+	var got map[string]any
+	require.NoError(t, json.Unmarshal(raw, &got))
+	assert.Equal(t, true, got["internal"], "servi dans le JSON, pas seulement stocké")
+}
+
+// ⚠️ LE NOM DE LA FLOTTE INTERNE EST FIGÉ PAR LE CODE : il apparaît sur la ligne
+// de chaque véhicule de la plateforme, et deux exploitants qui l'écrivent à la
+// main écrivent deux noms. L'index unique sur le nom ferait d'ailleurs échouer
+// la seconde création sous un code qui parle d'homonymie, pas de réservation.
+func TestTheInternalFleetNameIsReserved(t *testing.T) {
+	assert.Equal(t, "Dira GA", InternalFleetName("GA"))
+	assert.NotEqual(t, InternalFleetName("GA"), InternalFleetName("GN"),
+		"une flotte interne PAR PAYS : la redevance se dit dans la monnaie de son pays")
 }

@@ -43,6 +43,36 @@ const (
 type Fleet struct {
 	ID   primitive.ObjectID `bson:"_id,omitempty"`
 	Name string             `bson:"name"`
+	// Internal marque LA FLOTTE DE DIRA — les véhicules que la plateforme
+	// possède ELLE-MÊME et confie à un chauffeur ou à un livreur contre une
+	// REDEVANCE. Voir `internal/ownfleet`.
+	//
+	// ⚠️⚠️ UNE FLOTTE INTERNE EST UNE FLOTTE, et c'est la décision de
+	// conception de tout le sujet. Une voiture qui appartient à Dira et une
+	// voiture qui appartient à Sodigaz posent la MÊME question au reste de la
+	// plateforme : à qui est ce véhicule, qui le conduit, et que montre-t-on
+	// sur sa ligne. Tout cela existe déjà — `vehicles.fleet_id`, la colonne
+	// « propriétaire » de la console, le détachement, la liste des conducteurs
+	// d'une flotte. En faire une notion séparée aurait dupliqué ces quatre
+	// chemins, et le cinquième — celui qu'on écrit l'an prochain — n'aurait
+	// été branché que sur l'un des deux.
+	//
+	// ⚠️⚠️ MAIS SON ARGENT N'EST PAS CELUI D'UNE FLOTTE PARTENAIRE, et c'est
+	// pourquoi un simple booléen ne suffit pas à s'en désintéresser. Ce qu'un
+	// chauffeur rend à Sodigaz est un accord entre eux deux : Dira
+	// l'enregistre (`FleetPay`) et ne prélève rien. La redevance d'un véhicule
+	// de Dira, elle, est DE L'ARGENT DE DIRA : elle se prélève, elle se
+	// retarde, elle bloque. Elle emprunte donc le moteur de prélèvement du
+	// matériel (`internal/equipment`) et non le partage de flotte — et ce
+	// champ est ce qui permet de REFUSER les deux à la fois.
+	//
+	// ⚠️ CONSÉQUENCE DIRECTE : la console partenaire est FERMÉE sur une flotte
+	// interne (voir `partner.go`). Y laisser entrer un compte aurait ouvert
+	// `PUT /partner/drivers/{id}/pay` — le seul chemin d'écriture de
+	// `FleetPay` — et Dira aurait alors pris une part de chaque course EN PLUS
+	// de la redevance, sans que rien ne le signale : les deux nombres sont
+	// plausibles.
+	Internal bool `bson:"internal,omitempty"`
 	// OwnerUserID est le COMPTE qui gère la flotte — celui qui se connecte,
 	// voit ses véhicules et ses conducteurs.
 	//
@@ -92,4 +122,22 @@ var (
 	errBadCommis = apperr.Validation("commission_bp must be between 0 and 10000")
 	errBadStatus = apperr.Validation("status must be active or suspended")
 	errEmptyName = apperr.Validation("name is required")
+	// errInternalReserved : la flotte interne ne s'enregistre pas comme une
+	// société.
+	//
+	// ⚠️ ELLE N'A NI CONTRAT, NI COMMISSION, NI GÉRANT À JOINDRE — Dira ne
+	// signe pas avec elle-même. Elle est créée par `EnsureInternal`, une fois
+	// par pays, et une seule chose la nomme : le pays. Laisser
+	// `POST /admin/fleets` la fabriquer aurait permis d'en créer deux, et la
+	// seconde aurait reçu des véhicules que la première ne montre pas.
+	errInternalReserved = apperr.Conflict("fleet_internal_reserved",
+		"the internal fleet is not registered here: it is created once per country")
 )
+
+// InternalFleetName nomme la flotte de Dira dans un pays.
+//
+// ⚠️ UN NOM FIGÉ PAR LE CODE, et non une saisie : il apparaît sur la ligne de
+// chaque véhicule de la plateforme, et deux exploitants qui l'écrivent à la
+// main écrivent deux noms. L'unicité du nom (index) ferait d'ailleurs échouer
+// la seconde création sans dire pourquoi.
+func InternalFleetName(cc string) string { return "Dira " + cc }

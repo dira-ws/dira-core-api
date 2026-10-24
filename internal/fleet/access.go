@@ -154,6 +154,14 @@ type accessPlanT struct {
 }
 
 func accessPlan(f *Fleet) (accessPlanT, error) {
+	// ⚠️⚠️ LA FLOTTE DE DIRA N'OUVRE AUCUN ACCÈS, et ce refus est ICI plutôt
+	// qu'au-dessus parce que c'est cette fonction qui est éprouvée : les deux
+	// décisions du geste tiennent dedans. Ouvrir un compte `partner` sur la
+	// flotte interne aurait donné à quelqu'un `PUT /partner/drivers/{id}/pay`
+	// — un partage de chaque course EN PLUS de la redevance du véhicule.
+	if f.Internal {
+		return accessPlanT{}, errInternalReserved
+	}
 	p := accessPlanT{
 		Phone: strings.TrimSpace(f.ContactPhone),
 		Email: strings.ToLower(strings.TrimSpace(f.ContactEmail)),

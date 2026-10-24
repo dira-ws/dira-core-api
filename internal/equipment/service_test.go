@@ -68,8 +68,16 @@ func (m *memStore) AdjustStock(_ context.Context, id primitive.ObjectID, delta i
 	it.Stock += delta
 	return nil
 }
+
+// ⚠️ LA DOUBLURE RESPECTE UN IDENTIFIANT DÉJÀ POSÉ, comme le dépôt. C'est ce
+// qui rend la double attribution d'un véhicule impossible : le registre des
+// biens réserve en INSCRIVANT l'identifiant du contrat, avant que ce contrat
+// existe. Une doublure qui l'écrasait — c'était le cas — faisait passer au vert
+// une réservation qui pointe un contrat inexistant.
 func (m *memStore) InsertContract(_ context.Context, c *Contract) error {
-	c.ID = primitive.NewObjectID()
+	if c.ID.IsZero() {
+		c.ID = primitive.NewObjectID()
+	}
 	c.CreatedAt = time.Now()
 	if c.Schedule == nil {
 		c.Schedule = []Line{}

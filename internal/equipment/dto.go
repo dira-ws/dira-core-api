@@ -188,14 +188,34 @@ type ContractResponse struct {
 	UserID    string `json:"user_id"`
 	UserName  string `json:"user_name,omitempty"`
 	Vertical  string `json:"vertical"`
-	ItemID    string `json:"item_id"`
-	ItemName  string `json:"item_name"`
-	ItemKind  string `json:"item_kind"`
-	Quantity  int    `json:"quantity"`
-	Serial    string `json:"serial,omitempty"`
-	Mode      string `json:"mode"`
-	Plan      Plan   `json:"plan"`
-	Status    string `json:"status"`
+	// ItemID : ABSENT sur un contrat de BIEN UNIQUE (une voiture de la flotte
+	// interne) — voir `asset_id`. ⚠️ Laisser l'identifiant nul s'écrire ferait
+	// vingt-quatre zéros, que la console afficherait comme un article.
+	ItemID   string `json:"item_id,omitempty"`
+	ItemName string `json:"item_name"`
+	ItemKind string `json:"item_kind"`
+	// AssetID et AssetLabel : LE BIEN UNIQUE loué — voir `asset.go`.
+	//
+	// ⚠️ SERVIS, parce que c'est ce qui permet à un écran de passer du contrat
+	// au véhicule : « cette redevance, c'est quelle voiture ? » est la première
+	// question posée devant la file des impayés.
+	AssetID    string `json:"asset_id,omitempty"`
+	AssetLabel string `json:"asset_label,omitempty"`
+	// Included : ce que la redevance COUVRE. ⚠️ Ce qui n'y est pas est à la
+	// charge de l'agent, et l'écran doit l'écrire DANS LES DEUX SENS : une
+	// liste « entretien » seule laisse croire que l'assurance est comprise.
+	Included []string `json:"included,omitempty"`
+	// EndsAt : la durée convenue. TermOver : elle est passée.
+	//
+	// ⚠️ `term_over` NE FERME RIEN — c'est l'exploitation qui reprend le
+	// véhicule. Voir `Contract.TermOver`.
+	EndsAt   *time.Time `json:"ends_at,omitempty"`
+	TermOver bool       `json:"term_over,omitempty"`
+	Quantity int        `json:"quantity"`
+	Serial   string     `json:"serial,omitempty"`
+	Mode     string     `json:"mode"`
+	Plan     Plan       `json:"plan"`
+	Status   string     `json:"status"`
 
 	PriceXOF   int `json:"price_xof"`
 	DepositXOF int `json:"deposit_xof"`
@@ -250,7 +270,9 @@ type ContractResponse struct {
 func toContract(c *Contract, now time.Time) ContractResponse {
 	resp := ContractResponse{
 		ID: c.ID.Hex(), Country: c.Country, UserID: c.UserID.Hex(), Vertical: c.Vertical,
-		ItemID: c.ItemID.Hex(), ItemName: c.ItemName, ItemKind: c.ItemKind, Quantity: c.Quantity, Serial: c.Serial,
+		ItemName: c.ItemName, ItemKind: c.ItemKind, Quantity: c.Quantity, Serial: c.Serial,
+		AssetLabel: c.AssetLabel, Included: c.Included,
+		EndsAt: c.EndsAt, TermOver: c.TermOver(now),
 		Mode: c.Mode, Plan: c.Plan, Status: c.Status, PriceXOF: c.PriceXOF, DepositXOF: c.DepositXOF,
 		OutstandingXOF: c.Outstanding(now, false), DueXOF: c.Outstanding(now, true), Blocked: c.Blocked(now),
 		Schedule: make([]LineResponse, 0, len(c.Schedule)), Payments: make([]PaymentResponse, 0, len(c.Payments)),
@@ -266,6 +288,15 @@ func toContract(c *Contract, now time.Time) ContractResponse {
 	// console afficherait comme un compte. On le laisse ABSENT.
 	if c.UserID.IsZero() {
 		resp.UserID = ""
+	}
+	// ⚠️ UN BIEN UNIQUE N'A PAS D'ARTICLE DE CATALOGUE : on laisse `item_id`
+	// ABSENT plutôt que de servir vingt-quatre zéros. Même règle que `user_id`
+	// sur un contrat de société.
+	if !c.ItemID.IsZero() {
+		resp.ItemID = c.ItemID.Hex()
+	}
+	if c.AssetID != nil {
+		resp.AssetID = c.AssetID.Hex()
 	}
 	if c.FleetID != nil {
 		resp.FleetID = c.FleetID.Hex()

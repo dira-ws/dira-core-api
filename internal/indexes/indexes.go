@@ -163,6 +163,39 @@ var applicationIndexes = []db.Index{
 	// La liste de l'administration, filtrée par état.
 	{Collection: "fleets", Keys: db.K("status", 1, "_id", -1)},
 	{Collection: "fleets", Keys: db.K("country", 1, "_id", -1)},
+	// ⚠️⚠️ UNE SEULE FLOTTE INTERNE PAR PAYS — LA FLOTTE DE DIRA. C'est cet
+	// index qui le garantit, et non une lecture « existe-t-elle ? » suivie d'une
+	// création : deux attributions traitées en même temps le jour de l'ouverture
+	// d'un pays passeraient toutes les deux, et la plateforme porterait deux
+	// flottes internes. Les véhicules de l'une seraient invisibles depuis
+	// l'autre, et personne ne saurait qu'il manque la moitié du parc.
+	//
+	// ⚠️ LE FILTRE PARTIEL PORTE SUR `internal: true`, ET LE CHAMP EST BIEN
+	// ÉCRIT quand il vaut `true` (`bson:"internal,omitempty"`) : c'est la
+	// condition pour qu'un index partiel verrouille réellement quelque chose —
+	// un filtre qui ne correspond à aucun document indexe le vide et laisse tout
+	// passer. Les flottes ORDINAIRES, elles, n'y entrent pas : sans quoi deux
+	// sociétés d'un même pays entreraient en collision.
+	{
+		Collection:    "fleets",
+		Keys:          db.K("country", 1),
+		Unique:        true,
+		PartialFilter: bson.D{{Key: "internal", Value: true}},
+	},
+	// --- LA FLOTTE INTERNE (internal/ownfleet) : les véhicules de Dira ---
+	//
+	// ⚠️ LA PLAQUE EST UNIQUE PAR PAYS, et c'est cet index qui le tient. Deux
+	// exploitants qui enregistrent la même livraison passeraient tous les deux
+	// un contrôle applicatif, et le parc porterait deux fois la même voiture :
+	// l'une confiée, l'autre « disponible » pour toujours.
+	{Collection: "own_fleet_assets", Keys: db.K("country", 1, "plate", 1), Unique: true},
+	{Collection: "own_fleet_assets", Keys: db.K("country", 1, "status", 1, "_id", -1)},
+	// Le véhicule d'une personne — la lecture de l'application de l'agent, qui
+	// n'est pas bornée par pays (c'est le compte connecté qui désigne).
+	{Collection: "own_fleet_assets", Keys: db.K("holder_user_id", 1)},
+	// La libération d'un véhicule est conditionnée par l'identifiant de son
+	// contrat : c'est le filtre du chemin INVERSE.
+	{Collection: "own_fleet_assets", Keys: db.K("contract_id", 1)},
 	// « Quelle flotte gère ce compte ? » — la question que pose la connexion
 	// d'un gérant. PARTIEL : une flotte enregistrée sur contrat papier n'a pas
 	// encore de gérant, et indexer ces absences coûterait sans rien répondre.
@@ -218,6 +251,10 @@ var applicationIndexes = []db.Index{
 	{Collection: "equipment_contracts", Keys: db.K("country", 1, "status", 1, "_id", -1)},
 	{Collection: "equipment_contracts", Keys: db.K("status", 1, "next_period_at", 1)},
 	{Collection: "equipment_contracts", Keys: db.K("item_id", 1, "_id", -1)},
+	// Les contrats d'un BIEN UNIQUE — la redevance d'un véhicule de la flotte
+	// interne. ⚠️ C'est la lecture qui décore une page de parc en UNE requête :
+	// sans index, l'écran du parc balaye tous les contrats du pays.
+	{Collection: "equipment_contracts", Keys: db.K("asset_id", 1, "_id", -1)},
 }
 
 // Ensure pose les index du socle. Idempotent : Mongo ignore un index déjà

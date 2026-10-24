@@ -45,6 +45,25 @@ func (r *Repository) Create(ctx context.Context, f *Fleet) error {
 	return nil
 }
 
+// Internal rend LA flotte de Dira dans le pays de la requête, ou nil.
+//
+// ⚠️ BORNÉE PAR LE PAYS DE LA REQUÊTE (`country.Restrict`), et c'est ce qui
+// fait qu'il y en a une par pays : la redevance d'un véhicule se dit dans la
+// monnaie de SON pays, et un parc national rendu à la console voisine
+// afficherait des montants divisés par quinze — la faute du Togo recopié vers
+// la Guinée, appliquée à un parc entier.
+func (r *Repository) Internal(ctx context.Context) (*Fleet, error) {
+	var f Fleet
+	err := r.fleets.FindOne(ctx, country.Restrict(ctx, bson.M{"internal": true})).Decode(&f)
+	if errors.Is(err, mongo.ErrNoDocuments) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("fleet: internal: %w", err)
+	}
+	return &f, nil
+}
+
 // ByID returns a fleet, or nil when the id matches nothing.
 func (r *Repository) ByID(ctx context.Context, id primitive.ObjectID) (*Fleet, error) {
 	var f Fleet

@@ -41,7 +41,38 @@ var (
 	// Le partenaire, lui, ne gère plus rien en attendant.
 	errFleetSuspended = apperr.Forbidden("partner_fleet_suspended",
 		"this fleet's contract is suspended: contact Dira")
+	// errFleetInternal : c'est LA FLOTTE DE DIRA, et personne ne la gère depuis
+	// la console partenaire.
+	//
+	// ⚠️⚠️ CE REFUS VAUT PLUS QU'UN CLOISONNEMENT D'ÉCRANS : la surface
+	// partenaire porte `PUT /partner/drivers/{id}/pay`, le SEUL chemin
+	// d'écriture des termes de paie. Ouverte sur une flotte interne, elle aurait
+	// fait prendre à Dira une PART DE CHAQUE COURSE en plus de la redevance du
+	// véhicule — deux fois le même revenu, et rien pour le signaler puisque les
+	// deux nombres sont plausibles. Le revenu d'un véhicule de Dira est sa
+	// redevance, et elle seule.
+	errFleetInternal = apperr.Forbidden("partner_fleet_internal",
+		"this fleet belongs to Dira itself: it is managed from the internal fleet desk")
 )
+
+// partnerGate dit si cette flotte s'ouvre à la console partenaire.
+//
+// ⚠️ EXTRAITE POUR ÊTRE ÉPROUVÉE : les deux refus de cette porte tiennent en
+// quatre lignes, et c'est leur ORDRE qui compte. Le reste de `FleetOfOwner` est
+// une lecture et une mise en forme.
+//
+// ⚠️⚠️ LA FLOTTE INTERNE D'ABORD, LE STATUT ENSUITE. Une flotte interne est
+// `active` : le contrôle de suspension la laisserait donc passer, et toute la
+// surface partenaire s'ouvrirait sur la flotte de Dira.
+func partnerGate(f *Fleet) error {
+	if f.Internal {
+		return errFleetInternal
+	}
+	if f.Status == StatusSuspended {
+		return errFleetSuspended
+	}
+	return nil
+}
 
 // FleetOfOwner rend la flotte d'un compte partenaire.
 //
@@ -60,8 +91,8 @@ func (s *Service) FleetOfOwner(ctx context.Context, userID string) (*Response, e
 	if f == nil {
 		return nil, errNoFleet
 	}
-	if f.Status == StatusSuspended {
-		return nil, errFleetSuspended
+	if err := partnerGate(f); err != nil {
+		return nil, err
 	}
 	out := toResponse(f)
 	// ⚠️ LE RÔLE VOYAGE AVEC LA FLOTTE, et c'est la moitié de la réponse : la

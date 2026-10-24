@@ -117,7 +117,36 @@ func (h *Handler) MountService(r chi.Router, serviceMW func(http.Handler) http.H
 		// connexion. La console partenaire compte quelques dizaines de
 		// personnes : l'appel ne coûte rien, et il dit la vérité d'maintenant.
 		g.Post("/internal/fleets/of-owner", h.ownerFleet)
+		// LA FLOTTE INTERNE DU PAYS — ce qu'une verticale demande pour
+		// rattacher un véhicule au parc de DIRA.
+		//
+		// ⚠️ UNE ROUTE QUI NE PREND AUCUN IDENTIFIANT, et c'est la garantie :
+		// la flotte est résolue par le PAYS DE LA REQUÊTE, jamais par un
+		// paramètre. Un `fleet_id` accepté dans le corps aurait permis de
+		// rattacher une voiture à n'importe quelle société en changeant un
+		// chiffre — exactement ce que la console des courses refuse déjà en
+		// n'offrant pas `fleet_id` dans son PATCH de véhicule.
+		//
+		// ⚠️ ET C'EST UN POST, parce qu'elle CRÉE la flotte interne au premier
+		// appel. Un GET qui écrit est un GET qu'on finit par appeler depuis un
+		// cache, un préchargement ou un robot.
+		g.Post("/internal/fleets/internal", h.internalFleet)
 	})
+}
+
+// POST /internal/fleets/internal — LA flotte de Dira dans ce pays.
+//
+// ⚠️ ELLE NE REND QUE L'IDENTIFIANT ET LE NOM. Une verticale affiche « Dira GA »
+// à côté d'une plaque et écrit cet identifiant sur le véhicule ; lui ouvrir la
+// fiche entière lui confierait des champs qu'elle finirait par recopier, et les
+// deux copies divergeraient.
+func (h *Handler) internalFleet(w http.ResponseWriter, r *http.Request) {
+	out, err := h.svc.EnsureInternal(r.Context())
+	if err != nil {
+		httpx.Error(w, r, err)
+		return
+	}
+	httpx.JSON(w, http.StatusOK, map[string]any{"fleet_id": out.ID, "name": out.Name})
 }
 
 func (h *Handler) list(w http.ResponseWriter, r *http.Request) {

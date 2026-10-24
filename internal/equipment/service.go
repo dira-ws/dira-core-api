@@ -97,7 +97,10 @@ type Service struct {
 	// fleets résout la flotte du compte appelant — le matériel d'une SOCIÉTÉ,
 	// voir fleet.go. Facultatif : sans lui, la surface partenaire n'est pas
 	// montée.
-	fleets   Fleets
+	fleets Fleets
+	// assets est le REGISTRE DES BIENS UNIQUES — la flotte interne. Facultatif :
+	// sans lui, aucune redevance de véhicule ne s'ouvre (voir asset.go).
+	assets   AssetDesk
 	repo     Store
 	purse    Purse
 	notifier Notifier
@@ -556,8 +559,17 @@ func (s *Service) HandOver(ctx context.Context, actorID, id string) (*ContractRe
 func (s *Service) handOver(ctx context.Context, actorID string, c *Contract) (*ContractResponse, error) {
 	now := s.now()
 	before := auditView(c)
-	if err := s.repo.AdjustStock(ctx, c.ItemID, -c.Quantity); err != nil {
-		return nil, err
+	// ⚠️ PAS DE STOCK POUR UN BIEN UNIQUE, et la garde est explicite plutôt
+	// que « ça ne trouvera rien de toute façon ». `AdjustStock` sur un
+	// identifiant nul ne décrémente effectivement rien aujourd'hui — mais
+	// compter sur ce silence, c'est faire reposer la remise d'une voiture sur
+	// le comportement d'une requête qui ne correspond à aucun document.
+	// La disponibilité d'un véhicule est tenue par son registre, pas par un
+	// compteur d'unités.
+	if !c.ItemID.IsZero() {
+		if err := s.repo.AdjustStock(ctx, c.ItemID, -c.Quantity); err != nil {
+			return nil, err
+		}
 	}
 	c.Status = StatusActive
 	c.HandedAt = &now
@@ -723,13 +735,20 @@ func (s *Service) applyReturn(ctx context.Context, actorID string, c *Contract, 
 			}
 		}
 	}
-	if err := s.repo.AdjustStock(ctx, c.ItemID, c.Quantity); err != nil {
-		slog.WarnContext(ctx, "equipment: stock not restored", "contract_id", c.ID.Hex(), "error", err)
+	if !c.ItemID.IsZero() {
+		if err := s.repo.AdjustStock(ctx, c.ItemID, c.Quantity); err != nil {
+			slog.WarnContext(ctx, "equipment: stock not restored", "contract_id", c.ID.Hex(), "error", err)
+		}
 	}
 	if err := s.repo.SaveContract(ctx, c); err != nil {
 		return nil, err
 	}
 	s.record(ctx, "equipment.return", c, before)
+	// ⚠️ LE BIEN REVIENT AU PARC ICI, dans le SEUL chemin de retour — la voie
+	// de l'exploitation et celle du scan passent toutes les deux par
+	// `applyReturn`. Une seconde libération « pour le scan » aurait divergé au
+	// premier correctif, et un véhicule rendu par scan serait resté attribué.
+	s.releaseAsset(ctx, c, OutcomeReturned)
 	vars := map[string]string{"item": c.ItemName, "refund": money(max(refunded, 0)), "owed": money(c.Outstanding(now, false))}
 	s.notify(ctx, c.UserID.Hex(), KeyReturned, vars, s.data(c))
 	out := s.responses(ctx, []Contract{*c}, true)
@@ -761,6 +780,11 @@ func (s *Service) Cancel(ctx context.Context, actorID, id, reason string) (*Cont
 		return nil, err
 	}
 	s.record(ctx, "equipment.cancel", c, before)
+	// ⚠️ UNE ATTRIBUTION ANNULÉE AVANT LA REMISE REND LE VÉHICULE AU PARC.
+	// Sans cela, une proposition refusée par le chauffeur immobiliserait la
+	// voiture pour toujours : elle serait réservée par un contrat annulé, et
+	// aucun écran ne dirait pourquoi elle n'est plus attribuable.
+	s.releaseAsset(ctx, c, OutcomeCancelled)
 	out := s.responses(ctx, []Contract{*c}, true)
 	return &out[0], nil
 }
@@ -782,6 +806,13 @@ func (s *Service) Default(ctx context.Context, actorID, id string) (*ContractRes
 		return nil, err
 	}
 	s.record(ctx, "equipment.default", c, before)
+	// ⚠️ UN IMPAYÉ CONSTATÉ REND LE VÉHICULE AU PARC, ET LA DETTE RESTE DUE.
+	// Les deux à la fois : le bien est repris pour être confié à quelqu'un
+	// d'autre, et l'échéancier garde ce qui n'a pas été payé — `defaulted`
+	// n'efface aucune ligne. Libérer sans garder la dette aurait soldé un
+	// impayé en reprenant une voiture ; garder sans libérer aurait immobilisé
+	// le parc.
+	s.releaseAsset(ctx, c, OutcomeDefaulted)
 	out := s.responses(ctx, []Contract{*c}, true)
 	return &out[0], nil
 }
@@ -1068,7 +1099,15 @@ func (s *Service) Standing(ctx context.Context, userID string) (*StandingRespons
 	if err != nil {
 		return nil, apperr.Validation("invalid user id")
 	}
-	all, err := s.repo.ContractsOfUser(ctx, uid, true)
+	// ⚠️⚠️ TOUS LES CONTRATS, PAS SEULEMENT LES ACTIFS, ET C'ÉTAIT UN DÉFAUT.
+	// `standingOf` compte délibérément les contrats `returned` — une reprise ne
+	// solde pas ce qui est dû —, mais cette lecture ne lui en passait aucun :
+	// `onlyActive` filtrait sur `active`. Résultat, la dette d'un agent dont on
+	// venait de reprendre le matériel (ou la voiture) TOMBAIT À ZÉRO sur son
+	// écran et sur celui du support, alors que `Collect` — qui lit la même
+	// fonction avec tous les contrats — continuait à la compter. Deux chiffres
+	// pour une personne, et c'est celui qui l'arrange qui la convaincra.
+	all, err := s.repo.ContractsOfUser(ctx, uid, false)
 	if err != nil {
 		return nil, apperr.Internal(err)
 	}

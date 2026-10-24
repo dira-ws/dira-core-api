@@ -104,6 +104,13 @@ var declaredSurface = []string{
 	// « Flotte Sodigaz » à côté d'une plaque ; lui ouvrir la fiche entière lui
 	// confierait un contrat et une commission qu'elle n'a aucune raison de
 	// porter, et qu'elle finirait par recopier chez elle.
+	// LA FLOTTE INTERNE DU PAYS — la flotte de DIRA, ce qu'une verticale demande
+	// pour rattacher un véhicule au parc de la plateforme.
+	//
+	// ⚠️ ELLE NE PREND AUCUN IDENTIFIANT : la flotte est résolue par le PAYS DE
+	// LA REQUÊTE. Un `fleet_id` dans le corps aurait permis de rattacher une
+	// voiture à n'importe quelle société en changeant un chiffre.
+	"/internal/fleets/internal",
 	"/internal/fleets/names",
 	// LA FLOTTE D'UN PARTENAIRE — ce qu'une verticale demande pour borner les
 	// listes de sa console partenaire.

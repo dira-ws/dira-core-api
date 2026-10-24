@@ -33,3 +33,21 @@ db.fleets.createIndex(
   { owner_user_id: 1 },
   { partialFilterExpression: { owner_user_id: { $exists: true } } },
 );
+
+// UNE SEULE FLOTTE INTERNE PAR PAYS — la flotte de Dira (`internal/ownfleet`).
+//
+// ⚠️⚠️ C'est cet index qui le garantit, et non une lecture « existe-t-elle ? »
+// suivie d'une création : deux attributions traitées en même temps le jour de
+// l'ouverture d'un pays passeraient toutes les deux, et la plateforme porterait
+// deux flottes internes. Les véhicules de l'une seraient invisibles depuis
+// l'autre, et personne ne saurait qu'il manque la moitié du parc.
+//
+// PARTIEL SUR `internal: true`, et le champ est bien ÉCRIT quand il vaut vrai :
+// c'est la condition pour qu'un index partiel verrouille réellement quelque
+// chose — un filtre qui ne correspond à aucun document indexe le vide et
+// laisse tout passer. Les flottes ORDINAIRES n'y entrent pas, sans quoi deux
+// sociétés d'un même pays entreraient en collision.
+db.fleets.createIndex(
+  { country: 1 },
+  { unique: true, partialFilterExpression: { internal: true } },
+);

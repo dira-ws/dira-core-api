@@ -79,7 +79,15 @@ type Response struct {
 	ContactEmail string `json:"contact_email,omitempty"`
 	ContractRef  string `json:"contract_ref,omitempty"`
 	CommissionBp *int   `json:"commission_bp"`
-	Status       string `json:"status"`
+	// Internal : LA FLOTTE DE DIRA — voir `model.go`.
+	//
+	// ⚠️ SERVI, et la console en a besoin AVANT de dessiner : la fiche d'une
+	// flotte interne n'a ni commission, ni contrat, ni bouton « ouvrir
+	// l'accès » — et ses véhicules se gèrent depuis la flotte interne, pas
+	// ici. Sans ce champ, l'écran proposerait des gestes que le serveur
+	// refuse, et un bouton refusé a déjà promis quelque chose.
+	Internal bool   `json:"internal"`
+	Status   string `json:"status"`
 	// Role est ce que le COMPTE APPELANT est dans cette flotte — `owner`,
 	// `manager` ou `viewer`. Rempli par `/partner/me` seulement : sur la liste
 	// d'exploitation, « le rôle de l'appelant » n'a pas de sens.
@@ -97,7 +105,7 @@ func toResponse(f *Fleet) Response {
 		ID: f.ID.Hex(), Name: f.Name,
 		ContactName: f.ContactName, ContactPhone: f.ContactPhone, ContactEmail: f.ContactEmail,
 		ContractRef: f.ContractRef, CommissionBp: f.CommissionBp,
-		Status: f.Status, Notes: f.Notes,
+		Internal: f.Internal, Status: f.Status, Notes: f.Notes,
 		CreatedAt: f.CreatedAt.Format("2006-01-02T15:04:05Z"),
 		UpdatedAt: f.UpdatedAt.Format("2006-01-02T15:04:05Z"),
 	}
@@ -115,6 +123,14 @@ func (s *Service) Create(ctx context.Context, actorID string, req CreateRequest)
 	}
 	if err := checkCommission(req.CommissionBp); err != nil {
 		return nil, err
+	}
+	// ⚠️ LE NOM RÉSERVÉ EST REFUSÉ ICI. L'index unique sur le nom aurait de
+	// toute façon rejeté la seconde création, mais sous le code
+	// `fleet_name_taken` — « ce nom est déjà pris » devant un écran qui ne
+	// montre aucune flotte de ce nom, puisque la liste d'exploitation la
+	// masque. Le refus doit nommer la vraie raison.
+	if name == InternalFleetName(country.FromContext(ctx)) {
+		return nil, errInternalReserved
 	}
 	f := &Fleet{
 		Name: name, ContactName: strings.TrimSpace(req.ContactName),
@@ -209,6 +225,46 @@ func (s *Service) Names(ctx context.Context, ids []string) (map[string]string, e
 	return out, nil
 }
 
+// EnsureInternal rend LA flotte de Dira pour le pays de la requête, en la
+// créant au premier appel.
+//
+// ⚠️ UNE PAR PAYS, ET L'UNICITÉ EST DANS LA BASE (index unique partiel sur
+// `country` parmi les flottes internes), pas dans une lecture préalable. Deux
+// attributions traitées en même temps le jour de l'ouverture d'un pays
+// passeraient toutes les deux un contrôle « existe-t-elle ? », et la plateforme
+// porterait deux flottes internes : les véhicules de l'une seraient invisibles
+// depuis l'autre, et personne ne saurait qu'il manque la moitié du parc.
+//
+// ⚠️ ET ELLE N'A NI GÉRANT NI COMMISSION : Dira ne signe pas avec elle-même.
+// Son revenu est la REDEVANCE de chaque attribution, pas une part de course.
+func (s *Service) EnsureInternal(ctx context.Context) (*Response, error) {
+	cc := country.FromContext(ctx)
+	if f, err := s.repo.Internal(ctx); err != nil {
+		return nil, apperr.Internal(err)
+	} else if f != nil {
+		out := toResponse(f)
+		return &out, nil
+	}
+	f := &Fleet{
+		Name: InternalFleetName(cc), Internal: true,
+		Status: StatusActive, Country: cc,
+		Notes: "Flotte interne : véhicules détenus par Dira, confiés contre redevance.",
+	}
+	if err := s.repo.Create(ctx, f); err != nil {
+		// ⚠️ LA COURSE SE RATTRAPE PAR UNE RELECTURE, et non par une erreur. Un
+		// doublon ici veut dire qu'une requête voisine vient de la créer : le
+		// résultat attendu existe, il suffit de le lire.
+		if again, err2 := s.repo.Internal(ctx); err2 == nil && again != nil {
+			out := toResponse(again)
+			return &out, nil
+		}
+		return nil, wrap(err)
+	}
+	out := toResponse(f)
+	s.record(ctx, "fleet.ensure_internal", f.ID.Hex(), nil, out)
+	return &out, nil
+}
+
 // Update changes a fleet.
 func (s *Service) Update(ctx context.Context, actorID, id string, req UpdateRequest) (*Response, error) {
 	oid, err := primitive.ObjectIDFromHex(id)
@@ -224,6 +280,17 @@ func (s *Service) Update(ctx context.Context, actorID, id string, req UpdateRequ
 	}
 	if err := checkCommission(req.CommissionBp); err != nil {
 		return nil, err
+	}
+	// ⚠️⚠️ PAS DE GÉRANT NI DE COMMISSION SUR LA FLOTTE DE DIRA, et ce refus
+	// vaut une relecture : poser un `owner_user_id` dessus OUVRIRAIT la console
+	// partenaire, donc `PUT /partner/drivers/{id}/pay`, donc un partage de
+	// chaque course EN PLUS de la redevance. `FleetOfOwner` refuse déjà, mais
+	// une règle écrite à un seul endroit est une règle qu'on perd : la porte se
+	// ferme aussi là où on fabrique la clé.
+	if before.Internal && (req.OwnerUserID != nil || req.CommissionBp != nil) {
+		return nil, errInternalReserved.WithMeta(map[string]any{
+			"fields": []string{"owner_user_id", "commission_bp"},
+		})
 	}
 	set := bson.M{}
 	if req.Name != nil {
