@@ -1,6 +1,6 @@
 # App CLIENT — COURSES (VTC) — contrat d'API
 
-> **Version 4.75.0** · 24 octobre 2026
+> **Version 4.76.0** · 24 octobre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Courses : `https://api-staging.dira.llc/api/v1/vtc` · Suivi : `wss://tracking-staging.dira.llc`
 
 ---
@@ -2361,10 +2361,22 @@ phrase **explique le cas**. Une taxonomie ne couvre jamais tout, et forcer un
 choix fait cocher le premier élément de la liste — ce qui est pire qu'un champ
 vide, parce qu'on le croit. `other` existe pour ça.
 
-⚠️ **UN CODE INVENTÉ EST REFUSÉ** — `422` avec `fields: ["reason_code"]` et la
-liste `allowed`. N'envoyez rien plutôt qu'un code approximatif : une annulation
-refusée pour un détail de formulaire laisse l'utilisateur coincé sur une course
-dont il veut sortir.
+⚠️ **UN CODE INVENTÉ EST REFUSÉ** — `422 cancel_reason_unknown`, et **la phrase
+nomme les motifs acceptés pour ce rôle**. N'envoyez rien plutôt qu'un code
+approximatif : une annulation refusée pour un détail de formulaire laisse
+l'utilisateur coincé sur une course dont il veut sortir.
+
+> ## ⚠️⚠️ CE CONTRAT PROMETTAIT « LA LISTE `allowed` », ET ELLE N'EST JAMAIS ARRIVÉE (v4.76.0)
+>
+> Depuis la v4.55.0, ces lignes annonçaient un `422` « avec la liste
+> `allowed` ». **Cette liste n'a jamais été servie** : elle voyageait dans le
+> `meta` du refus, et l'enveloppe ne porte que `code`, `message`, `fields` et
+> `reason`. L'application recevait donc `validation_failed` / « Requête
+> invalide » + le nom du champ, sans jamais savoir quels motifs existent.
+>
+> Le refus porte désormais **son propre code** et la liste est **dans la
+> phrase traduite**. ⚠️ Si votre écran lit `validation_failed` pour ce cas,
+> il lit l'ancien code.
 
 ⚠️ **ET LE MOTIF SE RELIT** : la course rend `cancelled_reason_code` à côté de
 `cancelled_reason`. Les courses **annulées avant la 4.55.0** n'ont que la
