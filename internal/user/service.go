@@ -186,9 +186,13 @@ func (s *Service) Register(ctx context.Context, req RegisterRequest) (AuthRespon
 	// formulaire d'inscription. Le provisionnement d'un administrateur passe
 	// par `EnsureAccount`, derrière le secret de service.
 	switch role {
-	case auth.RoleClient, auth.RoleDriver, auth.RoleMerchant:
+	// ⚠️ `publisher` EST ADMIS ICI, comme `merchant` : un particulier qui met
+	// son appartement en ligne s'inscrit lui-même, depuis l'application pro,
+	// et attendre qu'un administrateur lui ouvre un compte aurait fait du
+	// premier bien publié une démarche administrative.
+	case auth.RoleClient, auth.RoleDriver, auth.RoleMerchant, auth.RolePublisher:
 	default:
-		return AuthResponse{}, apperr.Validation("role must be client, driver or merchant")
+		return AuthResponse{}, apperr.Validation("role must be client, driver, merchant or publisher")
 	}
 	return s.register(ctx, req, role)
 }
@@ -409,7 +413,11 @@ var appRole = map[string]string{
 	// de route venait à manquer : il est refusé à la CONNEXION,
 	// `403 wrong_app`, avant d'avoir un jeton.
 	"partner": auth.RolePartner,
-	"console": auth.RoleAdmin,
+	// ⚠️ L'ANNONCEUR A SON APPLICATION, et c'est le même verrou que pour le
+	// partenaire : un compte pro qui tenterait la console d'exploitation est
+	// refusé à la CONNEXION, `403 wrong_app`, avant d'avoir un jeton.
+	"immo_pro": auth.RolePublisher,
+	"console":  auth.RoleAdmin,
 }
 
 // appOfRole nomme l'application où ce compte doit aller — pour le DIRE à la
@@ -420,11 +428,12 @@ var appRole = map[string]string{
 // rôle, et le socle ne peut pas deviner lequel. Dès que l'appartenance est
 // connue, `allowedInApp` s'en sert à la place — elle est exacte.
 var appOfRole = map[string]string{
-	auth.RoleClient:   "client",
-	auth.RoleDriver:   AgentAppDriver,
-	auth.RoleMerchant: "merchant",
-	auth.RolePartner:  "partner",
-	auth.RoleAdmin:    "console",
+	auth.RoleClient:    "client",
+	auth.RoleDriver:    AgentAppDriver,
+	auth.RoleMerchant:  "merchant",
+	auth.RolePartner:   "partner",
+	auth.RolePublisher: "immo_pro",
+	auth.RoleAdmin:     "console",
 }
 
 // refuseApp compose le refus « ce n'est pas votre application », en NOMMANT
@@ -1100,9 +1109,10 @@ func (s *Service) EnsureAccount(ctx context.Context, role, phone, name, email, p
 	// large que le reste de la surface de service, gardé par le même secret :
 	// un service qui peut créer un administrateur peut tout.
 	switch role {
-	case auth.RoleClient, auth.RoleDriver, auth.RoleMerchant, auth.RoleAdmin, auth.RolePartner:
+	case auth.RoleClient, auth.RoleDriver, auth.RoleMerchant, auth.RoleAdmin,
+		auth.RolePartner, auth.RolePublisher:
 	default:
-		return "", apperr.Validation("role must be client, driver, merchant, admin or partner")
+		return "", apperr.Validation("role must be client, driver, merchant, admin, partner or publisher")
 	}
 	existing, err := s.repo.FindByPhone(ctx, phone)
 	if err != nil {

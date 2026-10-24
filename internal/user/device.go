@@ -130,6 +130,25 @@ func deviceFrom(id, name string) (deviceID, deviceName string) {
 }
 
 // singleDevice dit si ce compte est borné à un seul appareil.
+//
+// ⚠️⚠️ L'ANNONCEUR N'EN FAIT PAS PARTIE, ET C'EST UN CHOIX, PAS UN OUBLI.
+// L'architecture de l'immobilier promettait « un appareil par compte pro » ;
+// elle donne aussi à l'annonceur DEUX applications — l'espace web où une
+// agence tient ses annonces, et l'application de capture avec laquelle elle
+// filme les biens. Les deux servent en même temps, sur deux appareils. La
+// règle promise aurait chassé l'une à chaque ouverture de l'autre, et le
+// travail que l'architecture décrit serait devenu impossible.
+//
+// ⚠️ ET LA RAISON DE LA RÈGLE DU CHAUFFEUR NE SE TRANSPOSE PAS. Elle n'existe
+// pas pour protéger un compte : elle existe pour le DISPATCH — deux téléphones
+// en ligne pour un véhicule, ce sont deux flux de positions et un appel qui
+// part vers celui resté à la maison. Un annonceur n'émet aucune position et ne
+// reçoit aucun appel.
+//
+// Ce qui protège une agence est ailleurs, et existe déjà : la BORNE
+// d'appareils réglable par pays (`devices.go`, trois par défaut, le plus
+// silencieux évincé), et des MEMBRES qui sont des comptes à eux — on ne
+// partage pas une connexion, on en ouvre une de plus.
 func singleDevice(u *User) bool { return u != nil && u.Role == auth.RoleDriver }
 
 // claimDevice fait de l'appareil déclaré CELUI du compte, et chasse le

@@ -402,7 +402,7 @@ func (h *Handler) ensureMerchant(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) ensureAccount(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		Role  string `json:"role" validate:"required,oneof=client driver merchant admin"`
+		Role  string `json:"role" validate:"required,oneof=client driver merchant publisher admin"`
 		Phone string `json:"phone" validate:"required,e164"`
 		Name  string `json:"name" validate:"required,min=1,max=120"`
 		// ⚠️ L'e-mail n'est pas décoratif : la console d'administration se
@@ -967,7 +967,7 @@ func (h *Handler) listPayments(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) accountSearch(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Q     string   `json:"q" validate:"required,min=2,max=80"`
-		Roles []string `json:"roles" validate:"omitempty,max=4,dive,oneof=client driver merchant admin"`
+		Roles []string `json:"roles" validate:"omitempty,max=5,dive,oneof=client driver merchant publisher admin"`
 		Limit int      `json:"limit" validate:"omitempty,min=1,max=200"`
 	}
 	if err := httpx.Decode(r, &req); err != nil {
