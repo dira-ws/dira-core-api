@@ -370,3 +370,47 @@ func TestTheGraveSpeedingAlertCannotBeMutedAway(t *testing.T) {
 	assert.Equal(t, CategoryStaff, categoryOf(KeyStaffSpeeding))
 	assert.False(t, Muteable(categoryOf(KeyStaffSpeeding)))
 }
+
+// ⚠️ LES QUATRE MESSAGES D'UN TRANSFERT NE SE REMPLACENT PAS, et c'est ce que
+// cette épreuve garde : trois destinataires, trois phrases, et chacune porte
+// l'information sans laquelle elle serait inquiétante.
+//
+//   - le motif au passager : un remplacement sans explication se lit comme une
+//     annulation ;
+//   - le nom et le véhicule : il va monter dedans ;
+//   - « votre chauffeur continue » : sans cette phrase, il reste sur « on
+//     cherche quelqu'un d'autre » pendant que la voiture roule ;
+//   - la part de l'ancien chauffeur : son écran se ferme sur une course qu'il
+//     n'a pas terminée.
+func TestTheFourTransferMessagesEachCarryWhatTheirReaderNeeds(t *testing.T) {
+	want := map[string][]string{
+		KeyRideTransferStarted: {"reason"},
+		KeyRideTransferred:     {"driver", "vehicle"},
+		KeyRideTransferFailed:  {"driver"},
+		KeyRideTransferDone:    {"amount"},
+	}
+	byKey := map[string]Template{}
+	for _, d := range Defaults() {
+		byKey[d.Key] = d
+	}
+	for key, vars := range want {
+		tpl, ok := byKey[key]
+		if !ok {
+			t.Fatalf("gabarit %s absent des défauts", key)
+		}
+		if !tpl.Enabled {
+			t.Fatalf("%s doit être actif : un transfert muet laisse le passager croire à une annulation", key)
+		}
+		for _, loc := range []string{LocaleFR, LocaleEN} {
+			txt, ok := tpl.Locales[loc]
+			if !ok || txt.Title == "" || txt.Body == "" {
+				t.Fatalf("%s n'a pas de phrase en %s", key, loc)
+			}
+			for _, v := range vars {
+				if !strings.Contains(txt.Body, "["+v+"]") {
+					t.Fatalf("%s (%s) doit porter [%s] DANS sa phrase : hors de la phrase, la variable est perdue", key, loc, v)
+				}
+			}
+		}
+	}
+}
