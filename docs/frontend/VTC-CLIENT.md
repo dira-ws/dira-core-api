@@ -1,6 +1,6 @@
 # App CLIENT — COURSES (VTC) — contrat d'API
 
-> **Version 4.76.0** · 24 octobre 2026
+> **Version 4.77.0** · 24 octobre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Courses : `https://api-staging.dira.llc/api/v1/vtc` · Suivi : `wss://tracking-staging.dira.llc`
 
 ---
@@ -2230,6 +2230,64 @@ socket de la course — **le statut ne change pas** (`searching`). Elle dit
 JAMAIS LE RAYON S'ÉLARGIR.** C'est la règle de toute la plateforme — aucune
 trame ne porte la vérité, elles disent de relire —, et c'est ici qu'elle se
 voit le plus.
+
+### 🆕 🤝 ON VOUS CHANGE DE CHAUFFEUR — `transfer` (v4.77.0)
+
+> Demandé par le propriétaire : quand le chauffeur ne peut pas continuer
+> (panne, malaise, route coupée, fin de service), un autre vient **vous
+> reprendre** — et vous devez l'apprendre, **avec la raison**.
+
+La course porte alors :
+
+```jsonc
+"transfer": {
+  "state": "searching",            // searching · done · failed · cancelled
+  "reason": "vehicle_breakdown",
+  "by": "driver",                  // driver · support
+  "grave": false,                  // accident, malaise, sécurité
+  "requested_at": "2026-10-24T14:05:00Z"
+}
+```
+
+#### ⚠️⚠️ VOTRE CHAUFFEUR NE DISPARAÎT PAS — ET IL PEUT CONTINUER À ROULER
+
+Pendant `state: "searching"`, **rien n'a changé** : la course garde son statut,
+son chauffeur, sa carte, et la voiture **avance peut-être encore**. On cherche
+quelqu'un **en parallèle**.
+
+**Ce que l'écran doit dire** : « votre chauffeur ne peut pas continuer
+(*raison*), nous cherchons quelqu'un pour vous reprendre — restez où vous
+êtes ». ⚠️ **Et surtout pas « course annulée »** : elle ne l'est pas, et le
+passager qui le croit descend de la voiture.
+
+| `state` | Ce qui s'est passé | Ce que l'écran dit |
+|---|---|---|
+| `searching` | on cherche un remplaçant | « votre chauffeur ne peut pas continuer : *raison* » — la **carte du chauffeur actuel reste affichée** |
+| `done` | quelqu'un a repris | le **nouveau** chauffeur et son véhicule (`driver` est remplacé dans la course) — « il vient à votre rencontre » |
+| `failed` | personne n'a repris | ⚠️ **« votre chauffeur continue »** — la bonne nouvelle. Sans cette phrase, l'écran reste sur « on cherche » pendant que la voiture roule vers la destination |
+| `cancelled` | le chauffeur ou le support a retiré la demande | même phrase que `failed` |
+
+⚠️ **LES TROIS PUSH** : `ride_transfer_started` (avec le motif),
+`ride_transferred` (nom + véhicule du nouveau), `ride_transfer_failed`. Chacun
+porte `data.type: "ride_status"` et `data.transfer_state` — **relisez la
+course**, c'est elle qui porte la vérité.
+
+⚠️ **`grave: true`** (accident, malaise, sécurité) : **changez de ton**. Un
+« changement de chauffeur » annoncé comme une fin de service après un accident
+est une faute — et un incident a déjà été ouvert côté support.
+
+⚠️ **LE MOTIF EST UN CODE, TRADUISEZ-LE VOUS-MÊME** si vous voulez votre propre
+phrase ; le **push**, lui, arrive déjà traduit. Ne montrez **jamais** le code
+brut (`shift_end` ne veut rien dire pour un passager).
+
+⚠️ **VOUS NE PAYEZ PAS PLUS.** Le prix de votre devis ne change pas : le
+partage entre les deux chauffeurs est un problème de la plateforme. Si un écran
+laisse craindre un supplément, c'est un appel au support garanti.
+
+⚠️ **ET VOUS NE POUVEZ PAS DEMANDER UN TRANSFERT VOUS-MÊME.** Il n'y a pas de
+route pour cela : si vous voulez un autre chauffeur, c'est **le support** qui
+le décide (son motif est `rider_asked`) — ou vous annulez, avec les règles
+d'annulation habituelles.
 
 ⚠️ **`dispatch_reason` (v4.42.0) DIT POURQUOI, quand il y a plusieurs façons de
 s'arrêter** — et il change ce que vous proposez. Il n'apparaît que sur une
