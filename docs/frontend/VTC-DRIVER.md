@@ -1,6 +1,6 @@
 # App CHAUFFEUR — COURSES (VTC) — contrat d'API
 
-> **Version 4.75.0** · 24 octobre 2026
+> **Version 4.76.0** · 24 octobre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Courses : `https://api-staging.dira.llc/api/v1/vtc` · Suivi : `wss://tracking-staging.dira.llc` · SIG : `https://maps.dira.llc/api`
 
 ---
@@ -1483,10 +1483,22 @@ phrase **explique le cas**. Une taxonomie ne couvre jamais tout, et forcer un
 choix fait cocher le premier élément de la liste — ce qui est pire qu'un champ
 vide, parce qu'on le croit. `other` existe pour ça.
 
-⚠️ **UN CODE INVENTÉ EST REFUSÉ** — `422` avec `fields: ["reason_code"]` et la
-liste `allowed`. N'envoyez rien plutôt qu'un code approximatif : une annulation
-refusée pour un détail de formulaire laisse l'utilisateur coincé sur une course
-dont il veut sortir.
+⚠️ **UN CODE INVENTÉ EST REFUSÉ** — `422 cancel_reason_unknown`, et **la phrase
+nomme les motifs acceptés pour ce rôle**. N'envoyez rien plutôt qu'un code
+approximatif : une annulation refusée pour un détail de formulaire laisse
+l'utilisateur coincé sur une course dont il veut sortir.
+
+> ## ⚠️⚠️ CE CONTRAT PROMETTAIT « LA LISTE `allowed` », ET ELLE N'EST JAMAIS ARRIVÉE (v4.76.0)
+>
+> Depuis la v4.55.0, ces lignes annonçaient un `422` « avec la liste
+> `allowed` ». **Cette liste n'a jamais été servie** : elle voyageait dans le
+> `meta` du refus, et l'enveloppe ne porte que `code`, `message`, `fields` et
+> `reason`. L'application recevait donc `validation_failed` / « Requête
+> invalide » + le nom du champ, sans jamais savoir quels motifs existent.
+>
+> Le refus porte désormais **son propre code** et la liste est **dans la
+> phrase traduite**. ⚠️ Si votre écran lit `validation_failed` pour ce cas,
+> il lit l'ancien code.
 
 ⚠️ **ET LE MOTIF SE RELIT** : la course rend `cancelled_reason_code` à côté de
 `cancelled_reason`. Les courses **annulées avant la 4.55.0** n'ont que la
@@ -2665,7 +2677,7 @@ GET /settings/dispatch → { chain_calls, chain_radius_m, call_mode, call_radius
                            call_ranking, call_ttl_s, max_drivers, max_minutes,
                            max_attempts, search_expiry_min, speed_limit_kmh,
                            speed_over_s, speed_alert, speed_grave_kmh,
-                           honk_delay_s, honk_interval_s }
+                           honk_delay_s, honk_interval_s, stop_guard }
 ```
 
 ⚠️ **`speed_limit_kmh` (v4.33.0) : alertez le chauffeur au-delà.** Un passager
@@ -2736,6 +2748,92 @@ l'écriture.
 ⚠️ **ET RIEN DU REGISTRE NE VOUS EST SERVI** : ni la liste des constats, ni un
 compteur, ni une route pour les lire. Ce que le support voit n'a aucune surface
 d'application, et ce n'est pas un oubli.
+
+### 🆕 🚧 LA GARDE DES ÉTAPES — `stop_guard` (v4.76.0)
+
+> Demandée par vous (socle #207) : empêcher de quitter un arrêt sans l'avoir
+> validé. Le cas grave est précis — quitter le point de prise en charge sans
+> « client à bord » laisse un passager sur le trottoir ; quitter la destination
+> sans « terminer » laisse une course qui continue de courir.
+
+```jsonc
+"stop_guard": {
+  "enabled": true,
+  "stepping_in_m": 150,     // on APPROCHE de l'arrêt
+  "in_stop_m": 40,          // on Y EST — assez près
+  "in_stop_dwell_s": 20,    // …et assez longtemps (ou quasi à l'arrêt)
+  "stepping_out_m": 80,     // on S'ÉLOIGNE de l'arrêt où l'on était
+  "stepped_out_m": 250,     // on l'a QUITTÉ
+  "max_accuracy_m": 50      // au-delà, la position est IGNORÉE
+}
+```
+
+⚠️ **CES VALEURS SONT EXACTEMENT CELLES QUE VOUS EMBARQUEZ DÉJÀ.** Servir le
+réglage ne change donc rien tant qu'un pays n'y touche pas — et le jour où il y
+touche, votre application suit **sans republication**. C'est tout l'objet de la
+demande : quarante mètres « dans l'arrêt » valent une porte d'immeuble à Lomé et
+trois voies plus un terre-plein sur un boulevard de Libreville.
+
+⚠️ **`enabled: false` → GARDE COUPÉE**, et rien d'autre ne change : vous ne
+surveillez plus, vous n'alertez plus, vous n'envoyez plus d'écart.
+
+⚠️ **`in_stop_dwell_s: 0` EST UN CHOIX LÉGITIME** — « confirmer dès qu'il est
+assez près ». Ce n'est pas « non réglé » : un pays peut le vouloir. Sans durée,
+en revanche, **un feu rouge à trente mètres de la porte confirme une prise en
+charge** — c'est pour cela que le défaut est 20 s.
+
+⚠️ **`max_accuracy_m` EST CE QUI VOUS ÉVITE D'ALERTER POUR RIEN.** Un point à
+cent mètres d'incertitude place la voiture n'importe où dans un cercle de deux
+cents mètres : alerter là-dessus fait sonner le téléphone d'un chauffeur garé
+devant la porte du passager.
+
+⚠️⚠️ **LE SERVEUR NE BLOQUE RIEN, ET C'EST DÉLIBÉRÉ.** Aucune transition n'est
+refusée sur un critère de distance : un GPS qui dérive dans un parking
+souterrain empêcherait un chauffeur de terminer une course qu'il a faite, et
+c'est le passager qui attendrait. La garde est **la vôtre** — elle alerte avant
+l'écart, elle n'empêche pas de conclure.
+
+#### 🆕 Remonter un écart — `POST /rides/{id}/stop-events` → `204`
+
+```jsonc
+{ "stop_index": 0, "event": "stepped_out_unvalidated",
+  "status": "picking_up", "lng": 1.2255, "lat": 6.1319,
+  "accuracy_m": 12, "at": "2026-10-24T13:58:02Z" }
+```
+
+⚠️ **TROIS ÉVÉNEMENTS SONT GARDÉS, ET TROIS SEULEMENT** — n'envoyez pas les
+quatre franchissements de zone de chaque arrêt : ils feraient des centaines de
+lignes par course que personne ne relira.
+
+| `event` | Quand l'envoyer | La question qu'il tranche |
+|---|---|---|
+| `step_in_stop_confirmed` | la présence vient d'être confirmée | « il n'est jamais venu » — ⚠️ **c'est votre seule preuve du contraire** |
+| `stepping_out_unvalidated` | vous venez d'alerter le chauffeur | « il allait partir » |
+| `stepped_out_unvalidated` | il a quitté l'arrêt sans valider | « le chauffeur est parti sans moi » |
+
+⚠️ **UN ÉVÉNEMENT INVENTÉ EST REFUSÉ** — `422 stop_event_unknown`, et **la
+phrase nomme les trois acceptés**.
+
+⚠️ **`status` EST GARDÉ PARCE QU'IL DIT LA GRAVITÉ** : quitter le départ en
+`picking_up` laisse quelqu'un sur le trottoir, quitter la destination en
+`in_transit` laisse une course ouverte qui facture. Envoyez l'état que **vous**
+voyiez au moment de l'écart.
+
+⚠️ **`accuracy_m` EST GARDÉ POUR QU'UNE LIGNE DOUTEUSE SE RECONNAISSE** : un
+écart écrit avec cent mètres d'incertitude ne prouve rien, et il vaut mieux le
+savoir en le lisant que le découvrir en l'opposant à quelqu'un.
+
+⚠️ **`at` EST FACULTATIF ET BORNÉ** : un écart vu hors réseau s'envoie plus
+tard, et son heure d'origine est la seule qui vaille — mais au-delà **d'une
+heure** en arrière, ou dans le futur, c'est l'heure du serveur qui est gardée.
+
+⚠️ **RIEN NE CHANGE D'ÉTAT, ET RIEN N'ARRIVE AU PASSAGER.** `204`, et la course
+continue exactement comme avant : ces lignes sont servies **à l'exploitation
+seule**. « Votre chauffeur a quitté le point de départ sans vous » sur l'écran
+d'un passager assis dans la voiture serait faux une fois sur deux.
+
+⚠️ **AU PLUS VINGT LIGNES PAR COURSE** : au-delà, les plus anciennes partent.
+N'en faites pas un journal de bord.
 
 #### Les deux formes que le contrat nommait sans les décrire (v4.33.0)
 

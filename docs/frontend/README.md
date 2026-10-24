@@ -1,6 +1,6 @@
 # Specs frontend — par rôle
 
-> **Version 4.75.0** · 24 octobre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics`
+> **Version 4.76.0** · 24 octobre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics`
 
 **Cinq** documents, un par application. Chacun est **autonome** : tout ce qu'un frontend doit savoir pour son rôle, sans avoir à ouvrir les vingt specs de modules.
 
@@ -355,6 +355,54 @@ Chaque document porte la même version en en-tête, et son propre journal des ch
 - [ ] ⚠️ **`TRACKING_JWT_SECRET` renseigné dans chaque environnement déployé.** Vide, l'authentification du service de suivi est **désactivée** : n'importe qui connaissant un `delivery_id` suit la course. Le secret doit valoir **exactement** le `JWT_SECRET` de `dira-food-api`.
 
 ## Journal
+
+### 4.76.0 — 24 octobre 2026
+
+🚧 **LA GARDE DES ÉTAPES — `stop_guard`** — `VTC-DRIVER.md`. Demandée par les
+équipes mobiles (socle #207) : empêcher de quitter un arrêt sans l'avoir validé.
+
+```
+GET /settings/dispatch → { …, stop_guard: { enabled, stepping_in_m, in_stop_m,
+                           in_stop_dwell_s, stepping_out_m, stepped_out_m,
+                           max_accuracy_m } }
+POST /vtc/rides/{id}/stop-events   { stop_index, event, status, lng, lat, accuracy_m, at? } → 204
+```
+
+- ⚠️ **Les valeurs servies sont EXACTEMENT celles que les apps embarquent** :
+  rien ne change tant qu'un pays n'y touche pas, et le jour où il y touche
+  l'application suit **sans republication**. C'est tout l'objet de la demande —
+  40 m « dans l'arrêt » valent une porte d'immeuble à Lomé et trois voies plus
+  un terre-plein sur un boulevard de Libreville.
+- ⚠️ **`in_stop_dwell_s: 0` est un choix légitime**, pas « non réglé ». Sans
+  durée, **un feu rouge à trente mètres de la porte confirme une prise en
+  charge** — d'où le défaut de 20 s.
+- ⚠️⚠️ **LE SERVEUR NE BLOQUE RIEN** : aucune transition n'est refusée sur un
+  critère de distance. Un GPS qui dérive dans un parking souterrain empêcherait
+  un chauffeur de terminer une course qu'il a faite, et c'est le passager qui
+  attendrait. La garde **alerte**, elle n'empêche pas de conclure.
+- **Trois écarts gardés, et trois seulement** : `step_in_stop_confirmed` (⚠️ la
+  seule **preuve** du chauffeur contre « il n'est jamais venu »),
+  `stepping_out_unvalidated`, `stepped_out_unvalidated`. Les quatre
+  franchissements de zone de chaque arrêt feraient des centaines de lignes que
+  personne ne relira.
+- ⚠️ **Servis à l'exploitation seule, 20 au plus, les plus anciens partent** :
+  « votre chauffeur a quitté le point de départ sans vous » sur l'écran d'un
+  passager assis dans la voiture serait faux une fois sur deux. **Matière à
+  litige, pas un message.**
+- ⚠️ **`at` est borné** (une heure en arrière, jamais dans le futur) : un écart
+  vu hors réseau s'envoie plus tard, mais une date libre venue d'un téléphone
+  n'écrit pas l'histoire.
+
+🆕 **DEUX REFUS QUI NE DISAIENT RIEN** — `VTC-CLIENT.md`, `VTC-DRIVER.md`.
+
+- `422 stop_event_unknown` : un écart inventé, **et la phrase nomme les trois
+  acceptés**.
+- `422 cancel_reason_unknown` : ⚠️⚠️ **celui-là existait depuis l'origine et
+  était muet.** Une application qui envoyait un motif d'annulation invalide
+  lisait « Requête invalide » — la liste des motifs valables voyageait sous
+  `meta.allowed`, **que l'enveloppe ne sert pas**. La liste est désormais
+  **dans la phrase**. ⚠️ Cinquième occurrence de cette famille cette semaine :
+  ce qui n'est pas dans la phrase traduite n'arrive jamais sur un écran.
 
 ### 4.75.0 — 24 octobre 2026
 
