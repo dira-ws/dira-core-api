@@ -1,6 +1,6 @@
 # App CLIENT — COURSES (VTC) — contrat d'API
 
-> **Version 4.73.0** · 24 octobre 2026
+> **Version 4.74.0** · 24 octobre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Courses : `https://api-staging.dira.llc/api/v1/vtc` · Suivi : `wss://tracking-staging.dira.llc`
 
 ---
@@ -3087,6 +3087,120 @@ entier**, parce que c'est elle qu'on donne à la police.
 ⚠️ **LA RÉPONSE EST `no-store` ET `noindex`.** Ne la mettez pas en cache côté
 client, ne la préchargez pas : une page de suivi en cache montre une voiture là
 où elle n'est plus.
+
+---
+
+## 🛰️ LE RADAR — les voitures libres autour de vous, AVANT de commander (v4.74.0)
+
+> Demandé par le propriétaire. Avant de commander, un passager veut savoir s'il
+> y a quelque chose à commander. Sans cela, l'écran ne répond ni à « y a-t-il
+> des voitures ? » ni à « combien de temps vais-je attendre ? », et la seule
+> façon de trancher est d'appuyer sur « commander » pour voir.
+
+```
+GET /nearby-drivers?lng=&lat=            (rôle client)
+```
+
+```jsonc
+{ "enabled": true,
+  "mode": "auto",            // auto · on_demand
+  "refresh_s": 15,           // le MINIMUM entre deux balayages
+  "radius_m": 5000,          // le rayon réellement balayé
+  "drivers": [
+    { "position": [9.4531, 0.3924], "type": "car",  "distance_m": 420 },
+    { "position": [9.4602, 0.3881], "type": "moto", "distance_m": 1180 }
+  ],
+  "count": 2,
+  "as_of": "2026-10-24T12:00:00Z" }
+```
+
+### ⚠️⚠️ CE SONT LES VOITURES QUE LE DISPATCH APPELLERAIT, PAS « CELLES DU QUARTIER »
+
+Le rayon est **celui de l'appel** — et le rayon **maximum** quand il est fluide
+—, et la liste est celle des véhicules **libres** du même vivier, lus chez le
+même service que le dispatch.
+
+C'est ce qui rend le radar utilisable : **ne dessinez aucune autre source**, et
+ne filtrez pas la liste par classe. Un point montré est un point appelable.
+
+⚠️ **ET L'INVERSE EST FAUX : UNE LISTE VIDE N'EST PAS « PERSONNE NE VIENDRA ».**
+Le dispatch cherche **plus longtemps** que le radar ne montre (plusieurs vagues,
+un rayon qui s'élargit, des chauffeurs qui se libèrent). Écrivez « aucune
+voiture libre pour l'instant » et **laissez commander** : un écran qui
+découragerait la commande ferait perdre des courses que la plateforme aurait
+servies.
+
+### ⚠️⚠️ AUCUN CHAUFFEUR N'EST IDENTIFIÉ — ET PAS MÊME PAR UN IDENTIFIANT D'AFFICHAGE
+
+Un point porte **trois champs**, et il n'y en aura pas d'autres : `position`,
+`type`, `distance_m`. Pas d'identifiant, pas de plaque, pas de nom.
+
+**Deux balayages ne se recollent donc pas.** C'est délibéré — un radar qui
+numérote ses points est un traceur de chauffeurs, et les chauffeurs n'ont rien
+choisi (c'est l'exact inverse du partage de trajet, où c'est le passager qui
+expose sa propre position).
+
+**Ce que cela impose à l'écran :** dessinez un **état**, pas un mouvement.
+N'essayez pas d'animer un point d'un balayage au suivant, de compter les
+voitures qui arrivent ou partent, ni de suivre « la voiture la plus proche » :
+rien ne garantit que le point le plus proche de deux balayages soit le même
+véhicule.
+
+### Les quatre champs qui se lisent de travers
+
+| Champ | Ce qu'il est | Ce qu'il n'est PAS |
+|---|---|---|
+| `type` | le **type de véhicule** du suivi (`car`, `moto`, `tricycle`…) — de quoi choisir un **pictogramme** | ni la classe tarifaire, ni le mode de course. Une voiture libre n'a pas de mode : elle en a plusieurs possibles. ⚠️ **N'annoncez aucun prix à partir de ce champ** |
+| `distance_m` | la distance **à vol d'oiseau**, telle que l'index la rend | ⚠️ **pas une durée.** La route peut valoir le triple (un pont, un sens unique) : un « 2 min » déduit d'ici serait démenti par la première commande |
+| `count` | le nombre de points **servis**, borné par le pays | ⚠️ **pas le nombre de voitures disponibles.** « 12 voitures disponibles » sur un plafond de 12 est un chiffre faux dès la treizième. Écrivez « des voitures sont disponibles », ou rien |
+| `radius_m` | le rayon **balayé** | pas une promesse de temps d'attente |
+
+### `mode` — automatique ou à la demande
+
+- **`auto`** : balayez tant que la carte est à l'écran, **en respectant
+  `refresh_s`**, et **suspendez** dès qu'elle ne l'est plus (onglet caché,
+  écran éteint, autre page). Un radar qui tourne en arrière-plan vide une
+  batterie et un forfait pour une carte que personne ne regarde.
+- **`on_demand`** : **aucun balayage spontané.** Un geste du passager, un
+  balayage. ⚠️ Ce n'est pas « le radar en moins bien » : c'est le choix d'un
+  pays dont le réseau coûte cher, ou dont l'offre est mince aux heures creuses.
+
+⚠️ **`refresh_s` EST UN MINIMUM, PAS UNE CADENCE À TENIR.** Balayer plus vite ne
+montrera pas autre chose — un véhicule libre se déplace peu — et se fera border
+par la limitation de débit du service.
+
+### ⚠️ `enabled: false` → L'ÉCRAN N'EXISTE PAS
+
+Pas de carte vide, pas de bouton grisé, pas de message : **rien**. C'est le
+**défaut de la plateforme** — montrer la position de chauffeurs qui n'ont rien
+demandé est une décision que chaque pays prend pour lui.
+
+⚠️ **ET CE N'EST PAS UNE ERREUR À TRAITER** : la route répond `200` avec
+`enabled: false` et une liste vide, précisément pour que l'application puisse
+cacher l'écran **sans** afficher de panne.
+
+### Le point à envoyer
+
+Envoyez le **point de départ envisagé** — le centre de la carte, ou le départ
+que le passager vient de saisir —, pas sa position GPS si elle en diffère :
+c'est ce point-là que le dispatch utilisera, et donc celui dont le vivier
+compte.
+
+⚠️ **LA POLITIQUE EST CELLE DU PAYS DE CE POINT**, pas celle du pays du compte :
+un passager togolais à Libreville lit le radar du Gabon — ou ne lit rien, si le
+Gabon l'a éteint. Il n'y a pas de `?near=` ici : **les coordonnées sont la
+question**.
+
+### Ce qui ne répond pas, et ce que ça veut dire
+
+| | |
+|---|---|
+| `422` avec `fields: ["lng","lat"]` | point manquant, illisible, ou hors du globe |
+| `403` | **rôle chauffeur** : le radar est réservé au passager. Un chauffeur qui le lirait verrait ses concurrents en direct |
+| liste vide avec `enabled: true` | aucune voiture libre **à portée**, ou le suivi n'a pas répondu. ⚠️ Les deux se disent pareil et **aucun des deux n'est une panne à signaler** |
+
+⚠️ **LA RÉPONSE EST `no-store`.** Ne la mettez pas en cache : un radar en cache
+montre des voitures là où elles ne sont plus.
 
 ---
 
