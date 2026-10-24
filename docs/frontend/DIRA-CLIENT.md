@@ -1,6 +1,6 @@
 # App CLIENT UNIFIÉE — LIVRAISON **et** COURSES — contrat d'API
 
-> **Version 4.72.0** · 24 octobre 2026
+> **Version 4.73.0** · 24 octobre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Livraison : `…/api/v1/food` · Courses : `…/api/v1/vtc` · Combiné : `…/api/v1/analytics` · Suivi : `wss://tracking-staging.dira.llc`
 
 ---
@@ -342,7 +342,7 @@ POST /auth/register · POST /auth/login · POST /auth/refresh · POST /auth/logo
 GET /me · GET /me/addresses · POST /me/devices
 GET /wallet · GET /wallet/transactions
 POST /payments/initiate · GET /payments/{id} · GET /payments/providers
-GET /notifications · GET /countries · POST /uploads
+GET /notifications · GET /countries · POST /uploads?kind=avatar   ⚠️ jpeg, png, webp — 5 Mio (v4.73.0)
 GET /me/referral                                ← mon code de PARRAINAGE (v4.51.0)
 ```
 

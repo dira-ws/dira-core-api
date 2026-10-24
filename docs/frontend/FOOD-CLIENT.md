@@ -1,6 +1,6 @@
 # App CLIENT — LIVRAISON — contrat d'API
 
-> **Version 4.72.0** · 24 octobre 2026
+> **Version 4.73.0** · 24 octobre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Livraison : `https://api-staging.dira.llc/api/v1/food` · Suivi : `wss://tracking-staging.dira.llc`
 
 
@@ -2272,8 +2272,54 @@ n'existe pas.
 GET  /tombola/draws · POST /tombola/draws/{id}/enter · GET /tombola/me
 POST /tickets · GET /tickets · GET /tickets/{id} · POST /tickets/{id}/messages
 POST /bug-reports
-POST /uploads?kind=avatar&entity={id}    (SOCLE, sans /food — kind ∈ avatar|vehicle|dish|store|brand|feed|banner)
+POST /uploads?kind=avatar&entity={id}    (SOCLE, sans /food)
 ```
+
+### 🆕 LES FORMATS DE TÉLÉVERSEMENT — un genre, ses formats, son plafond (v4.73.0)
+
+`POST /uploads?kind=…` n'accepte plus « des images » : **chaque genre a ses
+formats et son plafond**, et le refus nomme ceux **de ce genre-là**.
+
+| Genre | Formats acceptés | Plafond |
+|---|---|---|
+| `avatar` · `vehicle` · `dish` · `store` · `brand` · `banner` · `equipment` | jpeg, png, webp | **5 Mio** |
+| `feed` | jpeg, png, webp — vidéos : mp4, webm, mov (⚠️ **≤ 60 s**) | **60 Mio** |
+| `receipt` · `document` | jpeg, png, webp, **pdf** | **15 Mio** |
+| `class` · `marker` (pictogrammes, **exploitation seule**) | png, webp, **svg** | **512 Kio** |
+
+**Ce que cette application envoie : `avatar`, et rien d'autre : la photo de profil.**
+
+🆕 ⚠️ **`kind=document` MANQUAIT, ET C'EST LE CHANGEMENT QUI VOUS CONCERNE.** Les
+pièces de conformité n'avaient aucun genre à elles : elles passaient par un
+genre prévu pour des **photographies**, donc **sans PDF possible** — alors
+qu'une attestation d'assurance est un PDF neuf fois sur dix. Envoyez désormais
+toute pièce de conformité avec `?kind=document`.
+
+⚠️ **LE PDF N'EST ACCEPTÉ QUE LÀ** — `receipt` (pièce comptable) et `document`
+(pièce de conformité). Nulle part ailleurs : une photo de profil en PDF ne
+s'affiche dans aucune liste.
+
+⚠️ **LE SVG N'EST PLUS ACCEPTÉ HORS PICTOGRAMMES.** Il l'était partout, par une
+règle unique écrite pour toute la plateforme. Un SVG peut porter du script, et
+il n'a aucune raison d'être une photo.
+
+⚠️ **AFFICHEZ LA PHRASE DU REFUS, N'ÉCRIVEZ PAS LA LISTE EN DUR.** Le `422` dit
+`unsupported type for kind document (accepted: jpeg, png, webp, pdf)` : une
+liste recopiée dans l'application vieillit en silence au premier format ajouté.
+
+⚠️ **UN `kind` INCONNU EST REFUSÉ** (`422`, la liste des genres dans la phrase).
+N'en inventez pas, et ne réutilisez pas celui d'un autre écran parce qu'il
+« passe » : le plafond et les formats suivent le genre.
+
+⚠️ **CE CONTRAT ANNONÇAIT ICI `kind ∈ avatar|vehicle|dish|store|brand|feed|banner`**,
+une liste à la fois **incomplète** (il manquait `class`, `marker`, `receipt` et
+désormais `document`) et **trompeuse** : elle laissait croire qu'un genre
+quelconque convient pour une photo quelconque. C'est le **genre** qui décide des
+formats et du plafond — et la liste vit au serveur, qui la sert dans la phrase
+du refus.
+
+---
+
 
 ### Le SUPPORT — réclamations et objets perdus (v4.9.0)
 

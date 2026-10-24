@@ -1,6 +1,6 @@
 # Specs frontend — par rôle
 
-> **Version 4.72.0** · 24 octobre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics`
+> **Version 4.73.0** · 24 octobre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics`
 
 **Cinq** documents, un par application. Chacun est **autonome** : tout ce qu'un frontend doit savoir pour son rôle, sans avoir à ouvrir les vingt specs de modules.
 
@@ -355,6 +355,97 @@ Chaque document porte la même version en en-tête, et son propre journal des ch
 - [ ] ⚠️ **`TRACKING_JWT_SECRET` renseigné dans chaque environnement déployé.** Vide, l'authentification du service de suivi est **désactivée** : n'importe qui connaissant un `delivery_id` suit la course. Le secret doit valoir **exactement** le `JWT_SECRET` de `dira-food-api`.
 
 ## Journal
+
+### 4.73.0 — 24 octobre 2026
+
+🚗 **LA FLOTTE INTERNE — Dira possède des véhicules et les confie contre une
+redevance** — `VTC-DRIVER.md`, `FOOD-DELIVERY.md`, `PARTNER-FLEET.md`.
+
+```
+GET /me/fleet-vehicles → { items: [ … ] }   le véhicule confié, et ce qu'il coûte
+```
+
+- **Une location, pas un achat ni une société partenaire.** Le contrat, son
+  échéancier et ses retenues sont ceux du **matériel** : **une** enveloppe,
+  **un** plafond, **un** blocage (`402 equipment_overdue`). ⚠️ **Pas une
+  seconde dette** — et **aucune part** prélevée sur les courses : le revenu
+  d'un véhicule de Dira est sa redevance, et elle seule.
+- ⚠️ **`terms` N'EST PAS CE QUE L'AGENT PAIE** : c'est le défaut de la fiche,
+  pour la prochaine attribution. Ce qui l'engage est `fee`, figé sur son
+  contrat. Afficher `terms` annonce un loyer que personne ne lui demande dès
+  que l'exploitation met le parc à jour.
+- ⚠️ **`included` ET `excluded` viennent TOUS LES DEUX du serveur**
+  (`maintenance` · `repairs` · `insurance` · `fuel` · `tracker`). « Inclus :
+  entretien » laisse croire que l'assurance l'est aussi, et la question se pose
+  pour de bon le jour de la panne.
+- ⚠️ **`attention[]` est calculé par le serveur** — `fee_overdue` ·
+  `agent_blocked` · `term_over` · `not_handed` · `insurance_expired` ·
+  `technical_expired` · `assigned_no_fee`. Deux écrans qui le recalculent ne
+  comptent jamais pareil, et l'exploitation doit dire la même chose que le
+  téléphone.
+- ⚠️ **La redevance commence à la REMISE** (le QR du comptoir), pas à
+  l'attribution : `handed_at` nul ⇒ rien n'est dû. Et **`term_over` ne ferme
+  rien** : la durée est passée, le véhicule reste confié et la redevance court.
+- Dans `GET /me/equipment`, le véhicule est un contrat de location comme un
+  autre, avec `item_kind: "vehicle"` et **sans `item_id`** — il n'y a pas « des
+  Corolla » en stock, il y a **LA** Corolla GA-1234-AB. ⚠️ Un écran qui attend
+  un `item_id` affiche un contrat vide.
+- 🆕 **`partner_fleet_internal` (`403`)** sur **toute** la console partenaire si
+  le compte est rattaché à la flotte de Dira. ⚠️ Pas un cloisonnement d'écrans :
+  `PUT /vtc/partner/drivers/{driverID}/pay` y aurait fait prélever une part de chaque
+  course **en plus** de la redevance.
+
+🚦 **LA VITESSE : TROIS RÉGLAGES DE PLUS, ET UNE PROMESSE RETIRÉE** —
+`VTC-DRIVER.md`. Demandé par le propriétaire (le nombre, la durée, le type
+d'alerte, et la gestion des excès au support).
+
+```
+speed_over_s      la durée que le dépassement doit tenir   (0 → 10 s)
+speed_alert       silent · banner · sound · voice          (vide → banner)
+speed_grave_kmh   le second seuil, celui qui prévient le support   (0 = jamais)
+```
+
+- ⚠️⚠️ **CE CONTRAT PROMETTAIT « la plateforme ne coupe rien, NE SIGNALE RIEN,
+  ne facture rien ».** Elle ne coupe toujours rien et ne facture toujours rien,
+  **mais elle constate désormais** et prévient le support sur un excès **grave**.
+  Un écran qui promet « personne n'est prévenu » tient un engagement que le
+  serveur ne tient plus. **Rien n'est dit au passager**, et rien du registre
+  n'est servi à l'application.
+- ⚠️ **AUCUNE ROUTE POUR DÉCLARER UN EXCÈS** : le constat se fait depuis les
+  trames de suivi déjà émises. L'application **alerte**, le serveur
+  **constate** — indépendamment, ce qui permet à un pays de mesurer avant
+  d'alerter (`speed_alert: "silent"`).
+- ⚠️ **`speed_over_s` à 0 ne veut pas dire « alerter sur chaque pic »** : le
+  serveur retombe sur **10 s**. La vitesse GPS est bruitée — un pic d'une
+  seconde affiche 94 km/h à quelqu'un qui roule à 48, et une alerte qui se
+  trompe s'apprend à ignorer en une journée. **Vide ⇒ `banner`, jamais
+  `silent`.**
+
+📎 **UN GENRE DE TÉLÉVERSEMENT, SES FORMATS, SON PLAFOND** — les huit contrats.
+Demandé par le propriétaire : accepter le PDF **pour les reçus et les preuves
+seulement**, et contrôler les formats cas par cas.
+
+| Genre | Formats | Plafond |
+|---|---|---|
+| `avatar` · `vehicle` · `dish` · `store` · `brand` · `banner` · `equipment` | jpeg, png, webp | 5 Mio |
+| `feed` | jpeg, png, webp + mp4, webm, mov (≤ 60 s) | 60 Mio |
+| `receipt` · `document` | jpeg, png, webp, **pdf** | 15 Mio |
+| `class` · `marker` (pictogrammes, exploitation) | png, webp, **svg** | 512 Kio |
+
+- 🆕 ⚠️ **`kind=document` MANQUAIT.** Les pièces de conformité — identité,
+  permis, assurance, carte grise, contrôle technique, casier — n'avaient aucun
+  genre à elles : elles passaient sous un genre prévu pour des
+  **photographies**, donc **sans PDF possible**, alors qu'une attestation est un
+  PDF neuf fois sur dix. `POST /uploads?kind=document` désormais, dans les trois
+  surfaces qui déposent des pièces.
+- ⚠️ **LE SVG N'EST PLUS ACCEPTÉ HORS PICTOGRAMMES.** Il l'était partout, par
+  une règle unique écrite pour toute la plateforme : un SVG peut porter du
+  script, et il n'a aucune raison d'être une photo de profil.
+- ⚠️ **AFFICHEZ LA PHRASE DU REFUS** (`422 unsupported type for kind document
+  (accepted: jpeg, png, webp, pdf)`) **plutôt qu'une liste écrite en dur** : la
+  liste recopiée dans une application vieillit en silence au premier format
+  ajouté. ⚠️ Et `FOOD-CLIENT.md` annonçait une liste de genres **incomplète**
+  depuis des mois — elle est retirée.
 
 ### 4.72.0 — 24 octobre 2026
 

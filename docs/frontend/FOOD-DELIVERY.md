@@ -1,6 +1,6 @@
 # App LIVREUR — LIVRAISON — contrat d'API
 
-> **Version 4.72.0** · 24 octobre 2026
+> **Version 4.73.0** · 24 octobre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Livraison : `https://api-staging.dira.llc/api/v1/food` · Suivi : `wss://tracking-staging.dira.llc` · SIG : `https://maps.dira.llc/api`
 
 
@@ -2456,6 +2456,151 @@ reste dû passe `completed`.
 
 ---
 
+## 🚗 LA MOTO OU LA VOITURE DE DIRA — la flotte interne (v4.73.0) — **SOCLE** (sans `/food`)
+
+> Dira **possède** des véhicules et les **confie** contre une **redevance**.
+>
+> ⚠️ **CE N'EST PAS UNE SOCIÉTÉ PARTENAIRE.** Un véhicule de Dira ne prélève
+> **aucune part** sur ce que vous gagnez : son revenu est sa redevance, et elle
+> seule. Si un écran affiche les deux, il compte deux fois la même chose.
+>
+> ⚠️ **ET CE N'EST PAS UN ACHAT.** C'est une **location**, tenue par le **même**
+> contrat et le **même** échéancier que le matériel (§8 bis) : ce que vous
+> devez est **retenu sur vos gains**, dans la **même** enveloppe et sous le
+> **même** plafond. Pas une seconde dette.
+
+```
+GET /me/fleet-vehicles → { items: [ … ] }      le véhicule qui m'est confié, et ce que je dois
+```
+
+Rôle `driver`. ⚠️ **Sans borne de pays** : c'est le compte connecté qui désigne
+ses véhicules — quelqu'un en déplacement doit pouvoir lire ce qu'il doit.
+
+```jsonc
+{ "items": [ {
+  "id": "…", "country": "GA", "fleet_id": "…", "class_key": "berline",
+  "verticals": [ "food" ],          // vide = les deux métiers
+  "plate": "GA-1234-AB", "brand": "Toyota", "model": "Corolla",
+  "color": "gris", "year": 2019, "seats": 4, "odometer_km": 182400,
+  "photos": [ "https://…" ],
+  "insurance_expires_at": "2027-02-01T00:00:00Z",
+  "technical_expires_at": "2026-11-30T00:00:00Z",
+  "status": "assigned",                 // available · assigned · maintenance · retired
+  "label": "Toyota Corolla · GA-1234-AB",
+  "terms": { "fee_xof": 7000, "period": "weekly", "deposit_xof": 50000, "days": 90,
+             "included": [ "maintenance", "insurance" ],
+             "excluded": [ "repairs", "fuel", "tracker" ] },
+  "contract_id": "…", "assigned_at": "2026-10-01T08:12:00Z",
+  "fee": { "contract_id": "…", "status": "active",
+           "fee_xof": 7000, "period": "weekly", "deposit_xof": 50000,
+           "paid_xof": 21000, "outstanding_xof": 7000, "due_xof": 7000,
+           "overdue_since": null, "blocked": false,
+           "ends_at": "2026-12-30T00:00:00Z", "term_over": false,
+           "included": [ "maintenance", "insurance" ],
+           "handed_at": "2026-10-01T09:40:00Z" },
+  "attention": [ ]
+} ] }
+```
+
+### ⚠️⚠️ `terms` N'EST PAS CE QUE VOUS PAYEZ — `fee` l'est
+
+`terms` sont les conditions **de la fiche du véhicule** : un **défaut**, pour la
+prochaine attribution. `fee` est ce que **votre contrat** porte, figé le jour où
+on vous l'a confié.
+
+**Affichez `fee`.** Le jour où l'exploitation met le parc à jour, un écran qui
+lit `terms` annonce un loyer que personne ne vous demande — et c'est le genre de
+chiffre qu'on croit, puis qu'on conteste.
+
+⚠️ **`fee` PEUT ÊTRE ABSENT alors que le véhicule vous est confié.** Ce n'est
+pas « rien à payer » : c'est le signe qu'un contrat manque. Le serveur le dit
+dans `attention` (`assigned_no_fee`) — **ne l'affichez pas comme un solde à
+zéro**, dites « redevance introuvable, contactez Dira ».
+
+### `attention[]` — ce qui demande un geste, **calculé par le serveur**
+
+| Code | Ce que ça veut dire |
+|---|---|
+| `fee_overdue` | une échéance de redevance est en retard |
+| `agent_blocked` | votre prise de service est bloquée — ⚠️ **le MÊME blocage que le matériel** (`402 equipment_overdue`), pas un second |
+| `term_over` | la durée convenue est passée |
+| `not_handed` | confié, **jamais remis** : la redevance n'a pas commencé |
+| `insurance_expired` | assurance périmée |
+| `technical_expired` | visite technique périmée |
+| `assigned_no_fee` | confié sans redevance lisible — anomalie, à signaler |
+
+⚠️ **NE LE RECALCULEZ PAS.** Deux écrans qui comptent eux-mêmes ne comptent
+jamais pareil, et l'exploitation doit dire à la même personne la même chose que
+son téléphone. Liste vide = rien à faire.
+
+### ⚠️ `included` ET `excluded` : LES DEUX FACES VIENNENT DU SERVEUR
+
+`maintenance` · `repairs` · `insurance` · `fuel` · `tracker`.
+
+**Affichez les deux listes**, pas seulement ce qui est inclus. « Inclus :
+entretien » laisse croire que l'assurance l'est aussi, et la question se pose
+pour de bon le jour de la panne — devant quelqu'un qui n'a pas écrit la liste.
+Ce qui est dans `excluded` est **à votre charge**.
+
+### ⚠️ LA REDEVANCE COMMENCE À LA REMISE, PAS À L'ATTRIBUTION
+
+Une voiture ne se tend pas par-dessus un comptoir : elle se remet avec un état
+des lieux, des clés et des papiers. La remise est donc le **même geste prouvé**
+que le matériel — le **QR scanné au comptoir** (`POST /equipment/handover
+{ code }`) —, et c'est elle qui lance l'échéancier.
+
+Tant que `handed_at` est nul, **vous ne devez rien** : `attention` porte
+`not_handed`. N'affichez pas d'échéance à payer sur un véhicule qu'on ne vous a
+pas encore remis.
+
+Le retour se scanne de la même façon (`POST /equipment/return { code }`).
+
+### Le contrat lui-même est dans `GET /me/equipment`
+
+Un véhicule de Dira y est un contrat de location **comme un autre**, avec ses
+lignes, ses paiements et ses retenues — **deux nouveautés seulement** :
+
+```jsonc
+{ "item_kind": "vehicle",        // ⚠️ et PAS d'`item_id` : un véhicule n'est pas un article
+   "asset_id": "…",
+   "asset_label": "Toyota Corolla · GA-1234-AB",   // figé à l'ouverture
+   "included": [ "maintenance", "insurance" ],
+   "term_over": false }
+```
+
+⚠️ **NE CHERCHEZ PAS LE VÉHICULE DANS LE CATALOGUE** (`GET
+/equipment/catalogue`) : il n'y est pas, et c'est délibéré. Il n'y a pas « des
+Corolla » en stock, il y a **LA** Corolla GA-1234-AB. Un écran qui attend un
+`item_id` affichera un contrat vide.
+
+⚠️ **`asset_label` EST FIGÉ À L'OUVERTURE DU CONTRAT.** Une plaque change
+(réimmatriculation, revente) et un contrat se relit deux ans plus tard : c'est
+le libellé du contrat qui fait foi, pas la fiche du parc.
+
+⚠️ **`term_over` NE FERME RIEN.** La durée convenue est passée, le véhicule
+reste le vôtre jusqu'à ce que l'exploitation le reprenne — et la redevance
+continue de courir. N'écrivez **pas** « contrat terminé » : écrivez « durée
+dépassée, Dira va reprendre le véhicule ».
+
+### Ce que vous **ne** faites **pas** depuis l'application
+
+Confier, rendre au parc, changer un état, écrire des notes : **rien de tout
+cela** n'a de route pour vous. Les refus ci-dessous existent côté exploitation
+et **n'arriveront jamais** sur votre écran — ils sont nommés ici pour que
+personne ne les implémente :
+`own_fleet_vehicle_not_found` · `own_fleet_plate_taken` ·
+`own_fleet_vehicle_busy` · `own_fleet_vehicle_not_assigned` ·
+`own_fleet_vehicle_assigned` · `own_fleet_vehicle_retired` ·
+`own_fleet_vertical_not_offered` · `own_fleet_not_a_driver` ·
+`own_fleet_contract_open` · `own_fleet_unavailable`.
+
+⚠️ **ET `holder_name` ET `notes` NE VOUS SONT PAS SERVIS.** Vous savez qui vous
+êtes, et les notes du parc sont des échanges internes (« à surveiller », « rendu
+sale ») : les servir aurait fait lire à quelqu'un ce qu'on écrit sur lui. Un
+champ absent n'est pas un champ vide à afficher.
+
+---
+
 ## 🆘 LE BOUTON D'ALERTE — SOS (v4.56.0)
 
 Un bouton, dans **toutes** les applications. Il ne se coupe pas, il ne se règle
@@ -3118,6 +3263,50 @@ L'écran d'appel ne doit déclencher **aucune requête** avant de s'afficher : `
 GET  /agent/documents
 POST /agent/documents   { kind, file_url, vehicle_id?, expires_at? }
 ```
+
+🆕 ⚠️ **`file_url` VIENT DE `POST /uploads?kind=document` (v4.73.0), ET C'EST
+NOUVEAU.** Ce genre **n'existait pas** : les pièces partaient sous un genre
+prévu pour des **photographies**, donc **sans PDF possible** — alors qu'une
+attestation d'assurance ou un casier est un PDF neuf fois sur dix.
+
+### 🆕 LES FORMATS DE TÉLÉVERSEMENT — un genre, ses formats, son plafond (v4.73.0)
+
+`POST /uploads?kind=…` n'accepte plus « des images » : **chaque genre a ses
+formats et son plafond**, et le refus nomme ceux **de ce genre-là**.
+
+| Genre | Formats acceptés | Plafond |
+|---|---|---|
+| `avatar` · `vehicle` · `dish` · `store` · `brand` · `banner` · `equipment` | jpeg, png, webp | **5 Mio** |
+| `feed` | jpeg, png, webp — vidéos : mp4, webm, mov (⚠️ **≤ 60 s**) | **60 Mio** |
+| `receipt` · `document` | jpeg, png, webp, **pdf** | **15 Mio** |
+| `class` · `marker` (pictogrammes, **exploitation seule**) | png, webp, **svg** | **512 Kio** |
+
+**Ce que cette application envoie : `avatar` (la photo de profil), `vehicle` (les photos d'un véhicule, 8 au plus), `document` (les pièces de conformité).**
+
+🆕 ⚠️ **`kind=document` MANQUAIT, ET C'EST LE CHANGEMENT QUI VOUS CONCERNE.** Les
+pièces de conformité n'avaient aucun genre à elles : elles passaient par un
+genre prévu pour des **photographies**, donc **sans PDF possible** — alors
+qu'une attestation d'assurance est un PDF neuf fois sur dix. Envoyez désormais
+toute pièce de conformité avec `?kind=document`.
+
+⚠️ **LE PDF N'EST ACCEPTÉ QUE LÀ** — `receipt` (pièce comptable) et `document`
+(pièce de conformité). Nulle part ailleurs : une photo de profil en PDF ne
+s'affiche dans aucune liste.
+
+⚠️ **LE SVG N'EST PLUS ACCEPTÉ HORS PICTOGRAMMES.** Il l'était partout, par une
+règle unique écrite pour toute la plateforme. Un SVG peut porter du script, et
+il n'a aucune raison d'être une photo.
+
+⚠️ **AFFICHEZ LA PHRASE DU REFUS, N'ÉCRIVEZ PAS LA LISTE EN DUR.** Le `422` dit
+`unsupported type for kind document (accepted: jpeg, png, webp, pdf)` : une
+liste recopiée dans l'application vieillit en silence au premier format ajouté.
+
+⚠️ **UN `kind` INCONNU EST REFUSÉ** (`422`, la liste des genres dans la phrase).
+N'en inventez pas, et ne réutilisez pas celui d'un autre écran parce qu'il
+« passe » : le plafond et les formats suivent le genre.
+
+---
+
 
 > ## ⚠️ `missing` CONTIENT LES PIÈCES DÉPOSÉES MAIS PAS ENCORE VALIDÉES (v4.62.3)
 >

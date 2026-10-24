@@ -1,6 +1,6 @@
 # App CLIENT — COURSES (VTC) — contrat d'API
 
-> **Version 4.72.0** · 24 octobre 2026
+> **Version 4.73.0** · 24 octobre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Courses : `https://api-staging.dira.llc/api/v1/vtc` · Suivi : `wss://tracking-staging.dira.llc`
 
 ---
@@ -3625,7 +3625,7 @@ dans le fil : c'est ce qui protège les deux côtés.
 |---|---|
 | `POST /auth/register` · `/auth/login` · `/auth/refresh` · `/auth/logout` | la session — ⚠️ la connexion porte `app: "client"` depuis la v4.26.0 |
 | `GET · PATCH /me` · `PATCH /me/preferences` | le profil |
-| `POST /uploads?kind=avatar` | la photo de profil — **v3.0.0**, une seule porte pour toute la plateforme |
+| `POST /uploads?kind=avatar` | la photo de profil — **v3.0.0**, une seule porte pour toute la plateforme. ⚠️ **jpeg, png, webp — 5 Mio** (v4.73.0) : le **SVG n'est plus accepté**, et le **PDF** ne l'est que sur une pièce comptable ou de conformité |
 | `POST /bug-reports` (**LIVRAISON**, `…/api/v1/food/bug-reports`) | signaler un bug de l'application — pas une réclamation : celles-ci sont §7 ter, sur `/vtc/tickets` |
 | `GET · POST /me/addresses` · `PUT · DELETE /me/addresses/{id}` | le carnet d'adresses |
 | `GET /wallet` · `/wallet/transactions` · `POST /wallet/purchase` | le solde Dira |
