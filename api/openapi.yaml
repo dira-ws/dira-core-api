@@ -650,16 +650,14 @@ paths:
       summary: Countries where Dira is open
       security: []
       description: >-
-        PUBLIC. Les pays OUVERTS, avec leur fiche : nom, MONNAIE (code,
-        symbole, décimales — ce qu'il faut pour afficher un montant),
-        indicatif, langue, fuseau, centre. `default` nomme le pays du déploiement —
-        celui qu'une requête sans jeton ni en-tête reçoit. Cinq pays sont
-        ouverts d'office : Togo, Sénégal, Guinée, Tchad, Gabon. Une application
-        s'en sert avant toute connexion : proposer l'indicatif à
+        PUBLIC. Les pays OUVERTS, avec leur fiche : nom, MONNAIE EN VIGUEUR
+        (code, symbole, décimales — ce qu'il faut pour afficher un montant),
+        indicatif, langue, fuseau, centre, et leur **fond de carte par défaut**
+        (`basemap` : `dira` | `google`, v4.41.0). `default` nomme le pays du
+        déploiement — celui qu'une requête sans jeton ni en-tête reçoit. Cinq
+        pays sont ouverts d'office : Togo, Sénégal, Guinée, Tchad, Gabon. Une
+        application s'en sert avant toute connexion : proposer l'indicatif à
         l'inscription, dire « Dira n'est pas encore chez vous ».
-      description: >-
-        Les pays OUVERTS, avec leur monnaie EN VIGUEUR et leur **fond de carte
-        par défaut** (`basemap` : `dira` | `google`, v4.41.0).
 
 
         ⚠️ **`basemap` est ici parce que le bloc `maps` de l'authentification ne
