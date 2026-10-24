@@ -216,6 +216,27 @@ const (
 	// annulée : il est libre, et doit l'apprendre avant d'arriver au
 	// restaurant.
 	KeyDeliveryCancelled = "delivery_cancelled"
+	// LE TRANSFERT D'UNE COMMANDE — quand le livreur en place passe la main.
+	//
+	// ⚠️⚠️ QUATRE CLÉS DE PLUS, ET NON CELLES DES COURSES. Les phrases du
+	// transfert d'une course parlent d'une voiture qui vient « vous
+	// reprendre » : sur l'écran d'un client qui attend un repas, cela n'a
+	// aucun sens — personne ne monte dans la moto du livreur. Le client ne
+	// bouge pas, il attend ; ce qui change de main est son PAQUET.
+	//
+	//   - `delivery_transfer_started` : au CLIENT, avec LE MOTIF. Sans lui,
+	//     une attente qui s'allonge se lit comme une commande perdue ;
+	//   - `delivery_transferred` : au CLIENT, quand quelqu'un a repris — avec
+	//     le nom et le véhicule, parce que c'est cette personne qui sonnera
+	//     à sa porte, et qu'il attendait l'autre ;
+	//   - `delivery_transfer_failed` : au CLIENT, quand personne n'a repris.
+	//     ⚠️ La bonne nouvelle est dans la phrase : son livreur continue ;
+	//   - `delivery_transfer_done` : à L'ANCIEN LIVREUR, avec sa part. Son
+	//     écran se ferme sur une course qu'il n'a pas terminée.
+	KeyDeliveryTransferStarted = "delivery_transfer_started"
+	KeyDeliveryTransferred     = "delivery_transferred"
+	KeyDeliveryTransferFailed  = "delivery_transfer_failed"
+	KeyDeliveryTransferDone    = "delivery_transfer_done"
 	// KeyRideStopsChanged va au CHAUFFEUR quand le trajet d'une course en
 	// cours change — un arrêt ajouté ou retiré, et un prix recalculé. Il
 	// relit la course : c'est elle qui porte la nouvelle destination.
@@ -1008,6 +1029,42 @@ var defaults = map[string]Template{
 			LocaleEN: {Title: "Delivery cancelled", Body: "Order [order_ref] was cancelled. You are free for another delivery."},
 		},
 	},
+	KeyDeliveryTransferStarted: {
+		Key:         KeyDeliveryTransferStarted,
+		Description: "Le livreur en place passe la main — message au CLIENT, avec le motif. Une attente qui s'allonge sans explication se lit comme une commande perdue.",
+		Enabled:     true,
+		Locales: map[string]Text{
+			LocaleFR: {Title: "Changement de livreur", Body: "Votre livreur ne peut pas continuer : [reason]. Nous cherchons quelqu'un pour reprendre votre commande — elle vous sera livrée."},
+			LocaleEN: {Title: "Change of courier", Body: "Your courier cannot continue: [reason]. We are finding someone to take over your order — it will be delivered to you."},
+		},
+	},
+	KeyDeliveryTransferred: {
+		Key:         KeyDeliveryTransferred,
+		Description: "Un autre livreur a repris la commande — message au CLIENT, avec le nom et le véhicule : c'est cette personne qui sonnera, et il attendait l'autre.",
+		Enabled:     true,
+		Locales: map[string]Text{
+			LocaleFR: {Title: "Un autre livreur arrive", Body: "[courier] reprend votre commande en [vehicle]. C'est lui qui vous la remettra."},
+			LocaleEN: {Title: "Another courier is coming", Body: "[courier] is taking over your order on a [vehicle]. They are the one who will hand it to you."},
+		},
+	},
+	KeyDeliveryTransferFailed: {
+		Key:         KeyDeliveryTransferFailed,
+		Description: "Personne n'a repris la commande — message au CLIENT. ⚠️ La bonne nouvelle est dans la phrase : son livreur continue.",
+		Enabled:     true,
+		Locales: map[string]Text{
+			LocaleFR: {Title: "Votre livreur continue", Body: "Nous n'avons pas trouvé d'autre livreur : [courier] poursuit votre livraison."},
+			LocaleEN: {Title: "Your courier continues", Body: "We found no other courier: [courier] is continuing your delivery."},
+		},
+	},
+	KeyDeliveryTransferDone: {
+		Key:         KeyDeliveryTransferDone,
+		Description: "La commande a été reprise — message à L'ANCIEN LIVREUR, avec sa part. Son écran se ferme sur une course qu'il n'a pas terminée.",
+		Enabled:     true,
+		Locales: map[string]Text{
+			LocaleFR: {Title: "Course reprise", Body: "Un autre livreur a repris la commande. Votre part pour ce que vous avez porté : [amount]."},
+			LocaleEN: {Title: "Delivery taken over", Body: "Another courier has taken over the order. Your share for what you carried: [amount]."},
+		},
+	},
 	KeyDeliveryExpired: {
 		Key:         KeyDeliveryExpired,
 		Description: "Aucun livreur en N minutes : la recherche est arrêtée — message au MARCHAND, qui doit relancer.",
@@ -1088,7 +1145,14 @@ var provided = map[string][]string{
 	KeyRideCancelled:        {"reason"},
 	KeyRideCancelledByRider: {"reason"},
 	KeyDeliveryCancelled:    {"order_ref"},
-	KeyRideSearchExhausted:  {"pickup"},
+	// LE TRANSFERT D'UNE COMMANDE : le MOTIF, puis QUI reprend. ⚠️ Pas la
+	// référence de la commande — le client n'en a qu'une en cours, et ces
+	// quatre phrases arrivent pendant qu'il la regarde.
+	KeyDeliveryTransferStarted: {"reason"},
+	KeyDeliveryTransferred:     {"courier", "vehicle"},
+	KeyDeliveryTransferFailed:  {"courier"},
+	KeyDeliveryTransferDone:    {"amount"},
+	KeyRideSearchExhausted:     {"pickup"},
 	// LA COURSE PARTAGÉE : le LIEU DE DÉPART, et lui seul. ⚠️ Pas le nom du
 	// co-passager, ni son adresse : deux inconnus se rencontrent dans la
 	// voiture, pas dans une notification — et le lieu de départ est ce qui

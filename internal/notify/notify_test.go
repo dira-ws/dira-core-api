@@ -414,3 +414,62 @@ func TestTheFourTransferMessagesEachCarryWhatTheirReaderNeeds(t *testing.T) {
 		}
 	}
 }
+
+// ⚠️⚠️ LE TRANSFERT D'UNE COMMANDE NE SE DIT PAS AVEC LES PHRASES D'UNE
+// COURSE, et c'est tout l'objet de cette épreuve.
+//
+// Les quatre phrases du VTC annoncent une voiture qui vient « vous reprendre »
+// et demandent au passager de rester où il est. Recopiées sur l'écran de
+// quelqu'un qui attend un repas chez lui, elles sont incompréhensibles :
+// personne ne monte dans la moto du livreur, le client ne bouge pas, et ce qui
+// change de main est son PAQUET.
+//
+// La tentation de la recopie est réelle — les deux familles ont la même forme,
+// les mêmes destinataires, les mêmes variables. Alors l'épreuve regarde les
+// MOTS : la commande doit être nommée, et l'invitation à monter dans la
+// voiture doit être absente.
+func TestTheDeliveryTransferMessagesSpeakOfAParcelAndNotOfAnotherCar(t *testing.T) {
+	want := map[string][]string{
+		KeyDeliveryTransferStarted: {"reason"},
+		KeyDeliveryTransferred:     {"courier", "vehicle"},
+		KeyDeliveryTransferFailed:  {"courier"},
+		KeyDeliveryTransferDone:    {"amount"},
+	}
+	byKey := map[string]Template{}
+	for _, d := range Defaults() {
+		byKey[d.Key] = d
+	}
+	for key, vars := range want {
+		tpl, ok := byKey[key]
+		if !ok {
+			t.Fatalf("gabarit %s absent des défauts", key)
+		}
+		if !tpl.Enabled {
+			t.Fatalf("%s doit être actif : un transfert muet laisse le client croire à une commande perdue", key)
+		}
+		for _, loc := range []string{LocaleFR, LocaleEN} {
+			txt, ok := tpl.Locales[loc]
+			if !ok || txt.Title == "" || txt.Body == "" {
+				t.Fatalf("%s n'a pas de phrase en %s", key, loc)
+			}
+			for _, v := range vars {
+				if !strings.Contains(txt.Body, "["+v+"]") {
+					t.Fatalf("%s (%s) doit porter [%s] DANS sa phrase : hors de la phrase, la variable est perdue", key, loc, v)
+				}
+			}
+		}
+		// ⚠️ AUCUNE DES QUATRE NE DOIT PARLER DE LA COURSE DU PASSAGER. Ce
+		// sont les mots exacts des phrases du VTC : s'ils apparaissent ici,
+		// quelqu'un a recopié la mauvaise famille.
+		fr := byKey[key].Locales[LocaleFR].Body
+		for _, forbidden := range []string{"vous reprendre", "restez où vous êtes", "votre course", "votre trajet"} {
+			if strings.Contains(fr, forbidden) {
+				t.Fatalf("%s dit « %s » : c'est la phrase d'une COURSE. Le client d'une livraison ne monte dans aucun véhicule", key, forbidden)
+			}
+		}
+	}
+	// Et la première phrase nomme bien ce qui est en jeu : la commande.
+	if !strings.Contains(byKey[KeyDeliveryTransferStarted].Locales[LocaleFR].Body, "commande") {
+		t.Fatal("le message d'ouverture doit nommer la COMMANDE : c'est elle que le client attend")
+	}
+}
