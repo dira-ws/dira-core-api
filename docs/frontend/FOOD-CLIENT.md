@@ -1,6 +1,6 @@
 # App CLIENT — LIVRAISON — contrat d'API
 
-> **Version 4.79.0** · 24 octobre 2026
+> **Version 4.80.0** · 24 octobre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Livraison : `https://api-staging.dira.llc/api/v1/food` · Suivi : `wss://tracking-staging.dira.llc`
 
 
@@ -1521,6 +1521,34 @@ et personne ne s'y trouve encore. Quand votre commande est collectée chez **plu
 enseignes**, chaque point de collecte prend un pin numéroté du **marchand**,
 dans l'ordre où le livreur y passe — c'est ce qui permet de suivre sa
 tournée au lieu de voir trois pastilles identiques.
+
+## 🆕 🔔 « VOTRE LIVREUR ARRIVE » — le préavis (v4.80.0)
+
+> Demandé par le propriétaire : « notification quand le livreur est à 2 min du
+> client ». Le serveur la pousse **tout seul** : rien à demander, rien à
+> calculer.
+
+```
+push delivery_nearby   { courier, minutes }   ·   data: { type: "delivery_status", order_id, delivery_id, status: "in_transit" }
+```
+
+⚠️ **LE DÉLAI EST DANS LE MESSAGE, PAS DANS VOTRE CODE.** La variable
+`minutes` vaut ce que l'exploitation a réglé pour ce pays — deux minutes
+aujourd'hui, peut-être trois demain. Afficher « il arrive » sans le délai ne
+fait descendre personne de son appartement ; c'est tout l'intérêt de ce
+message.
+
+⚠️ **IL ARRIVE UNE SEULE FOIS PAR COMMANDE**, et le serveur s'en charge : vous
+n'avez ni à dédupliquer, ni à mémoriser que vous l'avez reçu.
+
+⚠️ **IL N'ARRIVE QU'APRÈS LES COLLECTES**, quand le livreur part vraiment vers
+vous. Pendant qu'il récupère les plats il peut passer à cent mètres de chez
+vous ; le serveur ne le dit pas, et vous ne devez pas le déduire de la carte.
+
+⚠️ **ET IL PEUT NE JAMAIS ARRIVER**, sans que rien n'aille mal : un pays peut
+ne pas avoir ouvert ce message, le réseau du livreur peut être coupé au moment
+où il franchit le rayon. N'en faites **aucune étape obligatoire** de votre
+écran — c'est un bonus, pas un statut. L'état de la commande reste la vérité.
 
 ## 🆕 🤝 ON CHANGE DE LIVREUR — le transfert (v4.78.0)
 

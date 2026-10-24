@@ -1,6 +1,6 @@
 # PARTENAIRE — PROPRIÉTAIRE DE FLOTTE PRIVÉE — contrat d'API
 
-> **Version 4.79.0** · 24 octobre 2026
+> **Version 4.80.0** · 24 octobre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Courses : `https://api-staging.dira.llc/api/v1/vtc`
 > Console en service : `https://partner-staging.dira.llc`
 >
@@ -1612,6 +1612,26 @@ Un livre qui tait son point de départ se lit comme complet.
 dû recalculer, via `recomputed_rides`.)
 
 ---
+
+## 🆕 ⚠️ UNE COURSE PEUT AVOIR ÉTÉ PORTÉE PAR DEUX VOITURES (v4.80.0)
+
+Un chauffeur qui ne peut pas continuer — panne, malaise, route coupée —
+**passe la main** à un autre : la course garde son passager et son trajet, et
+change de voiture en route (voir `VTC-DRIVER.md`, « Passer la main »).
+
+**Ce que ça change pour vos écrans :** votre part est **figée au moment où
+votre voiture lâche la course**, sur ce que votre chauffeur a réellement gagné —
+pas sur le prix entier.
+
+| | |
+|---|---|
+| le **relevé de paie** (`/vtc/partner/payroll`) | `earned_xof` et `fleet_share_xof` portent déjà les **deux cas** : une course entière, et une course **partiellement** portée. Rien à additionner vous-même |
+| le **grand livre** (`/vtc/partner/ledger`) | une course portée en partie apparaît **comme les autres** : une date, une plaque, un montant. Elle n'est pas marquée « partielle » — ce qui est dû ne dépend pas de la façon dont la course s'est finie |
+| le compte de **courses** | ⚠️ une course portée en partie **n'y est pas comptée**. « 12 courses » dirait faux si l'une des douze était un quart de trajet ; l'argent, lui, compte |
+
+⚠️ **N'ESSAYEZ PAS DE RECALCULER UNE PART À PARTIR DU PRIX DE LA COURSE.** Elle
+peut légitimement valoir le quart de ce que la grille donnerait — et un écran
+qui « corrige » ce chiffre affiche un montant que personne ne doit.
 
 ## 14. LE SUPPORT — ses fils, et SEULEMENT les siens
 
