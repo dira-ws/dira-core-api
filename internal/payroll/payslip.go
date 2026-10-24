@@ -92,7 +92,17 @@ func plannedShare(a *Adjustment, base, gross int) int {
 	if left == 1 {
 		return remaining
 	}
-	return remaining / left
+	share := remaining / left
+	// ⚠️ UNE ÉCHÉANCE QUI TOMBE À ZÉRO NE PROGRESSERAIT JAMAIS. Deux francs
+	// étalés sur trois paies font zéro par division entière — et comme rien
+	// n'est passé, le compteur d'échéances ne bouge pas : la retenue
+	// reviendrait indéfiniment en ne prenant rien, « en cours » pour toujours.
+	// On prend donc le reste tout de suite. C'est moins d'une unité de monnaie
+	// par période, et le plancher borne cette prise comme les autres.
+	if share == 0 {
+		return remaining
+	}
+	return share
 }
 
 // settledAfter dit si ce passage SOLDE l'ajustement — il n'a plus rien à

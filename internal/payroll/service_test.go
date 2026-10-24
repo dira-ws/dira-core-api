@@ -943,6 +943,62 @@ func TestABonusIsPaidOnceAndOnlyOnce(t *testing.T) {
 	assert.Equal(t, 0, number(t, next, "bonuses"), "une prime versée ne revient pas")
 }
 
+// ⚠️ UNE RÉSERVATION QUI N'A RIEN DONNÉ EST RENDUE AU VERSEMENT.
+//
+// La réservation (`run_id`) est ce qui écarte un ajustement des paies
+// SUIVANTES. Un ajustement réservé qui ne laisse aucune ligne sur la fiche
+// n'est donc pas consommé — et si sa réservation lui survit, il reste « en
+// cours » pour toujours sans jamais repasser : une dette qui s'efface toute
+// seule, ou une prime qui ne vient jamais.
+//
+// Le cas est rare et ne se signale pas. Celui mis en scène ici est la
+// CICATRICE d'une consommation échouée : un montant déjà entièrement pris sur
+// une paie précédente, mais resté ouvert parce que l'écriture de cette
+// consommation n'est pas passée (elle est journalisée, pas rejouée). Il est
+// réservé par la paie — le filtre de réservation ne regarde que le statut —,
+// il ne donne rien, et il ne doit pas rester accroché.
+func TestAClaimThatYieldedNothingIsGivenBack(t *testing.T) {
+	d := bench(t)
+	id := d.newEmployee(t, "Aline", 150_000)
+	code, body := d.call(t, http.MethodPost, "/admin/payroll/employees/"+id+"/bonuses", map[string]any{
+		"amount": 5_000, "reason": "prime de panier",
+	})
+	require.Equal(t, http.StatusCreated, code, "corps : %v", body)
+
+	// La cicatrice : tout est pris, le statut est resté ouvert.
+	scarred := &Adjustment{
+		Country: testCountry, Kind: KindDeduction, Amount: 10_000, Taken: 10_000,
+		Installments: 1, Runs: 1, Reason: "avance soldée mais restée ouverte",
+		Status: AdjustmentOpen, CreatedAt: d.now.AddDate(0, -2, 0),
+	}
+	for _, e := range d.store.employees {
+		scarred.EmployeeID = e.ID
+	}
+	require.NoError(t, d.store.InsertAdjustment(context.Background(), scarred))
+
+	runID, march := d.prepareMarch(t)
+	slip := march["slips"].([]any)[0].(map[string]any)
+	require.Len(t, slip["lines"].([]any), 1, "seule la prime laisse une ligne")
+	require.NotNil(t, d.store.adjustments[scarred.ID].RunID, "elle est bien réservée")
+
+	d.call(t, http.MethodPost, "/admin/payroll/runs/"+runID+"/approve", nil)
+	code, _ = d.call(t, http.MethodPost, "/admin/payroll/runs/"+runID+"/pay", map[string]any{"method": MethodCash})
+	require.Equal(t, http.StatusOK, code)
+
+	assert.Nil(t, d.store.adjustments[scarred.ID].RunID,
+		"la réservation doit être rendue : accrochée, elle écarterait cette ligne de toutes les paies suivantes")
+	// ⚠️ Et la libération ne défait pas le versement : la prime reste soldée.
+	code, list := d.call(t, http.MethodGet, "/admin/payroll/employees/"+id+"/adjustments", nil)
+	require.Equal(t, http.StatusOK, code)
+	for _, raw := range list["items"].([]any) {
+		item := raw.(map[string]any)
+		if item["kind"] == KindBonus {
+			assert.Equal(t, AdjustmentSettled, item["status"])
+			assert.Equal(t, 5_000, number(t, item, "taken"))
+		}
+	}
+}
+
 // ⚠️ ANNULER UNE PAIE REND SES PRIMES À LA FILE. Une prime restée réservée par
 // un brouillon abandonné n'entrerait plus dans aucune paie : elle
 // disparaîtrait sans trace d'annulation — la pire façon de perdre de l'argent

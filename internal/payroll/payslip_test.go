@@ -131,6 +131,23 @@ func TestInstalmentsAddUpToTheTotal(t *testing.T) {
 	assert.Equal(t, 0, slip.Deductions)
 }
 
+// ⚠️ UNE ÉCHÉANCE QUI TOMBE À ZÉRO NE BLOQUE PAS LA RETENUE. Deux francs
+// étalés sur trois paies font zéro par division entière — et comme rien n'est
+// passé, le compteur d'échéances ne bouge pas : la retenue reviendrait
+// indéfiniment en ne prenant rien, « en cours » pour toujours, et la dette
+// s'effacerait d'elle-même sans que personne ne l'ait décidé.
+func TestAnInstalmentThatRoundsToZeroDoesNotStallForever(t *testing.T) {
+	set := Settings{MaxDeductionPercent: 100}
+	e := employee(150_000)
+	a := adjustment(KindDeduction, 2, 0, day(2026, 1, 2))
+	a.Installments = 3
+
+	slip, applied := buildPayslip(e, []Adjustment{a}, &set, march)
+	require.Len(t, applied, 1, "la retenue doit passer, pas attendre un tour pour rien")
+	assert.Equal(t, 2, slip.Deductions, "le reste est pris tout de suite")
+	assert.True(t, applied[0].Settled, "et la retenue est soldée : elle ne doit pas revenir")
+}
+
 // ⚠️ LES DEUX POURCENTAGES NE PORTENT PAS SUR LA MÊME BASE. Une PRIME est une
 // part de RÉMUNÉRATION (le salaire de base) ; une RETENUE porte sur le BRUT
 // effectivement dû — sinon elle pourrait dépasser ce qu'il y a à retenir.

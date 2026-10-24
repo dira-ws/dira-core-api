@@ -866,6 +866,20 @@ func (s *Service) PayRun(ctx context.Context, id string, in PayInput) (RunRespon
 		s.log.Error("payroll: primes et retenues non consommées après versement — à rattraper",
 			"run", paid.ID.Hex(), "error", err)
 	}
+	// ⚠️ ET ON LIBÈRE CE QUI N'A LAISSÉ AUCUNE LIGNE. Un ajustement peut être
+	// RÉSERVÉ et ne rien donner : une échéance qui tombe à zéro par division
+	// entière (2 F restants sur trois paies), un pourcentage trop petit pour le
+	// salaire. Sans cette libération, sa réservation lui survivrait au versement
+	// — et comme la réservation est ce qui écarte un ajustement des paies
+	// suivantes, il resterait « en cours » pour toujours sans jamais repasser.
+	// Une dette qui s'efface toute seule, ou une prime qui ne vient jamais.
+	//
+	// Elle ne touche rien d'autre : ce qui vient d'être consommé n'a plus de
+	// réservation, et ce qui a été soldé n'est plus `open`.
+	if err := s.repo.ReleaseAdjustments(ctx, paid.ID); err != nil {
+		s.log.Error("payroll: réservations résiduelles non libérées après versement — à rattraper",
+			"run", paid.ID.Hex(), "error", err)
+	}
 	s.toLedger(ctx, paid)
 	s.announce(ctx, paid)
 	return toRun(paid), nil
