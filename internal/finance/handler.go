@@ -18,7 +18,8 @@ type Handler struct{ svc *Service }
 func NewHandler(svc *Service) *Handler { return &Handler{svc: svc} }
 
 // Mount : l'exploitation (portée `core`) lit l'aperçu, le journal, les
-// constats, règle la facturation et lance un balayage.
+// constats, règle la facturation, lance un balayage, et DÉCLARE les entrées
+// et sorties d'argent.
 func (h *Handler) Mount(r chi.Router, authMW func(http.Handler) http.Handler) {
 	r.Group(func(g chi.Router) {
 		g.Use(authMW, middleware.RequireRole(auth.RoleAdmin), middleware.RequireScope(auth.ScopeCore))
@@ -30,6 +31,9 @@ func (h *Handler) Mount(r chi.Router, authMW func(http.Handler) http.Handler) {
 		g.Get("/admin/finance/findings", h.findings)
 		g.Post("/admin/finance/findings/{id}/ack", h.ack)
 		g.Post("/admin/finance/integrity/run", h.run)
+		// Les DÉCLARATIONS d'entrée et de sortie d'argent, et leur catalogue
+		// de catégories — voir `declaration_handler.go`.
+		h.mountDeclarations(g)
 	})
 }
 

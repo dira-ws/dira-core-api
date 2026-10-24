@@ -26,6 +26,7 @@ var collections = []string{
 	"items",         // internal/equipment — le matériel
 	"contracts",     // internal/equipment — ventes, locations, prêts
 	"entries",       // internal/finance — le journal comptable
+	"declarations",  // internal/finance — les entrées et sorties déclarées
 	"tickets",       // pkg/support
 	"uses",          // pkg/promo — le grand livre des promotions
 	"payment.col",   // internal/payment

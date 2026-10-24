@@ -34,8 +34,12 @@ type Service struct {
 	// la mise en service du journal. Avant, les mouvements n'en ont pas, et
 	// ce n'est pas un écart.
 	journalSince time.Time
-	runMu        sync.Mutex
-	lastRun      *Run
+	// declStore : le stockage des DÉCLARATIONS (voir `declaration.go`). Nil
+	// en service réel — le dépôt fait l'affaire ; renseigné par les épreuves,
+	// qui éprouvent le JSON SERVI sans monter Mongo.
+	declStore declarationStore
+	runMu     sync.Mutex
+	lastRun   *Run
 }
 
 func NewService(repo *Repository, auditRec *audit.Recorder, journalSince time.Time) *Service {

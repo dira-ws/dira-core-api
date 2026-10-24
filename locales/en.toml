@@ -624,3 +624,19 @@ other = "This term holds no letters once normalised"
 
 [errors.lexicon_not_a_word]
 other = "A lexicon term must be ONE word: matching is on whole words, never on a sentence"
+
+# LES DÉCLARATIONS D'ENTRÉE ET DE SORTIE D'ARGENT (internal/finance).
+[errors.declaration_not_found]
+other = "Declaration not found"
+
+[errors.declaration_duplicate]
+other = "That reference has already been declared in this country — check the number before entering it again"
+
+[errors.declaration_not_posted]
+other = "That declaration is already reversed: there is nothing left to cancel"
+
+[errors.corrects_not_reversed]
+other = "Reverse the faulty declaration first: otherwise the expense would be counted twice"
+
+[errors.corrects_already_corrected]
+other = "That declaration has already been corrected by another one"
