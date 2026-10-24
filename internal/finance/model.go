@@ -169,11 +169,12 @@ const (
 	// actif. L'y mettre aurait fait passer le résultat du mois en perte pour
 	// un achat qui enrichit la plateforme.
 	AccFixedAssets = "fixed_assets"
-	// ⚠️ Les apports des associés sont classés en PASSIF et non en actif : ce
-	// que les associés ont mis dans la plateforme, la plateforme le leur
-	// doit. Le plan n'a pas de nature « capitaux propres », et en inventer
-	// une aurait demandé de rouvrir l'aperçu, qui ne connaît que cinq
-	// natures ; un passif dit la bonne chose au bon endroit.
+	// ⚠️ Les apports des associés sont en CAPITAUX PROPRES depuis la sixième
+	// nature (`KindEquity`), et non plus en passif. Ils y étaient par défaut,
+	// faute d'une nature pour les porter ; mais un passif est de l'argent dû à
+	// un TIERS qui peut le réclamer, et mêler les deux rendait la ligne
+	// « Passif » de l'aperçu illisible — on ne pouvait plus répondre « combien
+	// devons-nous réellement à des gens hors de la maison ? ».
 	AccOwnerContributions = "owner_contributions"
 	AccRevenueSubsidy     = "revenue_subsidy"
 	AccRevenueOther       = "revenue_other"
@@ -186,6 +187,21 @@ const (
 	KindClearing  = "clearing"
 	KindRevenue   = "revenue"
 	KindExpense   = "expense"
+	// KindEquity : LES CAPITAUX PROPRES — ce que les associés ont mis dans la
+	// plateforme, et ce que la plateforme a gagné sans le distribuer.
+	//
+	// ⚠️ SIXIÈME NATURE, ET IL EN FALLAIT UNE. Les apports des associés étaient
+	// rangés en PASSIF faute de mieux : un passif est de l'argent dû à un
+	// TIERS — un marchand, un client, un livreur — qu'il peut réclamer demain.
+	// Un apport d'associé n'est pas de cette nature, et les mêler rendait la
+	// ligne « Passif » de l'aperçu illisible : on ne pouvait plus répondre
+	// « combien devons-nous réellement à des gens hors de la maison ? ».
+	//
+	// ⚠️ ELLE SE SOLDE DU CÔTÉ CRÉDIT, comme un passif et un produit : c'est
+	// pour cela qu'elle n'entre PAS dans la liste des natures dont le solde se
+	// lit à l'envers (actif, charge). Et elle n'entre pas dans le résultat
+	// (`Net = produits − charges`) : un apport n'est pas un gain.
+	KindEquity = "equity"
 )
 
 // Account décrit un compte du plan.
@@ -218,7 +234,7 @@ var Chart = []Account{
 	{AccCashBox, KindAsset, "Caisse (espèces)"},
 	{AccBank, KindAsset, "Banque"},
 	{AccFixedAssets, KindAsset, "Immobilisations"},
-	{AccOwnerContributions, KindLiability, "Apports des associés"},
+	{AccOwnerContributions, KindEquity, "Apports des associés"},
 	{AccRevenueSubsidy, KindRevenue, "Subventions"},
 	{AccRevenueOther, KindRevenue, "Autres produits"},
 	{AccExpenseRent, KindExpense, "Loyers"},

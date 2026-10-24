@@ -111,3 +111,58 @@ func TestBillingDefaultsAndValidation(t *testing.T) {
 	assert.Error(t, validateVertical(VerticalBilling{AgentCharge: ChargeCommission, CommissionPct: 120, ClientChargeAt: ClientAtAccept}, "rides"))
 	assert.Error(t, validateVertical(VerticalBilling{AgentCharge: ChargeCommission, ClientChargeAt: "later"}, "deliveries"))
 }
+
+// --- LA SIXIÈME NATURE : LES CAPITAUX PROPRES ---
+
+// ⚠️ UN APPORT D'ASSOCIÉ N'EST PAS UN PASSIF, et c'est toute la raison de
+// cette nature. Un passif est de l'argent dû à un TIERS — un marchand, un
+// client, un livreur — qu'il peut réclamer demain. Les mêler empêchait de
+// répondre à la seule question que la ligne « Passif » sert à poser : combien
+// devons-nous réellement à des gens hors de la maison ?
+func TestOwnerContributionsAreEquityNotALiability(t *testing.T) {
+	var compte *Account
+	for i := range Chart {
+		if Chart[i].Code == AccOwnerContributions {
+			compte = &Chart[i]
+		}
+	}
+	require.NotNil(t, compte, "le compte des apports doit être au plan")
+	assert.Equal(t, KindEquity, compte.Kind,
+		"un apport d'associé ne se réclame pas comme une dette : il n'est pas un passif")
+}
+
+// ⚠️ ET AUCUN AUTRE COMPTE NE BASCULE AVEC LUI. Changer la nature d'un compte
+// déplace de l'argent d'une ligne de l'aperçu à une autre : seul celui des
+// apports devait bouger.
+func TestOnlyTheOwnerContributionsAccountBecameEquity(t *testing.T) {
+	var equity []string
+	for _, a := range Chart {
+		if a.Kind == KindEquity {
+			equity = append(equity, a.Code)
+		}
+	}
+	assert.Equal(t, []string{AccOwnerContributions}, equity)
+}
+
+// ⚠️ LES CAPITAUX PROPRES SE SOLDENT DU CÔTÉ CRÉDIT, comme un passif et un
+// produit — donc PAS dans la liste des natures qu'on lit à l'envers. Les y
+// mettre aurait affiché un apport reçu comme un apport négatif.
+func TestEquityIsReadOnTheCreditSide(t *testing.T) {
+	// La règle de l'aperçu : seuls l'actif et la charge se lisent débit −
+	// crédit. Si cette épreuve échoue, c'est que le signe a changé.
+	for _, k := range []string{KindEquity, KindLiability, KindRevenue} {
+		assert.NotContains(t, []string{KindAsset, KindExpense}, k,
+			"la nature %s se solde au crédit", k)
+	}
+}
+
+// ⚠️ ET UN APPORT N'EST PAS UN GAIN : le résultat reste produits − charges.
+// L'y compter ferait passer pour bénéficiaire un mois où les associés ont
+// remis de l'argent parce que le mois était mauvais.
+func TestTheResultIsMadeOfRevenueAndExpensesOnly(t *testing.T) {
+	ov := Overview{}
+	ov.KPIs.Revenue, ov.KPIs.Expenses, ov.KPIs.Equity = 100_000, 40_000, 5_000_000
+	ov.KPIs.Net = ov.KPIs.Revenue - ov.KPIs.Expenses
+	assert.Equal(t, 60_000, ov.KPIs.Net,
+		"cinq millions d'apport ne font pas un bénéfice")
+}

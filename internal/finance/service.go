@@ -193,10 +193,22 @@ type KPIs struct {
 	Expenses          int `json:"expenses"`
 	Net               int `json:"net"`
 	Liabilities       int `json:"liabilities"`
-	Receivables       int `json:"receivables"`
-	Clearing          int `json:"clearing"`
-	Suspense          int `json:"suspense"`
-	Collected         int `json:"collected"`
+	// Equity : les CAPITAUX PROPRES — apports des associés, et ce que la
+	// plateforme a gagné sans le distribuer.
+	//
+	// ⚠️ SÉPARÉ DE `Liabilities`, ET C'EST LA RAISON DE CETTE SIXIÈME NATURE.
+	// Un passif est dû à un TIERS qui peut le réclamer ; un apport d'associé
+	// non. Les additionner empêchait de répondre « combien devons-nous
+	// réellement à des gens hors de la maison ? », qui est la seule question
+	// que cette ligne sert à poser.
+	//
+	// ⚠️ ET IL N'ENTRE PAS DANS `Net` : un apport n'est pas un gain. Le
+	// résultat reste produits − charges.
+	Equity      int `json:"equity"`
+	Receivables int `json:"receivables"`
+	Clearing    int `json:"clearing"`
+	Suspense    int `json:"suspense"`
+	Collected   int `json:"collected"`
 }
 
 // WalletTotals : les soldes STOCKÉS, tous portefeuilles du pays confondus —
@@ -250,6 +262,11 @@ func (s *Service) Overview(ctx context.Context, from, to time.Time) (*Overview, 
 			ov.KPIs.Expenses += bal
 		case KindLiability:
 			ov.KPIs.Liabilities += bal
+		case KindEquity:
+			// ⚠️ PAS DANS `Liabilities`, et c'est tout l'objet de cette nature :
+			// « ce qu'on doit à des tiers » et « ce que les associés ont mis »
+			// sont deux questions, et les additionner n'en répondait à aucune.
+			ov.KPIs.Equity += bal
 		case KindAsset:
 			if a.Code == AccAgentReceivable {
 				ov.KPIs.Receivables += bal

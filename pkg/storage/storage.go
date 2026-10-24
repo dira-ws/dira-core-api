@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"sort"
 	"strings"
 	"time"
 
@@ -15,79 +16,162 @@ import (
 	"github.com/minio/minio-go/v7/pkg/credentials"
 )
 
-// Allowed upload kinds; the kind prefixes the object key.
-var Kinds = map[string]bool{
-	"dish": true, "store": true, "brand": true, "vehicle": true, "avatar": true, "feed": true,
-	// Visuels du carrousel publicitaire (internal/banner). Images seules :
-	// une bannière est une carte, pas une vidéo.
-	"banner": true,
-	// Pictogrammes des MODES de véhicule (dira-vtc-api : classes) — l'icône
-	// d'affichage et l'icône de carte, envoyées depuis la console. Images
-	// seules, petites : un pictogramme n'est pas une photo.
-	"class": true,
-	// Photos du MATÉRIEL du catalogue (internal/equipment) — gilet, sac,
-	// téléphone — envoyées depuis la console. Images seules.
-	"equipment": true,
-	// Pictogrammes des MARQUEURS DE CARTE hors véhicules (internal/marker) :
-	// livreur, client, marchand, arrêt — deux images par genre, comme un
-	// mode. Images seules, petites.
-	"marker": true,
-	// PIÈCES JOINTES AUX DÉCLARATIONS D'ENTRÉE ET DE SORTIE D'ARGENT
-	// (internal/finance) : la photo d'une facture, d'un reçu, d'une quittance.
-	//
-	// ⚠️ IMAGES SEULEMENT, comme tout le reste : `AllowedTypes` ne connaît pas
-	// le PDF, et l'y ajouter ouvrirait le PDF sur TOUS les points d'envoi —
-	// un plat, un avatar, une bannière. C'est une décision à prendre à part ;
-	// en attendant, on photographie la pièce, ce qui est de toute façon ce
-	// qu'on fait au comptoir.
-	"receipt": true,
-}
-
-// AllowedTypes maps accepted IMAGE content types to file extensions.
-var AllowedTypes = map[string]string{
-	"image/jpeg":    ".jpg",
-	"image/png":     ".png",
-	"image/webp":    ".webp",
-	"image/svg+xml": ".svg",
-}
-
-// VideoTypes maps accepted VIDEO content types to file extensions.
+// CE QUE CHAQUE GENRE DE TÉLÉVERSEMENT ACCEPTE, ET JUSQU'À QUELLE TAILLE.
 //
-// Réservées au kind "feed" : une photo de plat ou un logo d'enseigne n'a
-// aucune raison d'être une vidéo, et l'y autoriser ouvrirait un dépôt de
-// gros fichiers sur tous les points d'entrée.
-var VideoTypes = map[string]string{
-	"video/mp4":       ".mp4",
-	"video/webm":      ".webm",
-	"video/quicktime": ".mov",
+// ⚠️ UNE TABLE PAR GENRE, ET PLUS « LES IMAGES PARTOUT ». La règle d'avant
+// était « toutes les images sur tous les points d'envoi, plus la vidéo sur le
+// feed ». Elle paraissait prudente et laissait trois trous :
+//
+//   - le **SVG était accepté comme photo**. Un SVG n'est pas une image, c'est
+//     un document qui peut porter du script : en accepter un comme avatar ou
+//     comme reçu, c'est accepter du code fourni par un inconnu dans un
+//     fichier qu'on resservira. Il n'a de sens que pour un PICTOGRAMME, où il
+//     est précisément le bon format ;
+//   - le **PDF n'était accepté nulle part**, alors qu'un justificatif de
+//     dépense ou une attestation d'assurance est un PDF neuf fois sur dix.
+//     On demandait d'en photographier l'écran ;
+//   - **un seul plafond pour tout** : 5 Mio, trop peu pour un scan de carte
+//     grise, beaucoup trop pour un pictogramme de 2 Ko.
+//
+// Chaque genre déclare donc ce qu'il prend. Ajouter un format à un genre est
+// un geste qu'on fait exprès, pour ce genre-là.
+type Kind struct {
+	// Types : type de contenu accepté → extension du fichier déposé.
+	Types map[string]string
+	// Max : la taille maximale, en octets.
+	Max int64
+	// Label décrit les formats, pour la phrase de refus — celle que
+	// l'utilisateur lit quand son fichier est rejeté.
+	Label string
 }
 
-// MaxUploadBytes bounds a single image upload.
-const MaxUploadBytes = 5 << 20 // 5 MiB
+// Les formats, nommés une fois.
+var (
+	// photoTypes : de vraies photographies. ⚠️ SANS SVG.
+	photoTypes = map[string]string{
+		"image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp",
+	}
+	// pictoTypes : un pictogramme, où le vectoriel est le bon format.
+	pictoTypes = map[string]string{
+		"image/png": ".png", "image/webp": ".webp", "image/svg+xml": ".svg",
+	}
+	// proofTypes : une PREUVE — facture, reçu, quittance, attestation,
+	// casier. La photo d'un papier, ou le papier lui-même en PDF.
+	proofTypes = map[string]string{
+		"image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp",
+		"application/pdf": ".pdf",
+	}
+	// VideoTypes : réservées au feed. Une photo de plat ou un logo d'enseigne
+	// n'a aucune raison d'être une vidéo, et l'y autoriser ouvrirait un dépôt
+	// de gros fichiers sur tous les points d'entrée.
+	VideoTypes = map[string]string{
+		"video/mp4": ".mp4", "video/webm": ".webm", "video/quicktime": ".mov",
+	}
+	// feedTypes : le feed prend les deux.
+	feedTypes = merge(photoTypes, VideoTypes)
+)
 
-// MaxVideoBytes bounds a single feed video. Plus généreux que les images —
-// une vidéo promo dure quelques secondes mais pèse des dizaines de mégaoctets
-// — sans devenir un espace de stockage libre.
-const MaxVideoBytes = 60 << 20 // 60 MiB
+// Les plafonds, nommés par ce qu'ils bornent.
+const (
+	// MaxUploadBytes : une photographie.
+	MaxUploadBytes = 5 << 20 // 5 Mio
+	// MaxPictoBytes : un pictogramme. ⚠️ Serré exprès : au-delà, ce n'est plus
+	// un pictogramme, et un SVG d'un mégaoctet est presque toujours un
+	// document déguisé.
+	MaxPictoBytes = 512 << 10 // 512 Kio
+	// MaxProofBytes : un scan de papier, souvent multipage. Plus large qu'une
+	// photo, sans devenir un espace de stockage libre.
+	MaxProofBytes = 15 << 20 // 15 Mio
+	// MaxVideoBytes : une vidéo promo dure quelques secondes mais pèse des
+	// dizaines de mégaoctets.
+	MaxVideoBytes = 60 << 20 // 60 Mio
+)
+
+// Kinds : le genre préfixe la clé de l'objet, et dit ce qu'il accepte.
+var Kinds = map[string]Kind{
+	// Des photographies, servies dans les applications et les consoles.
+	"dish":      {photoTypes, MaxUploadBytes, "jpeg, png, webp"},
+	"store":     {photoTypes, MaxUploadBytes, "jpeg, png, webp"},
+	"brand":     {photoTypes, MaxUploadBytes, "jpeg, png, webp"},
+	"vehicle":   {photoTypes, MaxUploadBytes, "jpeg, png, webp"},
+	"avatar":    {photoTypes, MaxUploadBytes, "jpeg, png, webp"},
+	"banner":    {photoTypes, MaxUploadBytes, "jpeg, png, webp"},
+	"equipment": {photoTypes, MaxUploadBytes, "jpeg, png, webp"},
+
+	// Des PICTOGRAMMES : les modes de véhicule et les marqueurs de carte. Le
+	// vectoriel y est le bon format — une icône doit rester nette à toutes
+	// les tailles.
+	"class":  {pictoTypes, MaxPictoBytes, "png, webp, svg"},
+	"marker": {pictoTypes, MaxPictoBytes, "png, webp, svg"},
+
+	// Le FEED : photos et vidéos courtes.
+	"feed": {feedTypes, MaxVideoBytes, "jpeg, png, webp — vidéos : mp4, webm, mov"},
+
+	// LES PREUVES. ⚠️ LES DEUX SEULS GENRES QUI PRENNENT LE PDF, et c'est
+	// pour cela qu'ils sont séparés des photos :
+	//
+	//   - `receipt` : la pièce d'une déclaration d'entrée ou de sortie
+	//     d'argent — facture, reçu, quittance ;
+	//   - `document` : une pièce de conformité — identité, permis, assurance,
+	//     carte grise, contrôle technique, casier judiciaire.
+	//
+	// ⚠️ `document` MANQUAIT. Les pièces de conformité n'avaient aucun genre à
+	// elles : elles passaient par un genre prévu pour des photographies, donc
+	// sans PDF possible, et rangées sous un préfixe qui ne les désignait pas.
+	// Une attestation d'assurance est un PDF neuf fois sur dix.
+	"receipt":  {proofTypes, MaxProofBytes, "jpeg, png, webp, pdf"},
+	"document": {proofTypes, MaxProofBytes, "jpeg, png, webp, pdf"},
+}
+
+// merge réunit deux tables de formats. ⚠️ Une fonction plutôt qu'une table
+// recopiée : le feed accepte les photos ET les vidéos, et deux listes à tenir
+// à jour divergent au premier format ajouté.
+func merge(a, b map[string]string) map[string]string {
+	out := make(map[string]string, len(a)+len(b))
+	for k, v := range a {
+		out[k] = v
+	}
+	for k, v := range b {
+		out[k] = v
+	}
+	return out
+}
+
+// Known dit si ce genre existe.
+func Known(kind string) bool { _, ok := Kinds[kind]; return ok }
+
+// KindNames rend les genres connus, triés — pour la phrase de refus.
+func KindNames() []string {
+	out := make([]string, 0, len(Kinds))
+	for k := range Kinds {
+		out = append(out, k)
+	}
+	sort.Strings(out)
+	return out
+}
 
 // Accepts tells whether a kind takes this content type, and with which
 // extension. Point de décision UNIQUE : le handler HTTP et le stockage
 // doivent appliquer la même règle, sinon l'un accepte ce que l'autre rejette.
 func Accepts(kind, contentType string) (ext string, ok bool) {
-	if ext, ok = AllowedTypes[contentType]; ok {
-		return ext, true
+	k, known := Kinds[kind]
+	if !known {
+		return "", false
 	}
-	if kind == "feed" {
-		ext, ok = VideoTypes[contentType]
-		return ext, ok
-	}
-	return "", false
+	ext, ok = k.Types[contentType]
+	return ext, ok
 }
 
+// LabelFor décrit les formats d'un genre, pour la phrase de refus.
+func LabelFor(kind string) string { return Kinds[kind].Label }
+
 // MaxBytesFor returns the size ceiling of a kind.
+//
+// ⚠️ PAR GENRE, et non plus « 5 Mio sauf le feed ». Un plafond unique était
+// trop court pour un scan de carte grise et trop large pour un pictogramme.
 func MaxBytesFor(kind string) int64 {
-	if kind == "feed" {
-		return MaxVideoBytes
+	if k, ok := Kinds[kind]; ok && k.Max > 0 {
+		return k.Max
 	}
 	return MaxUploadBytes
 }

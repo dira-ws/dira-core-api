@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -62,8 +63,11 @@ func (h *Handler) upload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	kind := r.URL.Query().Get("kind")
-	if !storage.Kinds[kind] {
-		httpx.Error(w, r, apperr.Validation("kind must be one of dish|store|brand|vehicle|avatar|feed|banner|class|equipment|marker|receipt"))
+	if !storage.Known(kind) {
+		// ⚠️ LA LISTE SE LIT DE LA TABLE, elle ne se recopie pas ici : une
+		// liste écrite à la main dans la phrase de refus a vieilli en silence
+		// à chaque genre ajouté, et personne ne relit un message d'erreur.
+		httpx.Error(w, r, apperr.Validation("kind must be one of "+strings.Join(storage.KindNames(), "|")))
 		return
 	}
 	// Le plafond dépend du kind : une vidéo de feed pèse bien plus qu'une
@@ -83,11 +87,12 @@ func (h *Handler) upload(w http.ResponseWriter, r *http.Request) {
 
 	contentType := header.Header.Get("Content-Type")
 	if _, ok := storage.Accepts(kind, contentType); !ok {
-		if kind == "feed" {
-			httpx.Error(w, r, apperr.Validation("unsupported type (images: jpeg, png, webp, svg — videos: mp4, webm, mov)"))
-			return
-		}
-		httpx.Error(w, r, apperr.Validation("unsupported image type (jpeg, png, webp, svg)"))
+		// ⚠️ LA PHRASE DIT LES FORMATS DE *CE* GENRE. Un message générique
+		// (« jpeg, png, webp, svg ») envoyait chercher pourquoi un SVG
+		// refusé figurait dans la liste des formats acceptés — et ne disait
+		// pas qu'un reçu prend le PDF.
+		httpx.Error(w, r, apperr.Validation(
+			"unsupported type for kind "+kind+" (accepted: "+storage.LabelFor(kind)+")"))
 		return
 	}
 	// Une vidéo de feed est un SHORT : la durée est lue dans le conteneur, pas
