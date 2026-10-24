@@ -29,6 +29,19 @@ import (
 	"github.com/kgtech-org/dira-core-api/pkg/httpx"
 )
 
+// ⚠️⚠️ CES ROUTES DÉCODENT AVEC `httpx.DecodeService`, PAS `httpx.Decode`.
+//
+// L'appelant est une VERTICALE, pas une application : elle ajoute un champ à un
+// corps quand elle en a besoin, et se déploie à son rythme. Refuser une clé
+// inconnue — la règle qui protège un développeur d'application de croire avoir
+// enregistré un champ ignoré — fait ici d'un ajout ADDITIF une rupture muette,
+// puisque personne ne lit la réponse d'un rappel de service.
+//
+// Ce n'est pas théorique : la livraison a refusé CHAQUE vague d'appel pendant
+// un mois parce que le suivi avait ajouté `attempt` à son corps — plus aucune
+// course réservée aux livreurs appelés, plus aucun push, et un transfert de
+// commande qui ne pouvait jamais passer la main. Voir `httpx.DecodeService`.
+
 // Accounts is what a vertical may ask about a person.
 //
 // ⚠️ Volontairement ÉTROIT : un nom, un téléphone, un identifiant. Pas le
@@ -261,7 +274,7 @@ func (h *Handler) forgetFiles(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		URLs []string `json:"urls" validate:"required,min=1,max=100,dive,required"`
 	}
-	if err := httpx.Decode(r, &req); err != nil {
+	if err := httpx.DecodeService(r, &req); err != nil {
 		httpx.Error(w, r, err)
 		return
 	}
@@ -351,7 +364,7 @@ func (h *Handler) contact(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		UserID string `json:"user_id" validate:"required,len=24,hexadecimal"`
 	}
-	if err := httpx.Decode(r, &req); err != nil {
+	if err := httpx.DecodeService(r, &req); err != nil {
 		httpx.Error(w, r, err)
 		return
 	}
@@ -370,7 +383,7 @@ func (h *Handler) names(w http.ResponseWriter, r *http.Request) {
 		// veut pas servir.
 		IDs []string `json:"ids" validate:"required,min=1,max=200,dive,len=24,hexadecimal"`
 	}
-	if err := httpx.Decode(r, &req); err != nil {
+	if err := httpx.DecodeService(r, &req); err != nil {
 		httpx.Error(w, r, err)
 		return
 	}
@@ -388,7 +401,7 @@ func (h *Handler) ensureMerchant(w http.ResponseWriter, r *http.Request) {
 		Name     string `json:"name" validate:"required,min=1,max=120"`
 		Password string `json:"password" validate:"omitempty,min=8,max=128"`
 	}
-	if err := httpx.Decode(r, &req); err != nil {
+	if err := httpx.DecodeService(r, &req); err != nil {
 		httpx.Error(w, r, err)
 		return
 	}
@@ -413,7 +426,7 @@ func (h *Handler) ensureAccount(w http.ResponseWriter, r *http.Request) {
 		// Le portrait d'un jeu de démonstration, comblé s'il manque.
 		AvatarURL string `json:"avatar_url" validate:"omitempty,url,max=2048"`
 	}
-	if err := httpx.Decode(r, &req); err != nil {
+	if err := httpx.DecodeService(r, &req); err != nil {
 		httpx.Error(w, r, err)
 		return
 	}
@@ -445,7 +458,7 @@ func (h *Handler) claimAgentApp(w http.ResponseWriter, r *http.Request) {
 		// venue d'une application qui a frappé la première.
 		FromProfile bool `json:"from_profile"`
 	}
-	if err := httpx.Decode(r, &req); err != nil {
+	if err := httpx.DecodeService(r, &req); err != nil {
 		httpx.Error(w, r, err)
 		return
 	}
@@ -461,7 +474,7 @@ func (h *Handler) byPhone(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Phone string `json:"phone" validate:"required,e164"`
 	}
-	if err := httpx.Decode(r, &req); err != nil {
+	if err := httpx.DecodeService(r, &req); err != nil {
 		httpx.Error(w, r, err)
 		return
 	}
@@ -495,7 +508,7 @@ type walletRequest struct {
 
 func (h *Handler) createWallet(w http.ResponseWriter, r *http.Request) {
 	var req walletRequest
-	if err := httpx.Decode(r, &req); err != nil {
+	if err := httpx.DecodeService(r, &req); err != nil {
 		httpx.Error(w, r, err)
 		return
 	}
@@ -564,7 +577,7 @@ func (h *Handler) balance(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		OwnerID string `json:"owner_id" validate:"required,len=24,hexadecimal"`
 	}
-	if err := httpx.Decode(r, &req); err != nil {
+	if err := httpx.DecodeService(r, &req); err != nil {
 		httpx.Error(w, r, err)
 		return
 	}
@@ -606,7 +619,7 @@ func (h *Handler) owe(w http.ResponseWriter, r *http.Request) {
 		walletRequest
 		DueReason string `json:"due_reason" validate:"required,oneof=commission_due payment_due"`
 	}
-	if err := httpx.Decode(r, &req); err != nil {
+	if err := httpx.DecodeService(r, &req); err != nil {
 		httpx.Error(w, r, err)
 		return
 	}
@@ -631,7 +644,7 @@ func (h *Handler) owe(w http.ResponseWriter, r *http.Request) {
 // est simplement insuffisant.
 func (h *Handler) move(w http.ResponseWriter, r *http.Request, do func(context.Context, walletRequest) error) {
 	var req walletRequest
-	if err := httpx.Decode(r, &req); err != nil {
+	if err := httpx.DecodeService(r, &req); err != nil {
 		httpx.Error(w, r, err)
 		return
 	}
@@ -656,7 +669,7 @@ func (h *Handler) signal(w http.ResponseWriter, r *http.Request) {
 		// livré deux minutes plus tard est un appel fermé.
 		TTLSeconds int `json:"ttl_s" validate:"omitempty,min=1,max=3600"`
 	}
-	if err := httpx.Decode(r, &req); err != nil {
+	if err := httpx.DecodeService(r, &req); err != nil {
 		httpx.Error(w, r, err)
 		return
 	}
@@ -686,7 +699,7 @@ func (h *Handler) notify(w http.ResponseWriter, r *http.Request) {
 		// rythme.
 		OnceWithinS int `json:"once_within_s" validate:"omitempty,min=1,max=2592000"`
 	}
-	if err := httpx.Decode(r, &req); err != nil {
+	if err := httpx.DecodeService(r, &req); err != nil {
 		httpx.Error(w, r, err)
 		return
 	}
@@ -717,7 +730,7 @@ func (h *Handler) equipmentCollect(w http.ResponseWriter, r *http.Request) {
 		RefKind    string `json:"ref_kind" validate:"omitempty,max=30"`
 		RefID      string `json:"ref_id" validate:"omitempty,max=64"`
 	}
-	if err := httpx.Decode(r, &req); err != nil {
+	if err := httpx.DecodeService(r, &req); err != nil {
 		httpx.Error(w, r, err)
 		return
 	}
@@ -739,7 +752,7 @@ func (h *Handler) equipmentStanding(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		UserID string `json:"user_id" validate:"required,len=24,hexadecimal"`
 	}
-	if err := httpx.Decode(r, &req); err != nil {
+	if err := httpx.DecodeService(r, &req); err != nil {
 		httpx.Error(w, r, err)
 		return
 	}
@@ -774,7 +787,7 @@ func (h *Handler) challengeReport(w http.ResponseWriter, r *http.Request) {
 		Ref      string `json:"ref" validate:"required,max=120"`
 		Delta    int    `json:"delta" validate:"omitempty,min=1"`
 	}
-	if err := httpx.Decode(r, &req); err != nil {
+	if err := httpx.DecodeService(r, &req); err != nil {
 		httpx.Error(w, r, err)
 		return
 	}
@@ -806,7 +819,7 @@ func (h *Handler) challengeOwed(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		UserID string `json:"user_id" validate:"required,len=24,hexadecimal"`
 	}
-	if err := httpx.Decode(r, &req); err != nil {
+	if err := httpx.DecodeService(r, &req); err != nil {
 		httpx.Error(w, r, err)
 		return
 	}
@@ -827,7 +840,7 @@ func (h *Handler) challengeOwed(w http.ResponseWriter, r *http.Request) {
 // faire échouer l'action qu'elle documente — elle est journalisée ici.
 func (h *Handler) recordAudit(w http.ResponseWriter, r *http.Request) {
 	var e audit.Entry
-	if err := httpx.Decode(r, &e); err != nil {
+	if err := httpx.DecodeService(r, &e); err != nil {
 		httpx.Error(w, r, err)
 		return
 	}
@@ -857,7 +870,7 @@ func (h *Handler) notifyStaff(w http.ResponseWriter, r *http.Request) {
 		Vars    map[string]string `json:"vars"`
 		Data    map[string]string `json:"data"`
 	}
-	if err := httpx.Decode(r, &req); err != nil {
+	if err := httpx.DecodeService(r, &req); err != nil {
 		httpx.Error(w, r, err)
 		return
 	}
@@ -886,7 +899,7 @@ func (h *Handler) initiatePayment(w http.ResponseWriter, r *http.Request) {
 		RefID    string `json:"ref_id" validate:"required,len=24,hexadecimal"`
 		Amount   int    `json:"amount" validate:"required,gt=0"`
 	}
-	if err := httpx.Decode(r, &req); err != nil {
+	if err := httpx.DecodeService(r, &req); err != nil {
 		httpx.Error(w, r, err)
 		return
 	}
@@ -912,7 +925,7 @@ func (h *Handler) listWallets(w http.ResponseWriter, r *http.Request) {
 		Type    string `json:"type"`
 		OwnerID string `json:"owner_id"`
 	}
-	if err := httpx.Decode(r, &req); err != nil {
+	if err := httpx.DecodeService(r, &req); err != nil {
 		httpx.Error(w, r, err)
 		return
 	}
@@ -929,7 +942,7 @@ func (h *Handler) listLedger(w http.ResponseWriter, r *http.Request) {
 		pageRequest
 		WalletID string `json:"wallet_id"`
 	}
-	if err := httpx.Decode(r, &req); err != nil {
+	if err := httpx.DecodeService(r, &req); err != nil {
 		httpx.Error(w, r, err)
 		return
 	}
@@ -947,7 +960,7 @@ func (h *Handler) listPayments(w http.ResponseWriter, r *http.Request) {
 		Status  string `json:"status"`
 		Purpose string `json:"purpose"`
 	}
-	if err := httpx.Decode(r, &req); err != nil {
+	if err := httpx.DecodeService(r, &req); err != nil {
 		httpx.Error(w, r, err)
 		return
 	}
@@ -970,7 +983,7 @@ func (h *Handler) accountSearch(w http.ResponseWriter, r *http.Request) {
 		Roles []string `json:"roles" validate:"omitempty,max=4,dive,oneof=client driver merchant admin"`
 		Limit int      `json:"limit" validate:"omitempty,min=1,max=200"`
 	}
-	if err := httpx.Decode(r, &req); err != nil {
+	if err := httpx.DecodeService(r, &req); err != nil {
 		httpx.Error(w, r, err)
 		return
 	}
@@ -987,7 +1000,7 @@ func (h *Handler) accountRows(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		IDs []string `json:"ids" validate:"required,max=200,dive,len=24,hexadecimal"`
 	}
-	if err := httpx.Decode(r, &req); err != nil {
+	if err := httpx.DecodeService(r, &req); err != nil {
 		httpx.Error(w, r, err)
 		return
 	}
@@ -1005,7 +1018,7 @@ func (h *Handler) accountGet(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		UserID string `json:"user_id" validate:"required,len=24,hexadecimal"`
 	}
-	if err := httpx.Decode(r, &req); err != nil {
+	if err := httpx.DecodeService(r, &req); err != nil {
 		httpx.Error(w, r, err)
 		return
 	}
@@ -1022,7 +1035,7 @@ func (h *Handler) refundOrderPayment(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		OrderID string `json:"order_id" validate:"required,len=24,hexadecimal"`
 	}
-	if err := httpx.Decode(r, &req); err != nil {
+	if err := httpx.DecodeService(r, &req); err != nil {
 		httpx.Error(w, r, err)
 		return
 	}

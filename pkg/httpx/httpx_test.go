@@ -136,3 +136,47 @@ func TestAReceiptIsNeverCached(t *testing.T) {
 	assert.Contains(t, rec.Header().Get("Content-Disposition"), "attachment")
 	assert.Equal(t, "%PDF-1.3", rec.Body.String())
 }
+
+// ⚠️⚠️ UN CHAMP AJOUTÉ PAR UN SERVICE VOISIN NE DOIT PAS COUPER UN RAPPEL.
+//
+// L'épreuve rejoue l'histoire exacte : le suivi a ajouté `attempt` au corps de
+// `POST /internal/dispatch/wave`, et la livraison — qui ne s'en sert pas — a
+// refusé CHAQUE vague pendant un mois (`422 unknown field: attempt`). Plus
+// aucune course réservée, plus aucun push aux appelés, et un transfert de
+// commande qui ne pouvait jamais passer la main. Tout cela en silence : les
+// commandes étaient livrées quand même, par le pot commun.
+//
+// ⚠️ Et la seconde moitié de l'épreuve compte autant : ce qui est VALIDÉ ne
+// bouge pas. Tolérer les clés inconnues ne doit pas tolérer un champ
+// obligatoire absent — sinon un rappel vide passerait pour un rappel valide.
+func TestAServiceCallbackToleratesANewFieldButStillValidates(t *testing.T) {
+	type wave struct {
+		Ref       string   `json:"ref" validate:"required"`
+		UserIDs   []string `json:"user_ids"`
+		ExpiresAt int64    `json:"expires_at"`
+	}
+
+	post := func(body string) *http.Request {
+		r := httptest.NewRequest(http.MethodPost, "/internal/dispatch/wave", strings.NewReader(body))
+		r.Header.Set("Content-Type", "application/json")
+		return r
+	}
+
+	// Le corps du suivi, `attempt` compris.
+	var got wave
+	err := DecodeService(post(`{"ref":"6adcfca99be334a8ca70088f","user_ids":["u1"],"expires_at":1793000000000,"attempt":2}`), &got)
+	require.NoError(t, err, "un champ additif d'un service voisin ne doit pas couper le rappel")
+	assert.Equal(t, "6adcfca99be334a8ca70088f", got.Ref)
+	assert.Equal(t, int64(1793000000000), got.ExpiresAt)
+
+	// ⚠️ Le MÊME corps par la porte des applications : refusé, et c'est voulu.
+	var strict wave
+	err = Decode(post(`{"ref":"6adcfca99be334a8ca70088f","attempt":2}`), &strict)
+	require.Error(t, err, "la règle des applications ne change pas : une clé inconnue y reste un refus NOMMÉ")
+	assert.Equal(t, []string{"attempt"}, apperr.From(err).Meta["fields"])
+
+	// Et la validation mord toujours : `ref` est obligatoire.
+	var empty wave
+	err = DecodeService(post(`{"attempt":1}`), &empty)
+	require.Error(t, err, "tolérer l'inconnu ne tolère pas l'absence du nécessaire")
+}
