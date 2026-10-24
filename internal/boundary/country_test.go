@@ -19,20 +19,24 @@ import (
 
 // Les collections du socle dont les documents portent un `country`.
 var collections = []string{
-	"users",         // internal/user
-	"wallets",       // internal/token
-	"campaigns",     // internal/notify
-	"fleets",        // internal/fleet
-	"items",         // internal/equipment — le matériel
-	"contracts",     // internal/equipment — ventes, locations, prêts
-	"entries",       // internal/finance — le journal comptable
-	"declarations",  // internal/finance — les entrées et sorties déclarées
-	"tickets",       // pkg/support
-	"uses",          // pkg/promo — le grand livre des promotions
-	"payment.col",   // internal/payment
-	"audit.col",     // pkg/audit — le journal des actions
-	"sos.col",       // internal/sos — les appels au secours
-	"challenge.col", // internal/challenge — les objectifs à atteindre
+	"users",     // internal/user
+	"wallets",   // internal/token
+	"campaigns", // internal/notify
+	"fleets",    // internal/fleet
+	// ⚠️ NOMMÉE `ownfleet.assets` ET NON `assets` : la flotte interne n'est pas
+	// la seule à pouvoir appeler une collection ainsi, et une borne qui
+	// surveille le mauvais champ ne surveille rien.
+	"ownfleet.assets", // internal/ownfleet — les véhicules de Dira
+	"items",           // internal/equipment — le matériel
+	"contracts",       // internal/equipment — ventes, locations, prêts
+	"entries",         // internal/finance — le journal comptable
+	"declarations",    // internal/finance — les entrées et sorties déclarées
+	"tickets",         // pkg/support
+	"uses",            // pkg/promo — le grand livre des promotions
+	"payment.col",     // internal/payment
+	"audit.col",       // pkg/audit — le journal des actions
+	"sos.col",         // internal/sos — les appels au secours
+	"challenge.col",   // internal/challenge — les objectifs à atteindre
 }
 
 // Les lectures légitimement SANS pays, et pourquoi. Chacune se relit à

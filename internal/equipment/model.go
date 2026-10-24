@@ -231,7 +231,28 @@ type Contract struct {
 	FleetID   *primitive.ObjectID `bson:"fleet_id,omitempty"`
 	FleetName string              `bson:"fleet_name,omitempty"`
 	Vertical  string              `bson:"vertical"` // food | vtc
-	ItemID    primitive.ObjectID  `bson:"item_id"`
+	// AssetID et AssetLabel : LE BIEN UNIQUE loué — une voiture de la flotte
+	// interne. Voir asset.go.
+	//
+	// ⚠️ UN BIEN UNIQUE N'A PAS D'ARTICLE DE CATALOGUE : `ItemID` reste alors
+	// NUL, et c'est ce qui fait que l'ajustement de stock de la remise ne
+	// touche rien. Il n'y a pas « des Corolla » en stock, il y a LA Corolla
+	// GA-1234-AB.
+	AssetID    *primitive.ObjectID `bson:"asset_id,omitempty"`
+	AssetLabel string              `bson:"asset_label,omitempty"`
+	// Included : ce que la redevance COUVRE — entretien, réparations,
+	// assurance, carburant. Ce qui n'y est pas est à la charge de l'agent.
+	//
+	// ⚠️ SUR LE CONTRAT ET NON SUR LE VÉHICULE : c'est une condition
+	// d'attribution. La même voiture part avec l'entretien inclus chez l'un et
+	// pas chez l'autre, selon ce qui a été négocié.
+	Included []string `bson:"included,omitempty"`
+	// EndsAt : la DURÉE CONVENUE. Nil = sans terme.
+	//
+	// ⚠️ ELLE NE FERME RIEN TOUTE SEULE — voir `Contract.TermOver`. Une voiture
+	// ne rentre pas au parc parce qu'une date est passée.
+	EndsAt *time.Time         `bson:"ends_at,omitempty"`
+	ItemID primitive.ObjectID `bson:"item_id"`
 	// Figé à la création : le contrat reste lisible si l'article change.
 	ItemName string `bson:"item_name"`
 	ItemKind string `bson:"item_kind"`

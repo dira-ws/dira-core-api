@@ -640,3 +640,48 @@ other = "Reverse the faulty declaration first: otherwise the expense would be co
 
 [errors.corrects_already_corrected]
 other = "That declaration has already been corrected by another one"
+
+# --- THE INTERNAL FLEET (internal/ownfleet, internal/equipment/asset.go) ---
+#
+# The vehicles Dira owns and hands over against a fee. ⚠️ Each sentence says
+# WHAT TO DO: a registry refusal lands in front of an operator with someone at
+# the counter, and "conflict" teaches them nothing.
+
+[errors.own_fleet_vehicle_not_found]
+other = "This vehicle is not in this country's internal fleet"
+
+[errors.own_fleet_plate_taken]
+other = "A vehicle with this plate is already in this country's internal fleet"
+
+[errors.own_fleet_vehicle_busy]
+other = "This vehicle is already assigned, or it is not available"
+
+[errors.own_fleet_vehicle_not_assigned]
+other = "This vehicle is not assigned to anyone"
+
+[errors.own_fleet_vehicle_assigned]
+other = "This vehicle is assigned: close its fee contract before changing its status"
+
+[errors.own_fleet_vehicle_retired]
+other = "A vehicle out of the fleet cannot be assigned"
+
+[errors.own_fleet_vertical_not_offered]
+other = "This vehicle is not offered to this line of business"
+
+[errors.own_fleet_not_a_driver]
+other = "This account is not a driver account"
+
+[errors.own_fleet_contract_open]
+other = "Close the fee contract first: record the return, or record the default"
+
+[errors.own_fleet_unavailable]
+other = "The internal fleet is not available on this deployment"
+
+[errors.equipment_asset_desk_unavailable]
+other = "The internal fleet is not available on this deployment"
+
+[errors.fleet_internal_reserved]
+other = "Dira's own fleet is not registered here: it is created once per country, with no contract and no commission"
+
+[errors.partner_fleet_internal]
+other = "This fleet belongs to Dira: it is managed from the internal fleet desk, not from the partner console"

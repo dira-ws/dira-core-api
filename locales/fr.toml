@@ -722,3 +722,48 @@ other = "Contre-passez d'abord la déclaration fautive : sans cela, la dépense 
 
 [errors.corrects_already_corrected]
 other = "Cette déclaration a déjà été corrigée par une autre"
+
+# --- LA FLOTTE INTERNE (internal/ownfleet, internal/equipment/asset.go) ---
+#
+# Les véhicules que Dira possède et confie contre une redevance. ⚠️ Les phrases
+# disent QUOI FAIRE : un refus de registre arrive devant un exploitant qui a
+# quelqu'un au comptoir, et « conflit » ne lui apprend rien.
+
+[errors.own_fleet_vehicle_not_found]
+other = "Ce véhicule n'est pas dans la flotte interne de ce pays"
+
+[errors.own_fleet_plate_taken]
+other = "Un véhicule portant cette plaque est déjà dans la flotte interne de ce pays"
+
+[errors.own_fleet_vehicle_busy]
+other = "Ce véhicule est déjà confié, ou il n'est pas disponible"
+
+[errors.own_fleet_vehicle_not_assigned]
+other = "Ce véhicule n'est confié à personne"
+
+[errors.own_fleet_vehicle_assigned]
+other = "Ce véhicule est confié : clôturez sa redevance avant de changer son état"
+
+[errors.own_fleet_vehicle_retired]
+other = "Un véhicule sorti de la flotte ne peut plus être confié"
+
+[errors.own_fleet_vertical_not_offered]
+other = "Ce véhicule n'est pas proposé à ce métier"
+
+[errors.own_fleet_not_a_driver]
+other = "Ce compte n'est pas un compte de conducteur"
+
+[errors.own_fleet_contract_open]
+other = "Clôturez d'abord la redevance : enregistrez le retour, ou constatez l'impayé"
+
+[errors.own_fleet_unavailable]
+other = "La flotte interne n'est pas disponible sur ce déploiement"
+
+[errors.equipment_asset_desk_unavailable]
+other = "La flotte interne n'est pas disponible sur ce déploiement"
+
+[errors.fleet_internal_reserved]
+other = "La flotte de Dira ne s'enregistre pas ici : elle est créée une fois par pays, sans contrat ni commission"
+
+[errors.partner_fleet_internal]
+other = "Cette flotte appartient à Dira : elle se gère depuis la flotte interne, pas depuis la console partenaire"

@@ -122,8 +122,18 @@ func (r *Repository) AdjustStock(ctx context.Context, id primitive.ObjectID, del
 
 // --- contracts ---
 
+// InsertContract insère un contrat.
+//
+// ⚠️ UN IDENTIFIANT DÉJÀ POSÉ EST RESPECTÉ, et ce n'est pas une commodité :
+// c'est ce qui rend la double attribution d'un véhicule impossible. Le registre
+// des biens réserve le véhicule EN INSCRIVANT l'identifiant du contrat, dans
+// une écriture conditionnelle, AVANT que ce contrat existe (voir
+// `equipment/asset.go` et `ownfleet`). Écraser l'identifiant ici aurait rendu
+// la réservation muette : elle aurait pointé un contrat qui n'existe pas.
 func (r *Repository) InsertContract(ctx context.Context, c *Contract) error {
-	c.ID = primitive.NewObjectID()
+	if c.ID.IsZero() {
+		c.ID = primitive.NewObjectID()
+	}
 	now := time.Now().UTC()
 	c.CreatedAt, c.UpdatedAt = now, now
 	if c.Schedule == nil {
@@ -263,6 +273,19 @@ type ContractFilter struct {
 	Status   string
 	Vertical string
 	ItemID   *primitive.ObjectID
+	// AssetIDs : les contrats de BIENS UNIQUES nommés — la flotte interne qui
+	// veut, pour chaque véhicule de sa page, ce que sa redevance doit.
+	//
+	// ⚠️ UNE REQUÊTE POUR LA PAGE, et non une par ligne. Un écran de parc est
+	// une liste : résoudre la redevance ligne par ligne aurait fait cinquante
+	// allers-retours pour l'afficher, et c'est le genre de page qu'on finit par
+	// ne plus ouvrir.
+	AssetIDs []primitive.ObjectID
+	// Statuses : plusieurs statuts à la fois (`active`, `returned`) — ce que
+	// « ce véhicule doit-il encore quelque chose ? » demande vraiment. ⚠️ Un
+	// contrat RENDU peut garder une dette : s'arrêter à `active` aurait fait
+	// disparaître de la liste des impayés exactement les reprises à recouvrer.
+	Statuses []string
 }
 
 func (r *Repository) ListContracts(ctx context.Context, f ContractFilter, limit int, cursor string) ([]Contract, string, error) {
@@ -278,6 +301,12 @@ func (r *Repository) ListContracts(ctx context.Context, f ContractFilter, limit 
 	}
 	if f.ItemID != nil {
 		filter["item_id"] = *f.ItemID
+	}
+	if len(f.AssetIDs) > 0 {
+		filter["asset_id"] = bson.M{"$in": f.AssetIDs}
+	}
+	if len(f.Statuses) > 0 {
+		filter["status"] = bson.M{"$in": f.Statuses}
 	}
 	if cursor != "" {
 		if cid, err := primitive.ObjectIDFromHex(cursor); err == nil {
