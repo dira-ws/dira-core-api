@@ -1,6 +1,6 @@
 # Specs frontend — par rôle
 
-> **Version 4.81.0** · 24 octobre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics`
+> **Version 4.82.0** · 25 octobre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics`
 
 **Cinq** documents, un par application. Chacun est **autonome** : tout ce qu'un frontend doit savoir pour son rôle, sans avoir à ouvrir les vingt specs de modules.
 
@@ -355,6 +355,49 @@ Chaque document porte la même version en en-tête, et son propre journal des ch
 - [ ] ⚠️ **`TRACKING_JWT_SECRET` renseigné dans chaque environnement déployé.** Vide, l'authentification du service de suivi est **désactivée** : n'importe qui connaissant un `delivery_id` suit la course. Le secret doit valoir **exactement** le `JWT_SECRET` de `dira-food-api`.
 
 ## Journal
+
+### 4.82.0 — 25 octobre 2026
+
+✨ **LA GÉNÉRATION DE PHOTO ET DE VIDÉO DE PLAT PAR IA** — `FOOD-MERCHANT.md`.
+
+```
+POST /food/dishes/{id}/ai-photo      { source? } → { url, source, tokens }       2 jetons
+POST /food/stores/{id}/videos        { source: "ai", … } → status: processing     10 jetons
+```
+
+- ⚠️⚠️ **CE CHEMIN RENDAIT UNE ADRESSE FACTICE, ET LE MARCHAND PAYAIT.**
+  `source: "ai"` faisait passer le contenu en `ready` sur
+  `https://cdn.dira.example/ai-videos/….mp4` — un lien mort — après avoir
+  débité 10 jetons (1 000 F). Les cartes noires d'un feed viennent de là.
+  **Le champ `placeholder` n'existe plus** : une vidéo qui n'existe pas se
+  reconnaît à `status: "failed"`.
+- ⚠️⚠️ **ON RETOUCHE UNE PHOTO, ON N'INVENTE JAMAIS UN PLAT.** Il n'y a aucun
+  moyen de fabriquer la photo d'un plat depuis son nom, et il n'y en aura pas :
+  le client commande ce qu'il a vu. La consigne envoyée au modèle est écrite
+  côté serveur et interdit d'ajouter, de retirer ou de remplacer le moindre
+  aliment ; `description` est un **repère**, pas une consigne. Sans photo :
+  `422 dish_photo_required`, et **rien n'est débité**.
+- ⚠️ **`source` DÉSIGNE LAQUELLE DES PHOTOS DU PLAT RETOUCHER**, pas une
+  adresse libre — sinon la route serait un retoucheur d'images universel payé
+  par le portefeuille du marchand.
+- ⚠️ **LA PHOTO RETOUCHÉE N'EST PAS POSÉE SUR LE PLAT** : la route la rend, le
+  marchand la retient par un `PATCH` ordinaire. L'écraser remplacerait une
+  photo choisie par une qu'il n'a pas encore vue, sans retour en arrière.
+- ⚠️ **UNE ANIMATION PREND UNE À TROIS MINUTES** : réponse immédiate en
+  `processing`, puis `GET /food/stores/{id}/videos` toutes les quinze secondes.
+  Pas de barre de progression — rien ne sait où ça en est.
+- ⚠️ **`failed` VEUT DIRE QUE LES JETONS SONT REVENUS**, exactement ce qui a
+  été prélevé, et **une seule fois** même si la plateforme réessaie. Il faut le
+  DIRE : un marchand qui lit « échec » sans rien d'autre croit avoir perdu
+  1 000 F, et écrit au support.
+- ⚠️ **LES FICHIERS SONT DES ADRESSES DIRA**, jamais celles d'un fournisseur :
+  la plateforme les télécharge et les range avant de les servir. Aucune URL
+  n'expire.
+- ⚠️ **UN SON DE FOND NE S'AJOUTE PAS À UNE VIDÉO** (`422 sound_on_video`) :
+  elle porte déjà sa bande-son.
+- Fonctionnalité fermée sur une plateforme sans fournisseur :
+  `503 generation_unavailable` / `503 photo_ai_unavailable` — **masquez les
+  boutons**, rien n'est débité.
 
 ### 4.81.0 — 24 octobre 2026
 
