@@ -94,6 +94,15 @@ type GenerateDishVideoPayload struct {
 	DishID      string   `json:"dish_id,omitempty"`
 	Images      []string `json:"images,omitempty"`
 	Description string   `json:"description,omitempty"`
+	// Cost : les jetons DÉJÀ DÉBITÉS au marchand pour cette génération.
+	//
+	// ⚠️⚠️ IL VOYAGE DANS LA TÂCHE, et ce n'est pas une commodité : c'est ce
+	// qui rend le REMBOURSEMENT exact quand la génération échoue
+	// définitivement. L'ouvrier qui relirait le tarif de sa configuration
+	// rendrait le prix du jour, pas celui qu'on a prélevé — un tarif changé
+	// entre le débit et l'échec rembourserait trop, ou trop peu, et personne
+	// ne saurait d'où vient l'écart. Zéro = rien n'a été débité.
+	Cost int `json:"cost,omitempty"`
 }
 
 // TranscodeVideoPayload carries the raw upload to optimize. NeedThumbnail is
