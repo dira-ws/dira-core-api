@@ -1,6 +1,6 @@
 # App / console MARCHAND — LIVRAISON — contrat d'API
 
-> **Version 4.82.0** · 25 octobre 2026
+> **Version 4.82.1** · 25 octobre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Livraison : `https://api-staging.dira.llc/api/v1/food`
 
 
@@ -984,10 +984,18 @@ plateforme publie un contenu `pics` avec les photos du plat, dans le feed de
 ### 🆕 ✨ GÉNÉRER UNE PHOTO OU UNE VIDÉO PAR IA (v4.82.0)
 
 ```
-POST /dishes/{id}/ai-photo       { source? }  → { url, source, tokens }      2 jetons
-POST /stores/{id}/videos         { source: "ai", dish_id, images, description }  10 jetons
+POST /stores/{id}/dishes/{dish_id}/ai-photo   { source? } → { url, source, tokens }   2 jetons
+POST /stores/{id}/videos         { source: "ai", dish_id, images, description }       10 jetons
 GET  /stores/{id}/videos                      → status: processing | ready | failed
 ```
+
+⚠️ **v4.82.1 — LA ROUTE DE LA RETOUCHE A CHANGÉ DE CHEMIN.** Elle était
+`POST /dishes/{id}/ai-photo`. **Elle ne pouvait pas aboutir** : elle débitait le
+portefeuille de l'**enseigne**, et il n'existe aucun portefeuille d'enseigne
+sur cette plateforme — elle répondait `404 wallet_not_found` sur toutes. Le
+portefeuille de jetons est celui du **point de vente**, comme pour la vidéo du
+feed. Si vous avez déjà câblé l'ancien chemin, changez-le ; il n'a jamais
+marché.
 
 #### ⚠️⚠️ CE QUI MARCHAIT AVANT, ET QUI NE MARCHAIT PAS
 
@@ -1024,10 +1032,15 @@ et **rien n'est débité**.
 #### La retouche d'une photo — synchrone, 2 jetons
 
 ```
-POST /dishes/{id}/ai-photo
+POST /stores/{id}/dishes/{dish_id}/ai-photo
 { "source": "https://…/dish/original.jpg" }      ← facultatif
 → 200 { "url": "https://…/dish/retouchee.jpg", "source": "https://…/dish/original.jpg", "tokens": 2 }
 ```
+
+⚠️ **SOUS UN POINT DE VENTE, parce que c'est LUI qui paie.** Le plat appartient
+au catalogue de l'enseigne, mais le portefeuille de jetons est celui de la
+boutique — exactement comme la vidéo du feed. Seul son propriétaire peut
+dépenser ses jetons (`403 forbidden`).
 
 | ⚠️ | |
 |---|---|

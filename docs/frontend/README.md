@@ -1,6 +1,6 @@
 # Specs frontend — par rôle
 
-> **Version 4.82.0** · 25 octobre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics`
+> **Version 4.82.1** · 25 octobre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics`
 
 **Cinq** documents, un par application. Chacun est **autonome** : tout ce qu'un frontend doit savoir pour son rôle, sans avoir à ouvrir les vingt specs de modules.
 
@@ -355,6 +355,25 @@ Chaque document porte la même version en en-tête, et son propre journal des ch
 - [ ] ⚠️ **`TRACKING_JWT_SECRET` renseigné dans chaque environnement déployé.** Vide, l'authentification du service de suivi est **désactivée** : n'importe qui connaissant un `delivery_id` suit la course. Le secret doit valoir **exactement** le `JWT_SECRET` de `dira-food-api`.
 
 ## Journal
+
+### 4.82.1 — 25 octobre 2026
+
+⚠️ **LA RETOUCHE PAR IA CHANGE DE CHEMIN** — `FOOD-MERCHANT.md`.
+
+```
+POST /food/stores/{id}/dishes/{dish_id}/ai-photo     ← le bon
+POST /food/dishes/{id}/ai-photo                      ← n'a JAMAIS marché
+```
+
+⚠️ **L'ancien chemin ne pouvait pas aboutir.** Il débitait le portefeuille de
+l'**enseigne**, et il n'existe **aucun** portefeuille d'enseigne sur cette
+plateforme : il répondait `404 wallet_not_found` sur toutes. Le portefeuille de
+jetons est celui du **point de vente** — comme pour la vidéo du feed, qui
+débite déjà le sien. Trouvé en recette, le jour de la livraison.
+
+⚠️ **Et seul le propriétaire de la boutique peut dépenser ses jetons**
+(`403 forbidden`) : sans cette vérification, un marchand ferait retoucher ses
+photos avec le portefeuille d'un confrère.
 
 ### 4.82.0 — 25 octobre 2026
 
