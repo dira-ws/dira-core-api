@@ -1,6 +1,6 @@
 # App / console MARCHAND — LIVRAISON — contrat d'API
 
-> **Version 4.82.1** · 25 octobre 2026
+> **Version 4.82.2** · 25 octobre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Livraison : `https://api-staging.dira.llc/api/v1/food`
 
 
@@ -1005,9 +1005,16 @@ marché.
 aujourd'hui des cartes noires dans le feed, c'est de là qu'elles viennent, et
 elles ne reviendront pas.
 
-**Ce qui change pour vous :** le champ `placeholder` **n'existe plus**. Si vous
-le lisiez, retirez-le ; une vidéo qui n'existe pas se reconnaît maintenant à
-`status: "failed"`.
+**Ce qui change pour vous :** ce que vous receviez, c'était un contenu
+`status: "ready"` avec un `video_url` en `cdn.dira.example` — vérifiez vos
+écrans et vos captures de recette, les cartes noires venaient de là. Une vidéo
+qui n'existe pas se reconnaît maintenant à **`status: "failed"`**, avec un
+`video_url` absent.
+
+> ⚠️ **v4.82.2 — correction de ce paragraphe.** La v4.82.1 vous disait de
+> retirer un champ `placeholder` de votre code. **Il ne vous a jamais été
+> servi** : il existait entre deux services internes et s'arrêtait là. Si vous
+> l'avez cherché, vous ne l'avez pas trouvé — et c'est normal. Rien à retirer.
 
 #### ⚠️⚠️ ON RETOUCHE UNE PHOTO, ON N'INVENTE JAMAIS UN PLAT
 

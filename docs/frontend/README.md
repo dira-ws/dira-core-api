@@ -1,6 +1,6 @@
 # Specs frontend — par rôle
 
-> **Version 4.82.1** · 25 octobre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics`
+> **Version 4.82.2** · 25 octobre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics`
 
 **Cinq** documents, un par application. Chacun est **autonome** : tout ce qu'un frontend doit savoir pour son rôle, sans avoir à ouvrir les vingt specs de modules.
 
@@ -356,6 +356,22 @@ Chaque document porte la même version en en-tête, et son propre journal des ch
 
 ## Journal
 
+### 4.82.2 — 25 octobre 2026
+
+⚠️ **CORRECTION D'UN PARAGRAPHE DE 4.82.0/4.82.1** — `FOOD-MERCHANT.md`.
+
+Ces deux versions demandaient aux applications de **retirer un champ
+`placeholder`** d'un contenu de feed. **Il ne leur a jamais été servi** : il
+existait entre `dira-analytics` et `dira-food-api`, et s'arrêtait à cette
+frontière. Une équipe qui l'a cherché dans son code ne l'a pas trouvé — et
+c'est normal.
+
+Ce que les applications recevaient vraiment : un contenu `status: "ready"`
+portant un `video_url` en `cdn.dira.example`. **Rien à retirer, mais les
+captures de recette et les écrans qui affichaient cette carte sont à relire.**
+
+Aucune route, aucun champ ne change.
+
 ### 4.82.1 — 25 octobre 2026
 
 ⚠️ **LA RETOUCHE PAR IA CHANGE DE CHEMIN** — `FOOD-MERCHANT.md`.
@@ -387,9 +403,8 @@ POST /food/stores/{id}/videos        { source: "ai", … } → status: processin
 - ⚠️⚠️ **CE CHEMIN RENDAIT UNE ADRESSE FACTICE, ET LE MARCHAND PAYAIT.**
   `source: "ai"` faisait passer le contenu en `ready` sur
   `https://cdn.dira.example/ai-videos/….mp4` — un lien mort — après avoir
-  débité 10 jetons (1 000 F). Les cartes noires d'un feed viennent de là.
-  **Le champ `placeholder` n'existe plus** : une vidéo qui n'existe pas se
-  reconnaît à `status: "failed"`.
+  débité 10 jetons (1 000 F). Les cartes noires d'un feed viennent de là. Une
+  vidéo qui n'existe pas se reconnaît à `status: "failed"`, `video_url` absent.
 - ⚠️⚠️ **ON RETOUCHE UNE PHOTO, ON N'INVENTE JAMAIS UN PLAT.** Il n'y a aucun
   moyen de fabriquer la photo d'un plat depuis son nom, et il n'y en aura pas :
   le client commande ce qu'il a vu. La consigne envoyée au modèle est écrite
