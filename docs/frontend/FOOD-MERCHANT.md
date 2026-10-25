@@ -1,6 +1,6 @@
 # App / console MARCHAND — LIVRAISON — contrat d'API
 
-> **Version 4.81.0** · 24 octobre 2026
+> **Version 4.82.0** · 25 octobre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Livraison : `https://api-staging.dira.llc/api/v1/food`
 
 
@@ -930,7 +930,7 @@ PATCH  /stores/{id}/videos/{video_id}/schedule   { published_at }
 GET    /feed/sounds                              → les sons de fond proposés   🆕 v4.81.0
 ```
 
-La **génération de vidéo par IA** débite le portefeuille **de ce point de vente**.
+La **génération de vidéo par IA** débite le portefeuille **de ce point de vente** — voir « Générer une photo ou une vidéo par IA » plus bas (v4.82.0).
 
 Une vidéo **fournie** se téléverse d'abord — `POST /api/v1/uploads?kind=feed&entity={store_id}`, au **socle** (v3.0.0) — puis se déclare avec `source: "upload"`, `video_url` et le `duration_seconds` rendu par l'envoi. `feed` est le seul `kind` qui accepte une vidéo (mp4, webm, mov ; ≤ 60 MiB **et ≤ 60 s**, lus dans le fichier : `422 video_too_long` ou `video_unreadable` sinon). Le serveur réencode ensuite en arrière-plan et pose la vignette.
 
@@ -980,6 +980,110 @@ plateforme publie un contenu `pics` avec les photos du plat, dans le feed de
 
 > **Ce carrousel est à vous** : il apparaît dans `GET /stores/{id}/videos` et se
 > supprime comme les autres.
+
+### 🆕 ✨ GÉNÉRER UNE PHOTO OU UNE VIDÉO PAR IA (v4.82.0)
+
+```
+POST /dishes/{id}/ai-photo       { source? }  → { url, source, tokens }      2 jetons
+POST /stores/{id}/videos         { source: "ai", dish_id, images, description }  10 jetons
+GET  /stores/{id}/videos                      → status: processing | ready | failed
+```
+
+#### ⚠️⚠️ CE QUI MARCHAIT AVANT, ET QUI NE MARCHAIT PAS
+
+**`source: "ai"` rendait une adresse de démonstration.** Le contenu passait en
+`ready` sur `https://cdn.dira.example/ai-videos/….mp4` — un lien mort — et vos
+**10 jetons (1 000 F) étaient débités quand même**. Si votre application affiche
+aujourd'hui des cartes noires dans le feed, c'est de là qu'elles viennent, et
+elles ne reviendront pas.
+
+**Ce qui change pour vous :** le champ `placeholder` **n'existe plus**. Si vous
+le lisiez, retirez-le ; une vidéo qui n'existe pas se reconnaît maintenant à
+`status: "failed"`.
+
+#### ⚠️⚠️ ON RETOUCHE UNE PHOTO, ON N'INVENTE JAMAIS UN PLAT
+
+**Il n'y a aucun moyen de fabriquer la photo d'un plat depuis son nom, et il
+n'y en aura pas.** Tout part d'une **photo que vous avez prise** : la plateforme
+corrige la lumière, nettoie l'arrière-plan, redresse le cadrage — elle n'ajoute,
+ne retire et ne remplace **aucun** aliment, ne change ni les quantités, ni la
+vaisselle.
+
+Ce n'est pas une limite technique, c'est la règle : **votre client commande ce
+qu'il a vu**. Une assiette fabriquée serait belle, puis le livreur apporterait
+autre chose, et c'est vous qu'on accuserait.
+
+La consigne envoyée au modèle est écrite **côté serveur**. Vous n'avez aucun
+champ pour la dicter — `description` sert de **repère** (le nom du plat), et le
+serveur dit explicitement au modèle de ne pas s'en servir pour ajouter ce qui
+n'est pas sur la photo.
+
+⚠️ **Sans aucune photo, les deux routes refusent** : `422 dish_photo_required`,
+et **rien n'est débité**.
+
+#### La retouche d'une photo — synchrone, 2 jetons
+
+```
+POST /dishes/{id}/ai-photo
+{ "source": "https://…/dish/original.jpg" }      ← facultatif
+→ 200 { "url": "https://…/dish/retouchee.jpg", "source": "https://…/dish/original.jpg", "tokens": 2 }
+```
+
+| ⚠️ | |
+|---|---|
+| **`source` désigne LAQUELLE de vos photos retoucher**, pas une adresse libre | une URL quelconque serait refusée (`422`) : cette route n'est pas un retoucheur d'images universel payé par votre portefeuille. Absent = la première photo du plat |
+| **la photo retouchée N'EST PAS posée sur le plat** | montrez-la à côté de l'originale, et c'est vous qui décidez : `PATCH /dishes/{id}` avec les `images` que vous gardez. L'écraser d'office remplacerait une photo que vous avez choisie par une que vous n'avez pas encore vue, sans retour en arrière |
+| **elle est rangée chez nous** | `url` est une adresse Dira, définitive. Rien ne vient d'un tiers |
+| **les jetons sont rendus si ça échoue** | `502 photo_ai_failed` — et le solde est **déjà** revenu quand vous lisez cette erreur. La route est synchrone : il n'y a pas d'attente |
+| **solde insuffisant → `402 insufficient_tokens`** | refusé **avant** toute génération |
+
+#### L'animation d'une photo — en file, 10 jetons
+
+```
+POST /stores/{id}/videos
+{ "source": "ai", "dish_id": "…", "images": ["https://…/dish/original.jpg"], "description": "Poulet braisé" }
+→ 201 { "id": "…", "status": "processing", … }
+```
+
+⚠️ **UNE GÉNÉRATION PREND UNE À TROIS MINUTES.** La réponse est immédiate et
+porte `status: "processing"` : **ne l'attendez pas**, et n'affichez pas de barre
+de progression qui prétendrait savoir où ça en est. Montrez la carte « en
+préparation » dans `GET /stores/{id}/videos`, et relisez la liste — toutes les
+quinze secondes suffisent.
+
+Trois états, et trois seulement :
+
+| `status` | Ce que vous montrez |
+|---|---|
+| `processing` | « votre vidéo se prépare » — la carte existe déjà dans votre liste |
+| `ready` | `video_url` est servi, et c'est une adresse **Dira** |
+| `failed` | ⚠️ **vos jetons vous ont été rendus** — proposez de réessayer, éventuellement avec une autre photo |
+
+⚠️ **`failed` VEUT DIRE QUE LE SOLDE EST REVENU.** Dites-le : un marchand qui
+voit « échec » sans rien d'autre croit avoir perdu 1 000 F, et c'est le premier
+message qu'il envoie au support. Le remboursement est **exactement** ce qui a
+été prélevé, et il n'a lieu **qu'une fois**, même si la plateforme réessaie
+plusieurs fois en interne.
+
+⚠️ **LA VIDÉO EST UNE ADRESSE DIRA, PAS CELLE D'UN FOURNISSEUR.** La plateforme
+télécharge le fichier et le range chez elle avant de vous le servir. Vous
+n'avez donc jamais d'URL qui expire — et vous n'avez rien à mettre en cache
+d'urgence.
+
+⚠️ **UNE SEULE GÉNÉRATION PAR CONTENU.** Rappeler la même demande ne produit ni
+seconde vidéo ni second débit. Pour en obtenir une autre, publiez un nouveau
+contenu.
+
+⚠️ **UN SON DE FOND NE S'AJOUTE PAS À UNE VIDÉO GÉNÉRÉE** (`422
+sound_on_video`) : elle porte déjà sa bande-son. Le son de fond est pour `pic`
+et `pics`.
+
+#### Quand la fonctionnalité n'est pas ouverte
+
+`503 generation_unavailable` (aucun fournisseur sur cette plateforme) ou
+`503 photo_ai_unavailable` pour la retouche. **Masquez les boutons** plutôt que
+de les laisser échouer : lisez-le une fois au démarrage et gardez la réponse.
+Rien n'est débité dans ce cas.
 
 Le feed public et ses interactions :
 
