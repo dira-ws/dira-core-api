@@ -1,6 +1,6 @@
 # App CLIENT — LIVRAISON — contrat d'API
 
-> **Version 4.82.2** · 25 octobre 2026
+> **Version 4.83.0** · 26 octobre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Livraison : `https://api-staging.dira.llc/api/v1/food` · Suivi : `wss://tracking-staging.dira.llc`
 
 
@@ -928,6 +928,94 @@ POST /orders
 - `variant_id` est **obligatoire** quand le plat a des variantes, **refusé** sinon.
 - `option_ids` mélange tous les groupes ; le serveur retrouve le groupe de chacune et vérifie les bornes.
 - **Les prix sont résolus côté serveur.** Ceux que vous affichez sont indicatifs jusqu'à la réponse.
+
+### 🆕 ⚠️ UNE BOUTIQUE CHOISIE NE LIVRE PAS N'IMPORTE OÙ (v4.83.0)
+
+**Correctif.** « `store_id` fait foi » voulait dire **deux** choses, et une
+seule était vraie : le serveur ne **remplace** pas votre boutique par une plus
+proche — mais il ne vérifiait **pas non plus** qu'elle livrait jusqu'à
+l'adresse.
+
+La borne de distance n'existait que sur les lignes **sans** `store_id`. Comme
+vos applications en envoient toujours un, **une adresse à cinquante kilomètres
+était acceptée telle quelle** : aucun écran ne pouvait prévenir, et le défaut
+se découvrait avec un livreur déjà parti.
+
+```
+404 store_too_far
+meta: { "store_id": "…", "dish_id": "…", "distance_m": 50000, "max_distance_m": 15000 }
+```
+
+⚠️ **Ce n'est pas `no_store_nearby`, et les deux appellent des gestes
+opposés.** « Aucune boutique de cette enseigne ne livre ici » → *changez
+d'enseigne ou d'adresse*. « **Cette** boutique est trop loin » → *une autre de
+la même enseigne pourrait convenir* : proposez-la, ou retirez le `store_id` de
+la ligne pour laisser le serveur choisir la plus proche.
+
+⚠️ **Sans `delivery.geo`, rien n'est mesuré** — donc rien n'est refusé. Le
+contrôle n'est possible qu'avec une position.
+
+### 🆕 ✅ VÉRIFIER L'ADRESSE AVANT DE COMMANDER (v4.83.0)
+
+```
+POST /orders/check
+{ "items": [ … les mêmes lignes que POST /orders … ],
+  "delivery": { "address": "Rue 12, Hédzranawoé", "geo": [1.2255, 6.1319] } }
+```
+
+**Appelez-la à l'ouverture de la page de paiement, et à chaque changement
+d'adresse.** C'est elle qui permet de dire au client que son adresse pose
+problème **avant** qu'il appuie sur « Commander ».
+
+```jsonc
+// livrable
+{ "deliverable": true,
+  "subtotal": 5000, "delivery_fee": 700, "total": 5700,
+  "lines": [ { "dish_id": "…", "store_id": "…", "name": "Poulet braisé",
+               "unit_price": 2500, "qty": 2, "distance_m": 2400, "ok": true } ] }
+
+// pas livrable
+{ "deliverable": false,
+  "reason": "store_too_far",
+  "message": "Cette boutique est à 50000 m de votre adresse, et elle livre jusqu'à 15000 m : …",
+  "lines": [ { "dish_id": "…", "ok": false, "reason": "store_too_far", "message": "…" } ] }
+```
+
+⚠️⚠️ **ELLE RÉPOND `200` MÊME QUAND C'EST NON.** « Non livrable » est une
+réponse, pas une panne : ne la traitez pas comme une erreur réseau, et ne la
+comptez pas dans vos indicateurs d'échec. Seuls un panier vide ou une ligne
+malformée donnent `422`.
+
+⚠️ **CE QU'ELLE DIT EST CE QUE DIRA LA COMMANDE.** Les deux routes passent par
+les mêmes règles. Si elle dit « livrable », la commande passe ; si elle refuse,
+la commande refuse avec **le même code**. Vous pouvez donc décider sur sa
+réponse seule.
+
+⚠️ **TOUTES LES LIGNES ONT UN VERDICT**, pas seulement la première qui échoue
+— contrairement à la commande. Montrez-les **toutes** : un client dont trois
+plats sur cinq posent problème et qui les découvre un par un, à chaque
+tentative, abandonne.
+
+⚠️ **`reason` AU NIVEAU RACINE EST LE REFUS DOMINANT** — celui de la première
+ligne fautive, à afficher en grand. Les refus par ligne sont dans `lines[]`.
+
+⚠️ **`message` EST DÉJÀ TRADUIT** (comme partout ailleurs). Affichez-le quand
+vous ne connaissez pas le `reason` : c'est ce qui vous évite un écran vide le
+jour où le serveur ajoute un code.
+
+⚠️ **`delivery_fee` N'EST CHIFFRÉ QUE SI TOUT EST LIVRABLE.** Sur un panier
+incomplet il vaut `0` et `total` aussi : des frais calculés sur une tournée
+amputée seraient plus bas que les vrais, affichés juste avant que le client
+corrige son adresse.
+
+⚠️ **`total` EST AVANT REMISES** — ni promotion, ni code promo, ni crédit de
+tombola. Les chiffrer ici demanderait de les **engager**, et une page de
+paiement se rouvre dix fois. Le total définitif est celui de `POST /orders`.
+
+⚠️ **RIEN N'EST CRÉÉ NI RÉSERVÉ** : appelez-la autant que nécessaire.
+
+⚠️ **Si la route répond `404` sur votre déploiement**, elle n'y est pas encore :
+repliez-vous **silencieusement** sur les refus de `POST /orders`, comme avant.
 
 ### 🎟️ LE CODE PROMO — celui qu'on TAPE (v4.51.0)
 
@@ -2752,6 +2840,7 @@ L'écran de portefeuille dérive ce chiffre du **panier moyen réel** du client.
 | `cannot_cancel` | 409 | trop tard pour annuler |
 | `dish_unavailable` | 409 | plat indisponible dans ce point de vente |
 | `no_store_nearby` | **404** | l'enseigne ne livre pas à cette adresse → **changer d'enseigne ou d'adresse** |
+| `store_too_far` 🆕 | **404** | la boutique **choisie** est hors de portée (`meta.distance_m`, `meta.max_distance_m`) → **proposer une autre boutique de la même enseigne**, ou retirer le `store_id` de la ligne |
 | `dish_unavailable_nearby` | 409 | elle livre, mais aucune boutique proche n'a **ce plat** → **proposer autre chose de la même enseigne** |
 | `no_driver_yet` | 409 | écrire avant qu'un livreur ait pris la course |
 | `conversation_closed` | 409 | conversation fermée — **désactiver la saisie** |
@@ -2770,6 +2859,8 @@ L'écran de portefeuille dérive ce chiffre du **panier moyen réel** du client.
 | `storage_unavailable` | 503 | le stockage de fichiers n'a pas démarré → réessayer plus tard, ne pas perdre la saisie |
 
 > ⚠️ **`no_store_nearby` et `dish_unavailable_nearby` ne se traitent pas pareil.** Le premier dit que l'enseigne entière est hors de portée : proposer un autre plat de cette enseigne enverrait le client réessayer indéfiniment. Le second dit que l'enseigne livre bien ici — c'est ce plat-ci qui manque, et le reste de la carte est commandable.
+>
+> ⚠️ **ET `store_too_far` EST UN TROISIÈME CAS (v4.83.0)**, qu'il ne faut confondre avec aucun des deux : l'enseigne livre peut-être très bien ici — c'est **la boutique que le client a choisie** qui est trop loin. Le geste est donc d'en proposer une autre de la même enseigne, ou de laisser le serveur choisir en retirant le `store_id`.
 
 ---
 
