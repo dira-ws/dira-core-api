@@ -1,6 +1,6 @@
 # App CLIENT — COURSES (VTC) — contrat d'API
 
-> **Version 4.82.2** · 25 octobre 2026
+> **Version 4.83.0** · 26 octobre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Courses : `https://api-staging.dira.llc/api/v1/vtc` · Suivi : `wss://tracking-staging.dira.llc`
 
 ---
@@ -1052,10 +1052,96 @@ disponible**, tout marche sans elle.
 
 ```
 POST /rides
-{ "quote_id": "6aa2…", "payment_method": "cash" | "wallet" | "online" }
+{ "quote_id": "6aa2…", "payment_method": "cash" | "wallet" | "online",
+  "cars": 1 }                                              🆕 v4.83.0
 ```
 
 ⚠️ **Aucun montant.** Le prix vient du devis mémorisé.
+
+### 🆕 🚗🚗 PLUSIEURS VOITURES EN UNE COMMANDE (v4.83.0)
+
+« Il nous faut trois voitures pour l'aéroport. » Un geste, **trois courses** au
+même départ et à la même arrivée, chacune avec son chauffeur.
+
+```
+GET /settings/rider
+→ { "max_concurrent_rides": 3, "max_cars_per_request": 1 }
+```
+
+⚠️⚠️ **LISEZ CE RÉGLAGE AVANT DE DESSINER QUOI QUE CE SOIT.**
+`max_cars_per_request` vaut **1 par défaut** : la fonctionnalité est **éteinte**
+tant qu'un pays ne l'ouvre pas. À 1, **ne dessinez aucun sélecteur** — proposer
+trois voitures dans un pays qui n'en sert qu'une fait arriver le refus après le
+choix.
+
+⚠️⚠️ **LA FORME DE LA RÉPONSE SUIT `cars`** — et c'est le **seul** endroit de
+cette API où cela arrive.
+
+| `cars` | Réponse |
+|---|---|
+| absent ou `1` | **la course**, exactement comme avant |
+| `> 1` | `{ "booking_id": "…", "cars": 3, "rides": [ … ] }` |
+
+Deux routes auraient dupliqué toutes les règles de la commande — devis, pays,
+paiement, bornes — et deux copies d'une règle d'argent finissent par ne plus
+dire la même chose. Vous savez ce que vous avez demandé : la forme n'est jamais
+une surprise.
+
+⚠️ **TROIS COURSES, ET NON UNE COURSE À TROIS VOITURES.** Chacune a son
+identifiant, son statut, son chauffeur, son reçu et sa note. Elles portent le
+même `booking_id`, et un `booking_index` de 1 à `booking_size`.
+
+⚠️ **AFFICHEZ `booking_index`** : « Voiture 2 sur 3 ». Trois cartes au même
+départ, à la même arrivée et au même prix sont **indistinguables** — sans ce
+rang, vous les numérotez à votre façon, et l'ordre change à chaque
+rechargement de la liste.
+
+⚠️ **ELLES NE SE TERMINENT PAS ENSEMBLE**, et ce n'est pas une panne : trois
+chauffeurs, trois trajets. L'une peut être `in_transit` quand une autre cherche
+encore.
+
+**Ce qui est refusé, et pourquoi :**
+
+| Refus | Quand | Ce que vous affichez |
+|---|---|---|
+| `422 too_many_cars` | au-delà de `max_cars_per_request` ; `meta.max_cars` le dit | corrigez le sélecteur, ne montrez pas « erreur » |
+| `409 too_many_active_rides` | la borne de courses simultanées est atteinte ; `meta.active`, `meta.max_rides`, `meta.ride_ids` | « vous avez déjà N courses en cours » **+ un lien vers elles** |
+| `422 cars_on_payment_method` | `online` (trois paiements mobile money à enchaîner) ou `subscription` (il couvre **une** course) | proposez espèces ou solde Dira |
+| `422 cars_on_pool` | mode partagé : il remplit **une** voiture | proposez un autre mode |
+| `402 insufficient_funds` | en `wallet`, le solde ne couvre pas le **total** ; `meta.fare_xof` est le total, `meta.cars` le nombre | routez vers la recharge |
+
+⚠️⚠️ **LA REMISE NE S'APPLIQUE QU'À LA PREMIÈRE VOITURE.** Une commande part
+d'**un** devis : les courses suivantes paient le **tarif plein**, et leur
+`fare_xof` est donc **plus élevé** que celui du devis. Dites-le sur l'écran de
+confirmation — un total inattendu au moment de payer est le pire endroit pour
+une surprise. (Trois fois la remise pour un code saisi une fois ferait de
+« commander trois voitures pour en garder une » le moyen le moins cher de
+voyager.)
+
+⚠️ **TOUT OU RIEN** : si la commande échoue en chemin, **aucune** voiture ne
+part. Vous ne recevrez jamais une commande à moitié servie.
+
+### 🆕 📋 MES COURSES EN COURS (v4.83.0)
+
+```
+GET /rides/active
+→ { "items": [ { … une course, comme GET /rides/{id} … } ] }
+```
+
+⚠️⚠️ **N'UTILISEZ PLUS LA PREMIÈRE PAGE DE `GET /rides` POUR CELA.**
+`GET /rides` est l'**historique**, paginé, les plus récentes d'abord : il
+contient vos courses en cours **par accident**, parce qu'elles sont récentes.
+Le jour où quelqu'un termine quatre courses dans l'heure, sa course en cours
+sort de la première page — et l'écran qu'il ouvre en attendant sa voiture est
+vide.
+
+La liste comprend les courses **en recherche**. Elle n'est **pas paginée** :
+elle est bornée par `max_concurrent_rides` (trois par défaut, vingt au plus).
+
+Regroupez par `booking_id` si vous voulez une carte par commande.
+
+⚠️ **Le `mission_id` du suivi est l'`id` de la course** — voir §6, et la
+nouvelle socket qui en porte plusieurs.
 
 | Moyen | Ce qui se passe à la commande | À l'annulation |
 |---|---|---|
@@ -2780,6 +2866,75 @@ WS wss://tracking-staging.dira.llc/track/subscribe/{ride_id}
 L'identifiant de course sert d'identifiant de mission (`mission_id` =
 `ride_id`). Le jeton d'accès passe dans l'URL (`?token=`) — un WebSocket de
 navigateur ne porte pas d'en-tête.
+
+### 🆕 🛰️ PLUSIEURS COURSES SUR UNE SEULE SOCKET (v4.83.0)
+
+```
+WS wss://tracking-staging.dira.llc/track/subscribe?missions=<id1>,<id2>,<id3>&token=…
+```
+
+⚠️⚠️ **N'OUVREZ PAS TROIS SOCKETS.** Sur un réseau mobile, chaque socket coûte
+une poignée de main TLS, un maintien en vie qui **réveille la radio du
+téléphone**, et une reconnexion à chaque passage de tunnel. Trois courses à
+suivre, c'est trois fois tout cela — pour des trames qui portent **déjà** leur
+`mission_id`.
+
+- **Un `hello` par mission** arrive à l'ouverture, chacun avec la dernière
+  position connue : dessinez vos trois voitures tout de suite. Une voiture
+  arrêtée au feu rouge n'envoie aucune trame — sans son accueil, elle n'aurait
+  aucun point sur la carte jusqu'à ce qu'elle reparte, et le passager la
+  croirait perdue.
+- **Chaque trame porte son `mission_id`** : aiguillez dessus.
+- ⚠️ **Vingt missions au plus.** Au-delà, la socket est refusée (`400`).
+- ⚠️ **Une mission que vous n'avez pas le droit de suivre refuse TOUTE la
+  socket** (`401`), elle n'est pas écartée en silence : un abonnement partiel
+  qui a l'air complet dessinerait deux voitures sur trois sans que vous
+  puissiez le savoir.
+- ⚠️ **Ne demandez pas deux fois la même mission** : la liste est
+  dédoublonnée côté serveur, mais comptez-y — deux abonnements au même canal
+  doubleraient chaque position.
+
+La route à une mission (`/track/subscribe/{mission_id}`) **ne change pas** : une
+seule course, une seule socket, c'est toujours le plus simple.
+
+### 🆕 🤝 SUIVRE LE TRAJET QU'UN AUTRE PASSAGER A PARTAGÉ (v4.83.0)
+
+Quelqu'un vous envoie un lien de partage (§ *Partager mon trajet*). Connecté,
+vous pouvez l'**épingler** : le trajet apparaît à côté de vos propres courses,
+sur la même carte, aussi longtemps que le lien vit.
+
+```
+POST   /trip-shares/pinned      { "token": "<le jeton du lien reçu>" }
+→ 201 { "id": "<l'épingle>", "trip": { … la même page que le lien public … } }
+
+GET    /trip-shares/pinned      → { "items": [ { "id", "trip" } ] }
+DELETE /trip-shares/pinned/{id} → 204
+```
+
+⚠️⚠️ **ÉPINGLER N'ACCORDE RIEN DE PLUS QUE LE LIEN.** Le trajet se relit par
+les **mêmes** règles : révocation immédiate, durée choisie, fin du trajet plus
+la grâce. Celui qui a partagé peut couper à tout instant, et votre épingle se
+vide dans la seconde.
+
+⚠️ **LES TRAJETS MORTS SONT OMIS DE LA LISTE, pas rendus grisés.** Un lien
+révoqué ou un trajet terminé ne montre plus rien — et surtout pas sa dernière
+position connue, qui dirait « la voiture est là » alors que personne ne sait
+plus où elle est. Votre liste rétrécit toute seule ; c'est normal.
+
+⚠️ **`id` EST CELUI DE L'ÉPINGLE, pas du lien** : c'est lui qu'on envoie pour
+la retirer. Le jeton, lui, n'est écrit nulle part — ni chez vous, ni chez nous.
+
+| Refus | Sens |
+|---|---|
+| `409 follow_own_trip` | c'est **votre** trajet : il est déjà dans `GET /rides/active`. L'épingler en plus donnerait deux marqueurs au même endroit, dont l'un disparaîtrait à la révocation |
+| `409 too_many_followed_trips` | dix au plus (`meta.max`) |
+| `404 share_not_found` · `403 share_revoked` | jeton inconnu, lien expiré ou coupé |
+| `503 follow_unavailable` | pas servi sur cette plateforme : masquez le geste |
+
+**L'écran de suivi, en entier :** `GET /rides/active` (les vôtres) +
+`GET /trip-shares/pinned` (les autres), **une** socket avec tous les
+`mission_id` des vôtres, et le `trip` des épinglés se **relit** (la page
+publique fait de même) — un trajet partagé n'ouvre **pas** de socket.
 
 ### 🤝 SUR UNE COURSE PARTAGÉE, VOUS VOYEZ LA VOITURE COMME TOUT LE MONDE (v4.65.0)
 

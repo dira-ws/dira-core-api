@@ -1,6 +1,6 @@
 # Specs frontend — par rôle
 
-> **Version 4.82.2** · 25 octobre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics`
+> **Version 4.83.0** · 26 octobre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics`
 
 **Cinq** documents, un par application. Chacun est **autonome** : tout ce qu'un frontend doit savoir pour son rôle, sans avoir à ouvrir les vingt specs de modules.
 
@@ -355,6 +355,88 @@ Chaque document porte la même version en en-tête, et son propre journal des ch
 - [ ] ⚠️ **`TRACKING_JWT_SECRET` renseigné dans chaque environnement déployé.** Vide, l'authentification du service de suivi est **désactivée** : n'importe qui connaissant un `delivery_id` suit la course. Le secret doit valoir **exactement** le `JWT_SECRET` de `dira-food-api`.
 
 ## Journal
+
+### 4.83.0 — 26 octobre 2026
+
+🚗🚗 **PLUSIEURS COURSES À LA FOIS, PLUSIEURS VOITURES D'UN COUP, ET LES
+TRAJETS PARTAGÉS QU'ON ÉPINGLE** — `VTC-CLIENT.md`.
+
+```
+GET  /vtc/settings/rider     → { max_concurrent_rides: 3, max_cars_per_request: 1 }
+POST /vtc/rides              { quote_id, payment_method, cars: 3 }
+GET  /vtc/rides/active       → mes courses en cours, recherche comprise
+WS   /track/subscribe?missions=a,b,c
+POST /vtc/trip-shares/pinned { token }  ·  GET /vtc/trip-shares/pinned
+```
+
+- ⚠️⚠️ **LISEZ `max_cars_per_request` AVANT DE DESSINER QUOI QUE CE SOIT** : il
+  vaut **1 par défaut**, la fonctionnalité est donc ÉTEINTE tant qu'un pays ne
+  l'ouvre pas. À 1, aucun sélecteur — proposer trois voitures dans un pays qui
+  n'en sert qu'une fait arriver le refus après le choix.
+- ⚠️⚠️ **LA FORME DE LA RÉPONSE DE `POST /rides` SUIT `cars`**, seul endroit de
+  l'API où cela arrive : absent ou 1 rend LA COURSE comme avant, au-delà rend
+  `{ booking_id, cars, rides[] }`. Deux routes auraient dupliqué toutes les
+  règles de la commande.
+- ⚠️ **TROIS COURSES, ET NON UNE COURSE À TROIS VOITURES** : chacune son
+  statut, son chauffeur, son reçu, sa note. Même `booking_id`,
+  `booking_index` de 1 à `booking_size` — affichez « Voiture 2 sur 3 », sans
+  quoi trois cartes identiques se renumérotent à chaque rechargement.
+- ⚠️⚠️ **LA REMISE NE S'APPLIQUE QU'À LA PREMIÈRE VOITURE** : les suivantes
+  paient le tarif PLEIN, leur `fare_xof` est donc plus élevé que celui du
+  devis. Dites-le avant de payer — un total inattendu au moment de payer est
+  le pire endroit pour une surprise.
+- ⚠️ **TOUT OU RIEN** : une commande n'est jamais servie à moitié.
+- Refusés : `409 too_many_active_rides` (`meta.active`, `max_rides`,
+  `ride_ids` — montrez les courses qui bloquent), `422 too_many_cars`,
+  `422 cars_on_payment_method` (en ligne, abonnement), `422 cars_on_pool`,
+  `402 insufficient_funds` sur le **total**.
+- ⚠️⚠️ **N'UTILISEZ PLUS LA PREMIÈRE PAGE DE `GET /rides` POUR « MES COURSES EN
+  COURS »** : c'est l'historique, et il les contient PAR ACCIDENT. Le jour où
+  quelqu'un termine quatre courses dans l'heure, l'écran qu'il ouvre en
+  attendant sa voiture est vide. `GET /rides/active` est fait pour ça.
+- ⚠️ **UNE SEULE SOCKET POUR PLUSIEURS COURSES** (`?missions=a,b,c`) : sur un
+  réseau mobile, trois sockets font trois poignées de main TLS et trois
+  réveils de radio. Un `hello` par mission à l'ouverture ; vingt missions au
+  plus ; **une mission refusée refuse TOUTE la socket** (un abonnement partiel
+  qui a l'air complet est pire).
+- ⚠️ **ÉPINGLER UN TRAJET PARTAGÉ N'ACCORDE RIEN DE PLUS QUE LE LIEN** :
+  révocation immédiate, durée choisie, fin du trajet plus la grâce. Les
+  trajets morts sont **omis** de la liste, pas grisés — surtout pas leur
+  dernière position connue. Son propre trajet se refuse
+  (`409 follow_own_trip`) : il est déjà dans `/rides/active`.
+
+✅ **VÉRIFIER QU'UNE ADRESSE EST LIVRABLE AVANT DE COMMANDER** — `FOOD-CLIENT.md`
+(core-api#226).
+
+```
+POST /food/orders/check  { items, delivery } → 200 { deliverable, reason, message, lines[], delivery_fee }
+```
+
+- ⚠️⚠️ **CORRECTIF : UNE BOUTIQUE CHOISIE NE LIVRAIT NULLE PART.** « `store_id`
+  fait foi » voulait dire deux choses, et une seule était vraie : le serveur ne
+  REMPLACE pas la boutique du client, mais il ne vérifiait pas non plus qu'elle
+  livrait jusqu'à l'adresse. La borne n'existait que sur les lignes SANS
+  `store_id`, et les apps en envoient toujours un : **une adresse à cinquante
+  kilomètres était acceptée telle quelle**, et le défaut se découvrait avec un
+  livreur déjà parti. Désormais `404 store_too_far`, avec `meta.distance_m` et
+  `meta.max_distance_m`.
+- ⚠️ **TROISIÈME CAS À NE CONFONDRE AVEC AUCUN DES DEUX AUTRES** :
+  `no_store_nearby` → changez d'enseigne ou d'adresse ;
+  `dish_unavailable_nearby` → proposez autre chose de la même enseigne ;
+  `store_too_far` → proposez une AUTRE BOUTIQUE de la même enseigne, ou
+  retirez le `store_id`.
+- ⚠️⚠️ **`POST /orders/check` RÉPOND `200` MÊME QUAND C'EST NON** : « non
+  livrable » est une réponse, pas une panne. Ne la comptez pas dans vos
+  indicateurs d'échec.
+- ⚠️ **CE QU'ELLE DIT EST CE QUE DIRA LA COMMANDE** : mêmes règles, même code
+  de refus. Décidez sur sa réponse seule.
+- ⚠️ **TOUTES LES LIGNES ONT UN VERDICT**, pas seulement la première qui
+  échoue : un client qui découvre ses plats problématiques un par un abandonne.
+- ⚠️ **`delivery_fee` seulement si tout est livrable** (sinon il serait calculé
+  sur une tournée amputée), **`total` AVANT remises** (les chiffrer ici
+  demanderait de les engager), et **rien n'est créé ni réservé**.
+- Route absente sur un déploiement : **repli silencieux** sur les refus de
+  `POST /orders`.
 
 ### 4.82.2 — 25 octobre 2026
 
