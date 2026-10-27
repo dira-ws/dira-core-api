@@ -50,7 +50,16 @@ var Functions = []string{FunctionOps, FunctionSupport, FunctionFinance, Function
 // Scopes reprend les portées de `pkg/auth`. Elles y sont définies parce que
 // c'est le jeton qui les porte et le middleware qui les vérifie ; les
 // redéclarer ici ferait deux vocabulaires pour une seule notion.
-var Scopes = []string{auth.ScopeCore, auth.ScopeFood, auth.ScopeVTC}
+//
+// ⚠️ C'EST UN ALIAS, PAS UNE COPIE — et il l'est devenu en payant le prix
+// annoncé. Cette ligne énumérait les trois portées à la main, à côté d'un
+// commentaire d'`AllScopes` qui disait mot pour mot que « deux listes
+// divergeraient au premier métier ajouté ». Le quatrième métier est arrivé :
+// `immo` entrait dans `AllScopes`, que `cmd/seed` passe à `EnsureMember`, qui
+// le refusait ici comme portée inconnue. Le seed tombait — et une copie qui
+// tombe bruyamment est la chance, pas la règle : la console aurait tout
+// aussi bien pu simplement ne jamais proposer la case.
+var Scopes = auth.AllScopes
 
 const (
 	StatusActive    = "active"

@@ -32,7 +32,20 @@ const (
 	// siens. Inventer une troisième façon de faire aurait donné deux chemins à
 	// relire au lieu d'un.
 	RolePartner = "partner"
-	RoleAdmin   = "admin"
+	// RolePublisher : un ANNONCEUR IMMOBILIER — particulier qui met son bien
+	// en ligne, ou agence qui en publie des centaines.
+	//
+	// ⚠️ UN RÔLE À LUI, et pas `merchant` réutilisé. La forme est pourtant la
+	// même — un mandant externe qui administre ses propres objets — mais la
+	// matrice d'autorisation sonde des PUBLICS : confondre un restaurateur et
+	// une agence immobilière, c'est faire d'une habilitation gagnée d'un côté
+	// une ouverture de l'autre, sans qu'aucun test ne puisse le voir.
+	//
+	// ⚠️ ET CE N'EST PAS LE CHERCHEUR. Qui cherche un logement reste `client`,
+	// le compte qu'il a déjà : lui inventer un rôle aurait obligé quelqu'un
+	// qui commande un repas et visite un appartement à tenir deux comptes.
+	RolePublisher = "publisher"
+	RoleAdmin     = "admin"
 )
 
 const (
@@ -129,13 +142,14 @@ const (
 	ScopeCore = "core"
 	ScopeFood = "food"
 	ScopeVTC  = "vtc"
+	ScopeImmo = "immo"
 )
 
 // AllScopes est l'ensemble des verticales de la plateforme.
 //
 // Exporté pour que le provisionnement et la console lisent la MÊME liste que
 // la validation — deux listes divergeraient au premier métier ajouté.
-var AllScopes = []string{ScopeCore, ScopeFood, ScopeVTC}
+var AllScopes = []string{ScopeCore, ScopeFood, ScopeVTC, ScopeImmo}
 
 // Allows dit si ces claims couvrent la verticale demandée.
 //
