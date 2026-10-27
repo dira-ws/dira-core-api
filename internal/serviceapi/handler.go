@@ -15,6 +15,8 @@ import (
 	"context"
 	"log/slog"
 	"net/http"
+	"slices"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -26,8 +28,19 @@ import (
 	"github.com/kgtech-org/dira-core-api/internal/user"
 	"github.com/kgtech-org/dira-core-api/pkg/apperr"
 	"github.com/kgtech-org/dira-core-api/pkg/audit"
+	"github.com/kgtech-org/dira-core-api/pkg/auth"
 	"github.com/kgtech-org/dira-core-api/pkg/httpx"
 )
+
+// errUnknownScope : la portée demandée n'est pas une verticale de la
+// plateforme.
+//
+// ⚠️ SON PROPRE CODE, et non `apperr.Validation`. Celui-ci produit
+// `validation_failed`, dont la traduction se fait PAR LE CODE : la phrase
+// écrite serait jetée et remplacée par « Requête invalide ». Ici le détail —
+// quelles portées existent — est ce qui règle le problème en dix secondes.
+var errUnknownScope = apperr.New("unknown_scope",
+	"this scope is not a vertical of the platform", http.StatusUnprocessableEntity)
 
 // ⚠️⚠️ CES ROUTES DÉCODENT AVEC `httpx.DecodeService`, PAS `httpx.Decode`.
 //
@@ -864,7 +877,19 @@ func (h *Handler) recordAudit(w http.ResponseWriter, r *http.Request) {
 // quel pays, le socle trouve à qui.
 func (h *Handler) notifyStaff(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		Scope   string            `json:"scope" validate:"required,oneof=core food vtc"`
+		// ⚠️ PAS DE `oneof` ICI, ET C'EST UNE CORRECTION. La liste écrite à la
+		// main disait `core food vtc` : la quatrième verticale, l'immobilier,
+		// était refusée en `422` sur une route dont rien n'annonçait qu'elle
+		// tenait un catalogue de portées. Le socle en avait déjà deux copies
+		// de ce genre — `staff.Scopes`, corrigée dans le même lot — et le
+		// commentaire d'`AllScopes` annonçait précisément cela : « deux listes
+		// divergeraient au premier métier ajouté ».
+		//
+		// La liste vit maintenant en UN seul endroit, `auth.AllScopes`, et un
+		// tag de validation ne sait pas la lire. Le contrôle est donc en
+		// dessous, avec son propre code de refus — même geste que
+		// `pkg/compliance` pour ses types de pièces.
+		Scope   string            `json:"scope" validate:"required"`
 		Country string            `json:"country" validate:"omitempty,len=2"`
 		Key     string            `json:"key" validate:"required,max=60"`
 		Vars    map[string]string `json:"vars"`
@@ -872,6 +897,16 @@ func (h *Handler) notifyStaff(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := httpx.DecodeService(r, &req); err != nil {
 		httpx.Error(w, r, err)
+		return
+	}
+	// ⚠️ LE REFUS NOMME LES PORTÉES ADMISES. Un `validation_failed` muet
+	// aurait fait chercher dans le corps de la requête ce qui, en vérité,
+	// manquait à une liste du socle.
+	if !slices.Contains(auth.AllScopes, req.Scope) {
+		httpx.Error(w, r, errUnknownScope.WithMeta(map[string]any{
+			"fields": []string{"scope"},
+			"reason": strings.Join(auth.AllScopes, ", "),
+		}))
 		return
 	}
 	if h.staff == nil {

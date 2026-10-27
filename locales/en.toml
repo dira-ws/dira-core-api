@@ -749,3 +749,6 @@ other = "This file is over {{.max_mib}} MiB, the limit for this kind of file"
 
 [errors.store_directory_unavailable]
 other = "A store wallet is read from the merchant app: this service cannot tell who owns a store"
+
+[errors.unknown_scope]
+other = "This scope is not a vertical of the platform"

@@ -847,3 +847,6 @@ other = "Ce fichier dépasse {{.max_mib}} Mio, la limite de ce genre de fichier"
 
 [errors.store_directory_unavailable]
 other = "Le portefeuille d'un point de vente se lit depuis l'application marchand : ce service ne sait pas à qui appartient une boutique"
+
+[errors.unknown_scope]
+other = "Ce périmètre n'est pas une verticale de la plateforme"
