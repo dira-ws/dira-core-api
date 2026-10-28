@@ -49,48 +49,106 @@ func TestOnlyTheFeedTakesVideo(t *testing.T) {
 	}
 }
 
-// Le JPEG passe partout sauf sur un pictogramme — une icône en JPEG est une
-// icône floue sur un fond blanc — et sauf sur un SON, qui n'est pas une image.
+// LA NATURE DE CHAQUE GENRE, DÉCLARÉE À LA MAIN.
 //
-// ⚠️ LES TROIS FAMILLES SONT NOMMÉES, ET C'EST VOLONTAIRE : un genre ajouté
-// sans être classé ici fait TOMBER cette épreuve. Un motif large (« tout ce qui
-// n'est pas un pictogramme est une photo ») aurait accepté en silence le
-// premier genre d'une quatrième nature — et c'est exactement ce qui est arrivé
-// en ajoutant `sound`.
-func TestEveryPhotoKindTakesJPEG(t *testing.T) {
-	pictos := map[string]bool{"class": true, "marker": true}
-	sounds := map[string]bool{"sound": true}
+// ⚠️⚠️ C'EST LA TABLE QUI FAIT TOUT LE TRAVAIL DE CES ÉPREUVES, et elle est
+// écrite à la main EXPRÈS. Un genre ajouté sans y être classé fait tomber
+// `TestEveryKindHasADeclaredNature` : on ne peut pas ajouter un genre sans dire
+// de quelle nature il est. Un motif large (« tout ce qui n'est pas un
+// pictogramme est une photo ») aurait accepté en silence le premier genre d'une
+// nature nouvelle — c'est arrivé deux fois, avec `sound` puis avec `voice`.
+type nature string
+
+const (
+	photo nature = "photo"
+	picto nature = "pictogramme"
+	video nature = "photo+vidéo"
+	proof nature = "preuve"
+	audio nature = "audio"
+)
+
+var natures = map[string]nature{
+	"dish": photo, "store": photo, "brand": photo, "vehicle": photo,
+	"avatar": photo, "banner": photo, "equipment": photo,
+	"class": picto, "marker": picto,
+	"feed":  video,
+	"sound": audio, "voice": audio,
+	"receipt": proof, "document": proof,
+}
+
+func TestEveryKindHasADeclaredNature(t *testing.T) {
 	for kind := range Kinds {
-		_, ok := Accepts(kind, "image/jpeg")
-		image := !pictos[kind] && !sounds[kind]
-		if image != ok {
-			t.Errorf("%s : jpeg accepté = %v, attendu %v (pictogramme = %v, son = %v)",
-				kind, ok, image, pictos[kind], sounds[kind])
+		if _, ok := natures[kind]; !ok {
+			t.Errorf("le genre `%s` n'a pas de nature déclarée : classez-le dans `natures`, "+
+				"c'est ce qui dit s'il prend une image, un son ou un PDF", kind)
+		}
+	}
+	for kind := range natures {
+		if _, ok := Kinds[kind]; !ok {
+			t.Errorf("`%s` est classé mais n'existe plus : retirez-le de `natures`", kind)
 		}
 	}
 }
 
-// ⚠️⚠️ UN SON NE PASSE QUE PAR LE GENRE `sound`, ET JAMAIS EN WAV.
+// Le JPEG passe partout sauf sur un pictogramme — une icône en JPEG est une
+// icône floue sur un fond blanc — et sauf sur de l'AUDIO, qui n'est pas une
+// image.
+func TestEveryPhotoKindTakesJPEG(t *testing.T) {
+	for kind, n := range natures {
+		_, ok := Accepts(kind, "image/jpeg")
+		want := n == photo || n == video || n == proof
+		if want != ok {
+			t.Errorf("%s (%s) : jpeg accepté = %v, attendu %v", kind, n, ok, want)
+		}
+	}
+}
+
+// ⚠️⚠️ L'AUDIO NE PASSE QUE PAR LES GENRES AUDIO, ET JAMAIS EN WAV.
 //
 // Trente secondes de WAV pèsent cinq mégaoctets ; en AAC, trois cents
 // kilooctets. Sur les réseaux d'Afrique de l'Ouest, le premier ne se
 // télécharge pas pendant qu'on fait défiler un feed — autant ne pas avoir de
-// son du tout. Et le plafond serré (deux mégaoctets) est ce qui empêche qu'un
-// album entier entre par cette porte.
-func TestOnlyTheSoundKindTakesAudioAndNeverWav(t *testing.T) {
-	for kind := range Kinds {
-		for _, audio := range []string{"audio/mpeg", "audio/mp4", "audio/aac", "audio/ogg"} {
-			_, ok := Accepts(kind, audio)
-			if (kind == "sound") != ok {
-				t.Errorf("%s : %s accepté = %v, attendu %v", kind, audio, ok, kind == "sound")
+// son du tout. Et les plafonds serrés (deux mégaoctets) sont ce qui empêche
+// qu'un album entier, ou une heure d'enregistrement, entre par cette porte.
+func TestOnlyTheAudioKindsTakeAudioAndNeverWav(t *testing.T) {
+	for kind, n := range natures {
+		for _, mime := range []string{"audio/mpeg", "audio/mp4", "audio/aac", "audio/ogg"} {
+			_, ok := Accepts(kind, mime)
+			if (n == audio) != ok {
+				t.Errorf("%s (%s) : %s accepté = %v, attendu %v", kind, n, mime, ok, n == audio)
 			}
 		}
 		if _, ok := Accepts(kind, "audio/wav"); ok {
 			t.Errorf("%s accepte le WAV : cinq mégaoctets pour trente secondes", kind)
 		}
+		if n != audio {
+			continue
+		}
+		if max := Kinds[kind].Max; max > 4<<20 {
+			t.Errorf("le plafond de `%s` est %d : serré exprès — ni un album, ni une heure "+
+				"d'enregistrement n'entrent par cette porte", kind, max)
+		}
 	}
-	if max := Kinds["sound"].Max; max != MaxSoundBytes || max > 4<<20 {
-		t.Errorf("le plafond du son est %d : serré exprès, un son de fond n'est pas un album", max)
+}
+
+// ⚠️⚠️ UN VOCAL ACCEPTE CE QU'UN TÉLÉPHONE PRODUIT, ET `sound` NON.
+//
+// Ce n'est pas nous qui encodons : Android rend du 3GP ou du WebM/Opus, iOS du
+// M4A. Refuser ces formats, c'est refuser le vocal à la moitié du marché — et
+// les accepter sur `sound` aurait rendu un message vocal sélectionnable comme
+// musique de fond d'un carrousel, donc la voix d'un client dans le feed public.
+func TestOnlyTheVoiceKindTakesWhatAPhoneRecords(t *testing.T) {
+	for _, mime := range []string{"audio/opus", "audio/webm", "audio/3gpp", "audio/x-m4a"} {
+		if _, ok := Accepts("voice", mime); !ok {
+			t.Errorf("un vocal doit accepter %s : c'est ce que les téléphones enregistrent", mime)
+		}
+		if _, ok := Accepts("sound", mime); ok {
+			t.Errorf("`sound` accepte %s : un vocal deviendrait une musique de feed", mime)
+		}
+	}
+	if Kinds["voice"].Max != MaxVoiceBytes {
+		t.Error("le plafond du vocal doit être celui de la transcription : un fichier gardé " +
+			"que le transcripteur refuse est un fichier dont personne ne saura ce qu'il dit")
 	}
 }
 

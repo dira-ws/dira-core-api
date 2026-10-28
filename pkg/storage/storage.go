@@ -81,6 +81,26 @@ var (
 		"audio/mpeg": ".mp3", "audio/mp4": ".m4a", "audio/aac": ".aac",
 		"audio/ogg": ".ogg",
 	}
+	// voiceTypes : LE MESSAGE VOCAL D'UNE PERSONNE, gardé pour qu'elle puisse
+	// le réécouter et pour que le support l'entende.
+	//
+	// ⚠️⚠️ UN GENRE À LUI, ET SURTOUT PAS `sound` ÉLARGI. Ce sont deux choses
+	// qui n'ont en commun que d'être du son : `sound` est une boucle de
+	// musique PUBLIQUE, choisie par un marchand dans un catalogue, servie à
+	// tout le feed ; un vocal est la VOIX de quelqu'un, privée, gardée parce
+	// qu'une commande en dépend. Élargir `sound` aurait rendu un message vocal
+	// sélectionnable comme musique de fond d'un carrousel — et aurait fait
+	// passer la voix d'un client dans le feed public.
+	//
+	// ⚠️ PLUS DE FORMATS QUE `sound`, parce que ce n'est pas nous qui
+	// encodons : c'est le téléphone. Android rend du 3GP ou du WebM/Opus,
+	// iOS du M4A. Refuser ce qu'un téléphone produit, c'est refuser le vocal
+	// à la moitié du marché.
+	voiceTypes = map[string]string{
+		"audio/mp4": ".m4a", "audio/m4a": ".m4a", "audio/x-m4a": ".m4a",
+		"audio/aac": ".aac", "audio/mpeg": ".mp3", "audio/ogg": ".ogg",
+		"audio/opus": ".opus", "audio/webm": ".webm", "audio/3gpp": ".3gp",
+	}
 )
 
 // Les plafonds, nommés par ce qu'ils bornent.
@@ -97,6 +117,13 @@ const (
 	// MaxVideoBytes : une vidéo promo dure quelques secondes mais pèse des
 	// dizaines de mégaoctets.
 	MaxVideoBytes = 60 << 20 // 60 Mio
+	// MaxVoiceBytes borne un message vocal.
+	//
+	// ⚠️ LE MÊME PLAFOND QUE LA TRANSCRIPTION (`llm.MaxAudioBytes`), et il le
+	// faut : un vocal qu'on accepterait de garder mais que le transcripteur
+	// refuse serait un fichier stocké dont personne ne saura jamais ce qu'il
+	// dit. Deux mégaoctets, c'est une minute large en opus ou en AAC mono.
+	MaxVoiceBytes = 2 << 20 // 2 Mio
 	// MaxSoundBytes : trente secondes d'AAC pèsent trois cents kilooctets.
 	//
 	// ⚠️ SERRÉ EXPRÈS, à deux mégaoctets : c'est dix fois ce qu'il faut, et
@@ -132,6 +159,14 @@ var Kinds = map[string]Kind{
 	// aucune raison d'être un fichier audio. Élargir `feed` aurait ouvert le
 	// dépôt de sons sur tous les points d'entrée qui acceptent une image.
 	"sound": {soundTypes, MaxSoundBytes, "mp3, m4a, aac, ogg"},
+
+	// LE MESSAGE VOCAL d'un client — gardé pour être réécouté, et pour que le
+	// support entende ce que l'IA a entendu.
+	//
+	// ⚠️ SÉPARÉ DE `sound` : voir `voiceTypes`. Une boucle de feed et la voix
+	// d'une personne ne se rangent pas au même endroit, ne s'écoutent pas par
+	// les mêmes gens, et ne se gardent pas aussi longtemps.
+	"voice": {voiceTypes, MaxVoiceBytes, "m4a, aac, mp3, ogg, opus, webm, 3gp"},
 
 	// LES PREUVES. ⚠️ LES DEUX SEULS GENRES QUI PRENNENT LE PDF, et c'est
 	// pour cela qu'ils sont séparés des photos :
