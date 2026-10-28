@@ -61,7 +61,15 @@ type Device struct {
 	Platform string `bson:"platform,omitempty"`
 	// Locale est la langue de l'APPAREIL. Elle prime sur celle du compte :
 	// c'est celle de l'écran que la personne a sous les yeux.
-	Locale     string    `bson:"locale,omitempty"`
+	Locale string `bson:"locale,omitempty"`
+	// Edition : l'APPLICATION de ce jeton — `full` (défaut) ou `lite`.
+	//
+	// ⚠️ C'EST LE JETON QUI PORTE L'ÉDITION, PAS LE COMPTE. Une même personne
+	// peut avoir les deux applications installées : l'édition est une
+	// propriété de l'INSTALLATION, et la rattacher au compte aurait rendu
+	// impossible de distinguer ses deux téléphones — ou ses deux applications
+	// sur le même téléphone.
+	Edition    string    `bson:"edition,omitempty"`
 	CreatedAt  time.Time `bson:"created_at"`
 	LastSeenAt time.Time `bson:"last_seen_at"`
 	// DisabledAt marque un jeton que FCM a déclaré mort. On le GARDE, daté,

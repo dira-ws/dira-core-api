@@ -1,6 +1,6 @@
 # App CLIENT UNIFIÉE — LIVRAISON **et** COURSES — contrat d'API
 
-> **Version 4.85.0** · 28 octobre 2026
+> **Version 4.86.0** · 29 octobre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Livraison : `…/api/v1/food` · Courses : `…/api/v1/vtc` · Combiné : `…/api/v1/analytics` · Suivi : `wss://tracking-staging.dira.llc`
 
 ---
@@ -72,6 +72,7 @@ qui compose ».
 | Dates | ISO 8601 UTC. Une **date seule** s'écrit `YYYY-MM-DD`. |
 | Langue | `Accept-Language` |
 | Pays | `X-Dira-Country: TG` — sur chaque requête (§4) |
+| Édition | `X-Dira-Edition: full` \| `lite` — sur chaque requête (§4 bis) |
 | Fil | `X-Request-ID` — sur chaque réponse (§3) |
 
 **Traitez le `code`, pas le message.** Le message est traduit et peut changer ;
@@ -132,6 +133,79 @@ la monnaie de son pays : payer au solde une course facturée en francs guinéens
 depuis un solde en francs CFA est **refusé**. Les espèces et le paiement en
 ligne, eux, restent ouverts. Entre deux pays de même monnaie (Togo et Sénégal,
 Gabon et Tchad), le solde marche comme chez soi.
+
+---
+
+## 4 bis. 🆕 📱 L'ÉDITION — `X-Dira-Edition` (v4.86.0)
+
+**Dira Lite** est une **seconde application passager**, pour les zones de
+faible alphabétisation (le Tchad d'abord) : tout y est écoutable, et sa
+configuration est volontairement plus courte.
+
+Deux applications distinctes sur le téléphone (`llc.dira.client` et
+`llc.dira.lite`), **mêmes comptes**, **même rôle** — `app: "client"` à la
+connexion, inchangé. Rien ne permettait donc au serveur de savoir laquelle
+l'appelait.
+
+```
+X-Dira-Edition: lite        # ou `full`
+X-Dira-App-Version: 0.1.0 (26102901)     # facultatif, utile
+X-Dira-Platform: android | ios           # facultatif, utile
+```
+
+Posez-le sur **chaque** requête, comme `X-Dira-Country` — WebSocket du suivi
+compris, où le paramètre d'URL `?edition=lite` le remplace (un navigateur ne
+pose pas d'en-tête sur l'ouverture d'une socket).
+
+### ⚠️⚠️ Il est DÉCLARATIF, jamais autorisant
+
+N'importe qui peut écrire `X-Dira-Edition: lite`. Il sert donc à **adapter**
+(une liste plus courte, un texte plus simple) et à **compter**. Il ne décide
+**jamais** d'un droit : nous ne construirons pas de règle de sécurité dessus,
+et vous ne devez pas supposer qu'il en protège une.
+
+### ⚠️ Son défaut est `full`, et rien ne vous refuse
+
+| Ce que vous envoyez | Ce que le serveur retient |
+|---|---|
+| `lite` (toute casse) | `lite` |
+| `full` | `full` |
+| **rien** | `full` |
+| une valeur inconnue (`léger`, `lite2`) | `full` |
+
+Une faute de frappe dégrade vers l'application **complète**, jamais vers une
+application amputée — et aucune requête n'est refusée pour cet en-tête.
+
+### ⚠️ Le serveur republie l'édition retenue
+
+La réponse porte `X-Dira-Edition`. **Lisez-le au moins une fois** : une
+application Lite qui reçoit `full` sait immédiatement que son en-tête
+n'arrive pas (une passerelle qui le filtre, un cache qui le mange), au lieu de
+chercher deux jours pourquoi sa configuration n'est pas réduite.
+
+### L'appareil enregistré dit son édition
+
+```jsonc
+POST /me/devices
+{ "token": "…", "platform": "android", "locale": "fr",
+  "edition": "lite" }           // absent = `full`
+```
+
+⚠️⚠️ **UNE MÊME PERSONNE PEUT AVOIR LES DEUX APPLICATIONS**, et c'est tout
+l'objet de ce champ. Sans lui, une notification de course partait vers **tous**
+ses jetons : elle arrivait **deux fois**, et dans l'application qui n'avait
+rien commandé.
+
+⚠️ **L'édition est une propriété de l'INSTALLATION, pas du compte.** C'est le
+jeton qui la porte : la rattacher au compte rendrait impossible de distinguer
+vos deux applications sur le même téléphone.
+
+⚠️ **Un jeton déjà enregistré sans édition compte comme `full`** — le parc
+installé continue de recevoir ses notifications sans rien changer.
+
+> Si votre corps ne porte pas encore `edition`, le serveur retient celle de
+> l'en-tête de la requête. Vous n'avez donc pas à sortir les deux applications
+> dans le même ordre.
 
 ---
 
@@ -1352,6 +1426,9 @@ du métier.
 - [ ] Porte par code : compte à rebours rendu depuis `expires_at`, « renvoyer » gouverné par `resend_after`, nom demandé **seulement** si `created: true`, `dev_code` jamais nécessaire au fonctionnement.
 - [ ] Verrou : `app_lock` relu à **chaque** réponse qui le porte (y compris le rafraîchissement) et appliqué à chaud ; code de secours toujours possible ; au-delà de `max_attempts`, **déconnexion** — jamais blocage.
 - [ ] `X-Dira-Country` sur **chaque** requête ; monnaie formatée depuis le pays de l'**opération**.
+- [ ] **`X-Dira-Edition`** sur **chaque** requête (§4 bis), et `?edition=` sur le WebSocket du suivi.
+- [ ] L'édition **republiée** par le serveur est lue au moins une fois : recevoir `full` en se croyant `lite` veut dire que l'en-tête n'arrive pas.
+- [ ] `POST /me/devices` porte `edition` : sans elle, une notification arrive **deux fois**, dont une dans l'application qui n'a rien commandé.
 - [ ] **Le vocal** (§8) : les **quatre** `state` traités — `understood`, `ordered`, `needs_support`, `failed` —, et jamais « c'est commandé » déduit de la présence d'un `plan`.
 - [ ] `ordered.kind` ouvre le bon suivi (`ride` → la course, `order` → la commande).
 - [ ] 2 Mio au plus, en opus/AAC/M4A/3GP — **pas de WAV** ; `audio_url` absent n'est pas une erreur.

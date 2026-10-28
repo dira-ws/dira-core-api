@@ -11,6 +11,7 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 
 	"github.com/kgtech-org/dira-core-api/pkg/db"
+	"github.com/kgtech-org/dira-core-api/pkg/edition"
 
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
@@ -94,6 +95,7 @@ func (r *Repository) UpsertDevice(ctx context.Context, d *Device) error {
 			"user_id":      d.UserID,
 			"platform":     d.Platform,
 			"locale":       d.Locale,
+			"edition":      d.Edition,
 			"last_seen_at": now,
 		},
 		"$setOnInsert": bson.M{"token": d.Token, "created_at": now},
@@ -117,12 +119,42 @@ func (r *Repository) DeleteDevice(ctx context.Context, userID primitive.ObjectID
 	return nil
 }
 
-// ActiveDevices rend les appareils JOIGNABLES d'un utilisateur.
+// ActiveDevices rend les appareils JOIGNABLES d'un utilisateur — TOUTES
+// éditions confondues.
 func (r *Repository) ActiveDevices(ctx context.Context, userID primitive.ObjectID) ([]Device, error) {
-	cur, err := r.devices.Find(ctx, bson.M{
+	return r.activeDevices(ctx, userID, "")
+}
+
+// ActiveDevicesOfEdition rend les appareils joignables d'UNE édition.
+//
+// ⚠️⚠️ ET LES JETONS SANS ÉDITION COMPTENT COMME `full`. Tous les appareils
+// enregistrés AVANT cette livraison n'ont pas le champ : les écarter d'un
+// filtre `edition: "full"` aurait rendu muets, d'un coup, tous les téléphones
+// du parc existant — une panne de notifications totale, et invisible, jusqu'à
+// ce que chacun réouvre son application.
+func (r *Repository) ActiveDevicesOfEdition(ctx context.Context, userID primitive.ObjectID, ed string) ([]Device, error) {
+	return r.activeDevices(ctx, userID, edition.Normalize(ed))
+}
+
+func (r *Repository) activeDevices(ctx context.Context, userID primitive.ObjectID, ed string) ([]Device, error) {
+	q := bson.M{
 		"user_id":     userID,
 		"disabled_at": bson.M{"$exists": false},
-	})
+	}
+	switch ed {
+	case "":
+		// Toutes éditions : le comportement d'avant.
+	case edition.Full:
+		// ⚠️ LE CHAMP ABSENT OU VIDE EST `full` — voir ci-dessus.
+		q["$or"] = []bson.M{
+			{"edition": edition.Full},
+			{"edition": bson.M{"$exists": false}},
+			{"edition": ""},
+		}
+	default:
+		q["edition"] = ed
+	}
+	cur, err := r.devices.Find(ctx, q)
 	if err != nil {
 		return nil, fmt.Errorf("notify: active devices: %w", err)
 	}
