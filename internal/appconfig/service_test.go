@@ -69,7 +69,7 @@ func TestAFailedReadOpensEverything(t *testing.T) {
 // Mongo ne doit pas rouvrir des fonctions qu'on venait de couper.
 func TestAFailedReadKeepsTheLastKnownRegistry(t *testing.T) {
 	store := &fakeStore{reg: &pkgconf.Registry{Features: map[string]pkgconf.Rule{
-		pkgconf.FeatureRaffle: {Editions: []string{"full"}},
+		pkgconf.FeatureRaffle: {Editions: []string{"lite"}},
 	}}}
 	svc := NewService(store)
 	ctx := requestFrom("TD", "lite")
@@ -104,7 +104,7 @@ func TestSavingClearsTheCacheAtOnce(t *testing.T) {
 
 	// Après une écriture, la base est relue.
 	store.reg = &pkgconf.Registry{Features: map[string]pkgconf.Rule{
-		pkgconf.FeatureRaffle: {Editions: []string{"full"}},
+		pkgconf.FeatureRaffle: {Editions: []string{"lite"}},
 	}}
 	require.NoError(t, svc.Save(ctx, *store.reg, "op-1"))
 	assert.False(t, svc.Allows(ctx, pkgconf.FeatureRaffle),
@@ -131,7 +131,7 @@ func TestAMistypedKeyIsRefusedWhenItIsSaved(t *testing.T) {
 
 	// Une LISTE inconnue aussi.
 	err = svc.Save(ctx, pkgconf.Registry{ListRules: map[string]pkgconf.Rule{
-		"vehicle_mode": {Allow: []string{"moto"}},
+		"vehicle_mode": {Editions: []string{"lite"}, Allow: []string{"moto"}},
 	}}, "op-1")
 	require.Error(t, err)
 
@@ -163,7 +163,7 @@ func TestAWhitelistOnAFeatureIsRefused(t *testing.T) {
 
 	// La même liste blanche sur une LISTE passe, elle.
 	require.NoError(t, svc.Save(ctx, pkgconf.Registry{ListRules: map[string]pkgconf.Rule{
-		pkgconf.ListVehicleModes: {Allow: []string{"moto", "eco"}},
+		pkgconf.ListVehicleModes: {Editions: []string{"lite"}, Allow: []string{"moto", "eco"}},
 	}}, "op-1"))
 }
 
@@ -183,10 +183,10 @@ func TestAnInventedEditionIsRefusedWhenItIsSaved(t *testing.T) {
 	}
 	// Et les bonnes passent, normalisées.
 	require.NoError(t, svc.Save(ctx, pkgconf.Registry{Features: map[string]pkgconf.Rule{
-		pkgconf.FeatureRental: {Editions: []string{" FULL "}},
+		pkgconf.FeatureRental: {Editions: []string{" LITE "}},
 	}}, "op-1"))
 	require.NotNil(t, svc.repo.(*fakeStore).saved)
-	assert.Equal(t, []string{"full"},
+	assert.Equal(t, []string{"lite"},
 		svc.repo.(*fakeStore).saved.Features[pkgconf.FeatureRental].Editions)
 }
 
@@ -202,7 +202,7 @@ func TestABadCountryCodeIsRefused(t *testing.T) {
 		require.Error(t, err, "« %s » a été accepté comme pays", bad)
 	}
 	require.NoError(t, svc.Save(ctx, pkgconf.Registry{Features: map[string]pkgconf.Rule{
-		pkgconf.FeatureRental: {Countries: []string{" td "}},
+		pkgconf.FeatureRental: {Editions: []string{"lite"}, Countries: []string{" td "}},
 	}}, "op-1"))
 	assert.Equal(t, []string{"TD"},
 		svc.repo.(*fakeStore).saved.Features[pkgconf.FeatureRental].Countries)
@@ -216,7 +216,7 @@ func TestABadCountryCodeIsRefused(t *testing.T) {
 // au prochain démarrage plutôt que de reproposer un bouton qui échoue.
 func TestTheRefusalNamesTheFeature(t *testing.T) {
 	svc := NewService(&fakeStore{reg: &pkgconf.Registry{Features: map[string]pkgconf.Rule{
-		pkgconf.FeatureScheduledRides: {Editions: []string{"full"}},
+		pkgconf.FeatureScheduledRides: {Editions: []string{"lite"}},
 	}}})
 	err := svc.Require(requestFrom("TD", "lite"), pkgconf.FeatureScheduledRides)
 	require.Error(t, err)
@@ -235,14 +235,69 @@ func TestTheRefusalNamesTheFeature(t *testing.T) {
 // Le pays et l'édition viennent du CONTEXTE, celui que l'intergiciel a posé.
 func TestTheCountryAndEditionComeFromTheRequest(t *testing.T) {
 	svc := NewService(&fakeStore{reg: &pkgconf.Registry{Features: map[string]pkgconf.Rule{
-		pkgconf.FeatureTripShare: {Editions: []string{"full"}, Countries: []string{"TG"}},
+		pkgconf.FeatureTripShare: {Editions: []string{"lite"}, Countries: []string{"TG"}},
 	}}})
 	assert.True(t, svc.Allows(requestFrom("TG", "full"), pkgconf.FeatureTripShare))
 	assert.False(t, svc.Allows(requestFrom("TG", "lite"), pkgconf.FeatureTripShare))
-	assert.False(t, svc.Allows(requestFrom("TD", "full"), pkgconf.FeatureTripShare))
+	// ⚠️ ET LA COUPURE TOGOLAISE NE DÉBORDE NULLE PART : ni sur l'application
+	// normale, ni sur Lite dans un autre pays. Voir #245 — l'ancienne
+	// polarité répondait « indisponible » aux deux lignes suivantes, et c'est
+	// comme cela que trois pays ont perdu la location.
+	assert.True(t, svc.Allows(requestFrom("TD", "full"), pkgconf.FeatureTripShare))
+	assert.True(t, svc.Allows(requestFrom("TD", "lite"), pkgconf.FeatureTripShare))
 
 	got := svc.Resolve(requestFrom("tg", "lite"))
 	assert.Equal(t, "TG", got.Country)
 	assert.Equal(t, "lite", got.Edition)
 	assert.False(t, got.Features[pkgconf.FeatureTripShare])
+}
+
+// ⚠️⚠️ UN RÉGLAGE QUI NE RETIRE RIEN EST REFUSÉ, PAS RANGÉ.
+//
+// C'est le troisième défaut de #245, et le plus traître des trois parce qu'il
+// n'a l'air de rien : la console écrivait `{"editions":["full"]}` sur la liste
+// des modes de véhicule pour dire « Lite ne les voit plus ». Le serveur lisait
+// cette règle, n'y trouvait aucune valeur à retirer, et servait TOUS les modes.
+// La case restait décochée à l'écran. Personne ne pouvait s'en apercevoir
+// autrement qu'en ouvrant Lite au Gabon pour compter les véhicules.
+//
+// Mesuré en direct avant le correctif :
+//
+//	règle écrite   {"lists":{"vehicle_modes":{"editions":["full"]}}}
+//	lite/GA        lists=null    ← tous les modes
+func TestARuleThatRestrictsNothingIsRefused(t *testing.T) {
+	svc := NewService(&fakeStore{reg: &pkgconf.Registry{}})
+	ctx := requestFrom("TD", "full")
+
+	// Une fonction sans édition nommée : la coupure ne mord sur personne.
+	err := svc.Save(ctx, pkgconf.Registry{Features: map[string]pkgconf.Rule{
+		pkgconf.FeatureRental: {Countries: []string{"TD"}},
+	}}, "op-1")
+	require.Error(t, err, "une règle sans édition a été rangée : elle ne retire rien")
+	var appErr *apperr.Error
+	require.ErrorAs(t, err, &appErr)
+	assert.Contains(t, appErr.Meta["fields"], "editions",
+		"le refus doit montrer OÙ est le problème")
+
+	// Une règle entièrement vide, aussi.
+	require.Error(t, svc.Save(ctx, pkgconf.Registry{Features: map[string]pkgconf.Rule{
+		pkgconf.FeatureRental: {},
+	}}, "op-1"))
+
+	// ⚠️ ET LE CAS EXACT DE LA CONSOLE : une liste sans sa liste blanche.
+	err = svc.Save(ctx, pkgconf.Registry{ListRules: map[string]pkgconf.Rule{
+		pkgconf.ListVehicleModes: {Editions: []string{"lite"}},
+	}}, "op-1")
+	require.Error(t, err, "la règle que la console écrivait a été rangée en silence")
+	require.ErrorAs(t, err, &appErr)
+	assert.Contains(t, appErr.Meta["fields"], "allow",
+		"le refus doit dire qu'il manque la liste blanche")
+
+	// Rien de tout cela n'a été écrit.
+	assert.Nil(t, svc.repo.(*fakeStore).saved, "un réglage mort a été enregistré")
+
+	// Et la même règle AVEC sa liste blanche passe.
+	require.NoError(t, svc.Save(ctx, pkgconf.Registry{ListRules: map[string]pkgconf.Rule{
+		pkgconf.ListVehicleModes: {Editions: []string{"lite"}, Allow: []string{"moto", "eco"}},
+	}}, "op-1"))
 }

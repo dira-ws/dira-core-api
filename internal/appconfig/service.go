@@ -212,5 +212,19 @@ func cleanRule(rule appconfig.Rule, isList bool) (appconfig.Rule, error) {
 			out.Allow = append(out.Allow, a)
 		}
 	}
+	// ⚠️⚠️ UNE RÈGLE QUI NE RETIRE RIEN EST REFUSÉE, PAS RANGÉE. Une règle
+	// sans édition nommée ne mord sur personne ; une règle de liste sans
+	// liste blanche ne restreint aucune valeur. Les deux s'enregistraient
+	// sans broncher, et c'est ce qui fait tout #245 : la case était décochée
+	// à l'écran, le serveur servait tout, et le réglage avait l'air posé.
+	// Celui qui écrit l'apprend maintenant à l'écriture.
+	if !out.Restricts(isList) {
+		msg := "a rule must name at least one edition to take away"
+		if isList && len(out.Editions) > 0 {
+			msg = "a list rule needs its whitelist — without it nothing is restricted"
+		}
+		return appconfig.Rule{}, apperr.Validation(msg).
+			WithMeta(map[string]any{"fields": []string{"editions", "allow"}})
+	}
 	return out, nil
 }

@@ -26,11 +26,11 @@ func TestAnEmptyRegistryTakesNothingAway(t *testing.T) {
 }
 
 // ⚠️⚠️ RETIRER DE LITE NE RETIRE PAS DE L'APPLICATION NORMALE — c'est toute la
-// demande, et le sens de la règle le garantit : elle dit ce qui est PERMIS.
+// demande, et la polarité de la règle le garantit : elle nomme QUI PERD.
 func TestTakingAFeatureFromLiteLeavesTheFullAppAlone(t *testing.T) {
 	r := &Registry{Features: map[string]Rule{
-		FeatureScheduledRides: {Editions: []string{"full"}},
-		FeatureRental:         {Editions: []string{"full"}},
+		FeatureScheduledRides: {Editions: []string{"lite"}},
+		FeatureRental:         {Editions: []string{"lite"}},
 	}}
 	// Lite ne les voit plus…
 	assert.False(t, r.Allows(FeatureScheduledRides, "TD", "lite"))
@@ -43,19 +43,62 @@ func TestTakingAFeatureFromLiteLeavesTheFullAppAlone(t *testing.T) {
 	assert.True(t, r.Allows(FeatureTripShare, "TD", "lite"))
 }
 
-// ⚠️ PAYS *ET* ÉDITION, JAMAIS L'UN SANS L'AUTRE. Les deux questions se posent
-// ensemble parce qu'on y répond ensemble : « que voit Lite au Tchad ? »
-func TestTheTwoDimensionsCombine(t *testing.T) {
+// ⚠️⚠️ NOMMER UN PAYS RÉTRÉCIT UNE COUPURE, IL N'EN CRÉE JAMAIS UNE AILLEURS.
+//
+// C'est l'épreuve de #245, et elle existe parce que le contraire est arrivé en
+// vrai. La règle disait auparavant ce qui était PERMIS — « disponible dans ces
+// éditions ET dans ces pays » — si bien que la seule écriture naturelle pour
+// « pas de location dans Lite, au Gabon » :
+//
+//	{Editions: ["full"], Countries: ["GA"]}
+//
+// signifiait « la location n'existe QUE pour l'édition normale, et QUE au
+// Gabon ». Mesuré sur la préprod juste après l'écriture : l'application
+// NORMALE avait perdu la location au Togo, au Sénégal et en Guinée. Trois pays
+// réels, par un réglage qui se lisait comme gabonais, et sans aucune erreur.
+func TestNamingACountryOnlyNarrowsTheCut(t *testing.T) {
 	r := &Registry{Features: map[string]Rule{
-		// Le partage de trajet : seulement dans l'app normale, et seulement
-		// au Togo et au Sénégal.
-		FeatureTripShare: {Editions: []string{"full"}, Countries: []string{"TG", "SN"}},
+		FeatureRental: {Editions: []string{"lite"}, Countries: []string{"GA"}},
 	}}
-	assert.True(t, r.Allows(FeatureTripShare, "TG", "full"))
-	assert.True(t, r.Allows(FeatureTripShare, "SN", "full"))
-	assert.False(t, r.Allows(FeatureTripShare, "TD", "full"), "mauvais pays")
-	assert.False(t, r.Allows(FeatureTripShare, "TG", "lite"), "mauvaise édition")
-	assert.False(t, r.Allows(FeatureTripShare, "TD", "lite"), "les deux")
+	// La coupure mord là où on l'a posée, et là seulement.
+	assert.False(t, r.Allows(FeatureRental, "GA", "lite"), "la coupure demandée")
+
+	// ⚠️ L'APPLICATION NORMALE NE PERD RIEN, NULLE PART — le défaut exact.
+	for _, c := range []string{"GA", "TG", "SN", "GN", "TD"} {
+		assert.True(t, r.Allows(FeatureRental, c, "full"),
+			"l'app normale a perdu la location au %s : c'est le défaut de #245", c)
+	}
+	// Et Lite la garde partout ailleurs qu'au Gabon.
+	for _, c := range []string{"TG", "SN", "GN", "TD"} {
+		assert.True(t, r.Allows(FeatureRental, c, "lite"),
+			"la coupure gabonaise a débordé sur Lite au %s", c)
+	}
+}
+
+// Sans pays nommé, la coupure vaut partout — c'est la portée par défaut.
+func TestWithoutACountryTheCutAppliesEverywhere(t *testing.T) {
+	r := &Registry{Features: map[string]Rule{
+		FeatureTripShare: {Editions: []string{"lite"}},
+	}}
+	for _, c := range []string{"TD", "TG", "SN", "GA"} {
+		assert.False(t, r.Allows(FeatureTripShare, c, "lite"), "pays %s", c)
+		assert.True(t, r.Allows(FeatureTripShare, c, "full"), "pays %s", c)
+	}
+}
+
+// ⚠️⚠️ UNE RÈGLE SANS ÉDITION NOMMÉE NE RETIRE RIEN, et ce n'est pas un détail
+// de confort : la `Rule` NULLE est ce qu'on obtient pour une clé ABSENTE de la
+// carte. Si une liste d'éditions vide voulait dire « toutes », chaque fonction
+// du catalogue serait coupée partout dès qu'une seule autre est réglée.
+func TestARuleThatNamesNoEditionTakesNothing(t *testing.T) {
+	r := &Registry{Features: map[string]Rule{
+		FeatureRaffle: {Countries: []string{"TD"}},
+	}}
+	for _, ed := range []string{"full", "lite"} {
+		assert.True(t, r.Allows(FeatureRaffle, "TD", ed), "édition %s", ed)
+		// Et la clé jamais réglée, qui passe par la même règle nulle.
+		assert.True(t, r.Allows(FeatureWallet, "TD", ed), "édition %s", ed)
+	}
 }
 
 // ⚠️⚠️ LA CASSE NE DOIT PAS DÉCIDER. Un pays écrit `tg` dans la console et
@@ -64,12 +107,13 @@ func TestTheTwoDimensionsCombine(t *testing.T) {
 // parfaitement inexplicable.
 func TestCaseAndSpacesNeverDecide(t *testing.T) {
 	r := &Registry{Features: map[string]Rule{
-		FeatureRaffle: {Editions: []string{"FULL"}, Countries: []string{" tg ", "Sn"}},
+		FeatureRaffle: {Editions: []string{"LITE"}, Countries: []string{" tg ", "Sn"}},
 	}}
-	assert.True(t, r.Allows(FeatureRaffle, "TG", "full"))
-	assert.True(t, r.Allows(FeatureRaffle, "tg", "FULL"))
-	assert.True(t, r.Allows(FeatureRaffle, " sn ", "Full"))
 	assert.False(t, r.Allows(FeatureRaffle, "TG", "lite"))
+	assert.False(t, r.Allows(FeatureRaffle, "tg", "LITE"))
+	assert.False(t, r.Allows(FeatureRaffle, " sn ", "Lite"))
+	assert.True(t, r.Allows(FeatureRaffle, "TG", "full"))
+	assert.True(t, r.Allows(FeatureRaffle, "GA", "lite"), "hors de la portée")
 }
 
 // ⚠️ UNE ÉDITION INCONNUE EST TRAITÉE COMME `full` — la même règle que partout
@@ -77,11 +121,64 @@ func TestCaseAndSpacesNeverDecide(t *testing.T) {
 // vers une application amputée.
 func TestAnUnknownEditionIsTreatedAsFull(t *testing.T) {
 	r := &Registry{Features: map[string]Rule{
-		FeatureChallenges: {Editions: []string{"full"}},
+		FeatureChallenges: {Editions: []string{"lite"}},
 	}}
 	assert.True(t, r.Allows(FeatureChallenges, "TD", "léger"))
 	assert.True(t, r.Allows(FeatureChallenges, "TD", ""))
 	assert.False(t, r.Allows(FeatureChallenges, "TD", "lite"))
+
+	// ⚠️⚠️ ET « TRAITÉE COMME `full` » VEUT DIRE LES DEUX SENS : une édition
+	// inconnue reçoit AUSSI ce que l'application normale perd. Sans cette
+	// seconde moitié, « inconnue » serait une troisième édition à qui on ne
+	// retire jamais rien — une application qui envoie un mot de travers
+	// obtiendrait plus que les deux vraies.
+	//
+	// C'est une mutation PASSÉE AU VERT qui l'a montré : retirer
+	// `edition.Normalize` ne changeait rien aux trois lignes ci-dessus,
+	// puisqu'une règle qui coupe `lite` ne croise de toute façon pas `léger`.
+	// Il fallait une règle qui coupe `full`.
+	cut := &Registry{Features: map[string]Rule{
+		FeatureChallenges: {Editions: []string{"full"}},
+	}}
+	assert.False(t, cut.Allows(FeatureChallenges, "TD", "full"))
+	assert.False(t, cut.Allows(FeatureChallenges, "TD", "léger"),
+		"une faute de frappe a obtenu ce que l'application normale a perdu")
+	assert.False(t, cut.Allows(FeatureChallenges, "TD", ""),
+		"une édition absente a obtenu ce que l'application normale a perdu")
+	assert.True(t, cut.Allows(FeatureChallenges, "TD", "lite"))
+}
+
+// ⚠️⚠️ ET LE SCHÉMA SAIT ENFIN DIRE « COUPÉE DES DEUX CÔTÉS ».
+//
+// L'ancienne polarité ne pouvait pas : une liste d'éditions vide voulait dire
+// « toutes », si bien qu'« aucune » n'avait pas d'écriture. La console portait
+// pour cela un bouton DÉSACTIVÉ avec une infobulle — on ne pouvait pas décocher
+// la dernière édition, parce que le second clic rouvrait la fonction des deux
+// côtés. Ce n'est plus une limite : c'est une règle comme les autres.
+func TestBothEditionsCanLoseAFeature(t *testing.T) {
+	r := &Registry{Features: map[string]Rule{
+		FeatureRaffle: {Editions: []string{"full", "lite"}, Countries: []string{"TD"}},
+	}}
+	assert.False(t, r.Allows(FeatureRaffle, "TD", "full"))
+	assert.False(t, r.Allows(FeatureRaffle, "TD", "lite"))
+	// Et toujours pas ailleurs : la portée reste la portée.
+	assert.True(t, r.Allows(FeatureRaffle, "TG", "full"))
+	assert.True(t, r.Allows(FeatureRaffle, "TG", "lite"))
+}
+
+// `Restricts` est ce qui refuse un réglage mort à l'écriture.
+func TestARuleKnowsWhetherItTakesAnything(t *testing.T) {
+	assert.False(t, Rule{}.Restricts(false), "la règle nulle ne retire rien")
+	assert.False(t, Rule{Countries: []string{"TD"}}.Restricts(false),
+		"un pays sans édition ne retire rien")
+	assert.True(t, Rule{Editions: []string{"lite"}}.Restricts(false))
+
+	// ⚠️ UNE LISTE A BESOIN DE SA LISTE BLANCHE : nommer une édition sans dire
+	// ce qu'elle voit ne restreint aucune valeur. C'est exactement ce que la
+	// console écrivait, et le serveur servait tout.
+	assert.False(t, Rule{Editions: []string{"lite"}}.Restricts(true),
+		"une règle de liste sans liste blanche ne restreint rien")
+	assert.True(t, Rule{Editions: []string{"lite"}, Allow: []string{"moto"}}.Restricts(true))
 }
 
 // --- LES LISTES BLANCHES ---
@@ -117,12 +214,12 @@ func TestAWhitelistThatMatchesNothingReturnsEverything(t *testing.T) {
 		{"inexistant", "autre"}, // deux fautes
 		{" "},                   // une saisie vide
 	} {
-		r := &Registry{ListRules: map[string]Rule{ListVehicleModes: {Allow: allow}}}
+		r := &Registry{ListRules: map[string]Rule{ListVehicleModes: {Editions: []string{"lite"}, Allow: allow}}}
 		assert.Equal(t, served, r.AllowedIn(ListVehicleModes, "TD", "lite", served),
 			"liste blanche %v : l'application se retrouverait sans aucun véhicule", allow)
 	}
 	// Et la casse ne doit pas provoquer ce repli : `Eco` doit croiser `eco`.
-	r := &Registry{ListRules: map[string]Rule{ListVehicleModes: {Allow: []string{"ECO", " Moto "}}}}
+	r := &Registry{ListRules: map[string]Rule{ListVehicleModes: {Editions: []string{"lite"}, Allow: []string{"ECO", " Moto "}}}}
 	assert.Equal(t, []string{"moto", "eco"}, r.AllowedIn(ListVehicleModes, "TD", "lite", served))
 }
 
@@ -134,7 +231,11 @@ func TestNoWhitelistMeansEverything(t *testing.T) {
 	for _, r := range []*Registry{nil, {}, {ListRules: map[string]Rule{}}} {
 		assert.Equal(t, served, r.AllowedIn(ListPaymentMethods, "TD", "lite", served))
 	}
-	// Une règle sans `Allow` non plus : elle ne vise que l'édition ou le pays.
+	// ⚠️ Une règle sans `Allow` non plus — et c'est tout le défaut de #245 :
+	// la console écrivait EXACTEMENT cela pour « retirer les modes de Lite »,
+	// le serveur n'y trouvait aucune valeur à retirer, et servait tout. La
+	// case était décochée à l'écran. L'écriture la refuse maintenant
+	// (`Restricts`), et la lecture reste inerte pour les règles déjà posées.
 	r := &Registry{ListRules: map[string]Rule{ListPaymentMethods: {Editions: []string{"lite"}}}}
 	assert.Equal(t, served, r.AllowedIn(ListPaymentMethods, "TD", "lite", served))
 }
@@ -150,7 +251,7 @@ func TestNoWhitelistMeansEverything(t *testing.T) {
 // le jour où le serveur l'annonce.
 func TestResolveServesEveryKeyIncludingTheOnesLeftOn(t *testing.T) {
 	r := &Registry{Features: map[string]Rule{
-		FeatureScheduledRides: {Editions: []string{"full"}},
+		FeatureScheduledRides: {Editions: []string{"lite"}},
 	}}
 	got := r.Resolve("TD", "lite")
 	assert.Equal(t, "lite", got.Edition)
@@ -180,7 +281,7 @@ func TestResolveOnANilRegistryOpensEverything(t *testing.T) {
 // Les listes blanches sont servies triées, pour une réponse stable.
 func TestTheServedWhitelistsAreSorted(t *testing.T) {
 	r := &Registry{ListRules: map[string]Rule{
-		ListPaymentMethods: {Allow: []string{"mobile_money", "cash"}},
+		ListPaymentMethods: {Editions: []string{"lite"}, Allow: []string{"mobile_money", "cash"}},
 	}}
 	got := r.Resolve("TD", "lite")
 	assert.Equal(t, []string{"cash", "mobile_money"}, got.Lists[ListPaymentMethods],
