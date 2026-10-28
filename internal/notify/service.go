@@ -11,6 +11,7 @@ import (
 	"go.mongodb.org/mongo-driver/bson/primitive"
 
 	"github.com/kgtech-org/dira-core-api/pkg/apperr"
+	"github.com/kgtech-org/dira-core-api/pkg/edition"
 )
 
 // Pusher porte une notification jusqu'aux téléphones. Interface définie ICI,
@@ -102,12 +103,57 @@ func (s *Service) RegisterDevice(ctx context.Context, userID string, req Registe
 	if err != nil {
 		return apperr.Validation("invalid user id").WithCause(err)
 	}
+	// ⚠️ L'ÉDITION DITE PAR LE CORPS D'ABORD, l'en-tête de la requête ensuite.
+	//
+	// Le corps est explicite : l'application nomme l'édition de CE jeton. Mais
+	// une application Lite qui ne l'aurait pas encore dans son corps envoie
+	// déjà `X-Dira-Edition` sur chaque requête (c'est la même livraison), et
+	// s'en servir évite d'avoir à sortir les deux applications dans le même
+	// ordre. Ni l'un ni l'autre : `full`, comme partout.
+	ed := edition.Normalize(req.Edition)
+	if strings.TrimSpace(req.Edition) == "" {
+		ed = edition.FromContext(ctx)
+	}
 	return s.repo.UpsertDevice(ctx, &Device{
 		UserID:   uid,
 		Token:    req.Token,
 		Platform: req.Platform,
 		Locale:   normalizeLocale(req.Locale),
+		Edition:  ed,
 	})
+}
+
+// devicesFor choisit les appareils à joindre — ceux d'une édition, ou tous.
+//
+// ⚠️⚠️ ET IL RETOMBE SUR TOUS LES APPAREILS QUAND L'ÉDITION VISÉE N'EN A
+// AUCUN. C'est la garde qui empêche cette fonctionnalité de rendre quelqu'un
+// muet : une personne dont la course a été créée depuis Lite, puis qui
+// désinstalle Lite et garde l'application complète, n'a plus aucun appareil
+// `lite`. Sans ce repli, elle n'apprendrait jamais que sa voiture est arrivée
+// — et rien ne le signalerait, puisqu'il n'y a pas d'erreur à journaliser.
+//
+// Mieux vaut une notification dans la mauvaise application qu'un passager qui
+// attend une voiture déjà repartie.
+func (s *Service) devicesFor(ctx context.Context, uid primitive.ObjectID, ed string) ([]Device, error) {
+	if ed == "" {
+		return s.repo.ActiveDevices(ctx, uid)
+	}
+	only, err := s.repo.ActiveDevicesOfEdition(ctx, uid, ed)
+	if err != nil {
+		return nil, err
+	}
+	if len(only) > 0 {
+		return only, nil
+	}
+	all, err := s.repo.ActiveDevices(ctx, uid)
+	if err != nil {
+		return nil, err
+	}
+	if len(all) > 0 {
+		slog.InfoContext(ctx, "notify: no device of that edition, falling back to all of them",
+			"user_id", uid.Hex(), "edition", ed, "devices", len(all))
+	}
+	return all, nil
 }
 
 // UnregisterDevice retire un téléphone (déconnexion).
@@ -127,6 +173,30 @@ func (s *Service) UnregisterDevice(ctx context.Context, userID, token string) er
 // échouer parce qu'une notification n'est pas partie. Une commande acceptée
 // dont le client n'a pas été prévenu reste une commande acceptée.
 func (s *Service) Notify(ctx context.Context, userID, key string, vars map[string]string, data map[string]string) {
+	s.notify(ctx, userID, "", key, vars, data)
+}
+
+// NotifyEdition pousse vers les appareils d'UNE SEULE édition.
+//
+// ⚠️⚠️ L'ÉDITION DOIT VENIR DE L'OBJET, PAS DU CONTEXTE, et c'est le piège de
+// cette fonction. La plupart des notifications d'une course partent d'un geste
+// du CHAUFFEUR — il accepte, il arrive — et le contexte porte alors l'édition
+// de l'application du chauffeur, pas celle du passager qu'on prévient. Lire
+// `edition.FromContext` ici enverrait donc la notification du passager vers
+// l'édition du chauffeur, c'est-à-dire presque toujours dans le vide.
+//
+// L'appelant doit passer l'édition enregistrée SUR LA COURSE ou LA COMMANDE,
+// celle de l'application qui l'a créée.
+//
+// ⚠️ ET UNE ÉDITION VIDE VISE TOUT LE MONDE — le comportement d'avant. Un
+// appelant qui ne sait pas quelle édition viser ne doit pas rendre quelqu'un
+// muet : mieux vaut une notification de trop qu'un passager qui n'apprend
+// jamais que sa voiture est arrivée.
+func (s *Service) NotifyEdition(ctx context.Context, userID, ed, key string, vars map[string]string, data map[string]string) {
+	s.notify(ctx, userID, ed, key, vars, data)
+}
+
+func (s *Service) notify(ctx context.Context, userID, ed, key string, vars map[string]string, data map[string]string) {
 	uid, err := primitive.ObjectIDFromHex(userID)
 	if err != nil {
 		return
@@ -153,7 +223,7 @@ func (s *Service) Notify(ctx context.Context, userID, key string, vars map[strin
 		}
 	}
 
-	devices, err := s.repo.ActiveDevices(ctx, uid)
+	devices, err := s.devicesFor(ctx, uid, ed)
 	if err != nil {
 		slog.WarnContext(ctx, "notify: devices unavailable", "user_id", userID, "error", err)
 		devices = nil

@@ -424,6 +424,16 @@ func run(logger *slog.Logger) error {
 	router.Use(middleware.Recoverer(metrics))
 	router.Use(middleware.Language)
 	router.Use(countryMW)
+	// L'ÉDITION DE L'APPLICATION QUI APPELLE — `full` ou `lite`.
+	//
+	// ⚠️ APRÈS LE PAYS ET AVANT TOUT LE RESTE, pour la même raison : chaque
+	// réglage servi aux applications se lit désormais « pour ce pays ET cette
+	// édition », et un intergiciel posé plus bas laisserait les routes
+	// au-dessus servir la configuration complète à Lite.
+	//
+	// ⚠️ ET IL NE REFUSE JAMAIS : l'édition est déclarative, son défaut est
+	// `full`, et tout le parc installé continue de marcher sans rien envoyer.
+	router.Use(middleware.Edition())
 	router.Use(middleware.RateLimit(rdb, cfg.RateLimitRPM))
 
 	// LES PANNES : capturées ici, rangées groupées, servies à la console.

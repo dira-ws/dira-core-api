@@ -13,6 +13,19 @@ type RegisterDeviceRequest struct {
 	// forme (`fr`, `fr-FR`, `FR_fr`) : le serveur la normalise plutôt que
 	// d'imposer une écriture qu'aucune plateforme mobile ne rend pareil.
 	Locale string `json:"locale" validate:"omitempty,max=16"`
+	// Edition : L'APPLICATION qui a enregistré ce jeton — `full` ou `lite`.
+	//
+	// ⚠️⚠️ UNE MÊME PERSONNE PEUT AVOIR LES DEUX APPLICATIONS. Sans ce champ,
+	// une notification de course partait vers TOUS ses jetons : elle arrivait
+	// deux fois, et dans l'application qui n'avait rien commandé. Et le texte
+	// poussé vers un appareil Lite doit pouvoir être la version courte et
+	// parlée, ce qui demande de savoir lequel l'est.
+	//
+	// ⚠️ ABSENT = `full`, comme l'en-tête : les versions déjà installées
+	// n'envoient rien, et ré-enregistrer leur jeton ne doit pas les faire
+	// taire. Une valeur inconnue retombe aussi sur `full` — jamais sur `lite`,
+	// qui recevrait des textes amputés sans l'avoir demandé.
+	Edition string `json:"edition" validate:"omitempty,oneof=full lite"`
 }
 
 // SaveTemplateRequest écrit un gabarit dans toutes ses langues.

@@ -1,6 +1,6 @@
 # Specs frontend — par rôle
 
-> **Version 4.85.0** · 28 octobre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics`
+> **Version 4.86.0** · 29 octobre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics`
 
 **Cinq** documents, un par application. Chacun est **autonome** : tout ce qu'un frontend doit savoir pour son rôle, sans avoir à ouvrir les vingt specs de modules.
 
@@ -355,6 +355,42 @@ Chaque document porte la même version en en-tête, et son propre journal des ch
 - [ ] ⚠️ **`TRACKING_JWT_SECRET` renseigné dans chaque environnement déployé.** Vide, l'authentification du service de suivi est **désactivée** : n'importe qui connaissant un `delivery_id` suit la course. Le secret doit valoir **exactement** le `JWT_SECRET` de `dira-food-api`.
 
 ## Journal
+
+### 4.86.0 — 29 octobre 2026
+
+📱 **DIRA LITE : LE SERVEUR RECONNAÎT L'ÉDITION DE L'APPLICATION** —
+`DIRA-CLIENT.md` §4 bis.
+
+```
+X-Dira-Edition: lite | full      # sur CHAQUE requête, comme X-Dira-Country
+X-Dira-App-Version: 0.1.0 (26102901)
+X-Dira-Platform: android | ios
+POST /me/devices { …, "edition": "lite" }
+```
+
+Dira Lite est une **seconde application passager** (zones de faible
+alphabétisation, le Tchad d'abord) : deux applications distinctes sur le
+téléphone, **mêmes comptes**, **même rôle**. Rien ne permettait au serveur de
+savoir laquelle l'appelait.
+
+⚠️⚠️ **DÉCLARATIF, JAMAIS AUTORISANT.** N'importe qui peut écrire
+`X-Dira-Edition: lite` : il sert à **adapter** une liste et à **compter**,
+jamais à ouvrir un droit. Aucune règle de sécurité ne sera construite dessus.
+
+⚠️ **SON DÉFAUT EST `full`, ET RIEN N'EST JAMAIS REFUSÉ.** Les versions déjà
+installées n'envoient rien et continuent de marcher. Une valeur inconnue
+dégrade vers l'application **complète** — jamais vers une application amputée.
+
+⚠️ **LE SERVEUR REPUBLIE L'ÉDITION RETENUE** dans la réponse. Lisez-la au moins
+une fois : recevoir `full` en se croyant `lite` veut dire que l'en-tête
+n'arrive pas (une passerelle qui le filtre, un cache qui le mange) — sinon on
+cherche deux jours pourquoi la configuration n'est pas réduite.
+
+⚠️ **ET L'APPAREIL ENREGISTRÉ DIT SON ÉDITION.** Une même personne peut avoir
+les deux applications : sans ce champ, une notification de course arrivait
+**deux fois**, dont une dans l'application qui n'avait rien commandé.
+L'édition est une propriété de l'**installation**, pas du compte — c'est le
+jeton qui la porte. Un jeton déjà enregistré sans édition compte comme `full`.
 
 ### 4.85.0 — 28 octobre 2026
 
