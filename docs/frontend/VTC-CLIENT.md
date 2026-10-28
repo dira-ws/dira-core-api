@@ -1,6 +1,6 @@
 # App CLIENT — COURSES (VTC) — contrat d'API
 
-> **Version 4.84.1** · 28 octobre 2026
+> **Version 4.85.0** · 28 octobre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Courses : `https://api-staging.dira.llc/api/v1/vtc` · Suivi : `wss://tracking-staging.dira.llc`
 
 ---
@@ -2447,6 +2447,49 @@ coupée au milieu de la tentative suivante.
 ⚠️ **Ce n'est pas la fin de la recherche, c'est la fin de l'attente.** Tant
 que le délai n'est pas écoulé, les deux gestes restent — et sur un pays où
 le délai vaut 0, la course attend indéfiniment, comme avant.
+
+### 🆕 🛣️ LA ROUTE PRÉVUE — dessinez la ROUTE, pas une ligne droite (v4.85.0)
+
+```jsonc
+// GET /vtc/rides/{id}  ·  GET /vtc/rides  ·  dès la CRÉATION
+{ "planned_polyline": "sgpd@kxlF{T{T_]_q@…", … }
+```
+
+L'itinéraire que le réseau routier a rendu **au devis** — celui sur lequel
+`fare_xof` est calculé, et celui que la navigation du chauffeur suit. Polyline
+Google (`[lat, lng]`, précision 1e-5), le même encodage que les deux tracés
+ci-dessous.
+
+⚠️⚠️ **PRÉSENT DÈS LA CRÉATION, et c'est tout l'intérêt.** Les deux autres
+tracés n'existent qu'à la **fin** de la course. Pendant le trajet, une carte
+qui n'a pas celui-ci ne peut que relier le départ à l'arrivée par une **ligne
+droite** — c'est ce que faisait notre console, et un opérateur ne pouvait donc
+pas voir qu'un chauffeur s'écartait de sa route. Si votre carte fait la même
+chose, ce champ est la correction.
+
+| Tracé | Ce qu'il dit | Quand |
+|---|---|---|
+| `planned_polyline` | par où la course **devrait** passer | dès la création |
+| `traveled_polyline` | par où le chauffeur **est** passé | à `completed` |
+| `approach_polyline` | ce qu'il a roulé **pour venir** | à `arrived` |
+
+⚠️ **NE LE DESSINEZ PAS COMME UN PARCOURS RÉEL.** « Il a fait un détour » se
+tranche sur `traveled_polyline`, jamais sur celui-ci. Quand les deux existent,
+montrez le réel **par-dessus** et le prévu atténué : l'écart entre les deux est
+exactement ce qu'on vient lire.
+
+⚠️ **UN TRAIT PLEIN POUR UNE ROUTE, POINTILLÉ POUR DES ARRÊTS.** Quand
+`planned_polyline` est **absent** — le réseau routier n'a pas rendu de
+géométrie — retombez sur `stops` en **pointillé**. Un trait plein entre deux
+points dirait « la voiture passe par là », ce que personne ne sait.
+
+⚠️ **ET UN TRACÉ DE MOINS DE DEUX POINTS N'EST PAS UNE ROUTE.** Le serveur ne
+vous en servira pas, mais vérifiez-le quand même avant de sauter votre repli :
+un point ne dessine aucune ligne, et vous n'afficheriez **plus rien** là où
+vous affichiez au moins une ligne droite.
+
+⚠️ **LE PRIX NE DÉPEND PAS DE CE TRACÉ**, comme pour les deux autres :
+`fare_xof` vient du devis. Le tracé dessine.
 
 **Le parcours d'une course terminée (v3.2.0).** À `completed`, la course
 porte **`traveled_polyline`** (polyline Google, le chemin réellement roulé,

@@ -1,6 +1,6 @@
 # App CHAUFFEUR — COURSES (VTC) — contrat d'API
 
-> **Version 4.84.1** · 28 octobre 2026
+> **Version 4.85.0** · 28 octobre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Courses : `https://api-staging.dira.llc/api/v1/vtc` · Suivi : `wss://tracking-staging.dira.llc` · SIG : `https://maps.dira.llc/api`
 
 ---
@@ -2022,6 +2022,16 @@ connu. N'envoyez jamais `0` pour « inconnu » — c'est le nord.
 
 C'est ce champ qui fait le **parcours** : à `completed`, le serveur fige les
 positions portées par la course, les recale sur la route, et la course garde
+> ### 🆕 🛣️ LA ROUTE PRÉVUE est servie dès la création (v4.85.0)
+>
+> `planned_polyline` — l'itinéraire rendu par le réseau routier au devis,
+> encodé comme les tracés ci-dessous. ⚠️ **Il existe DÈS la création**, là où
+> le parcours réel n'arrive qu'à la fin : si vous dessinez une carte pendant
+> la course, c'est lui qu'il faut, et non une ligne droite entre les arrêts.
+>
+> ⚠️ Ce n'est **pas** le parcours réel. Il dit où la course devrait passer ;
+> il ne prouve rien sur ce que vous avez roulé.
+
 **`traveled_polyline`** (polyline Google), **`actual_distance_m`** et
 **`distance_source`** (`tracked`). Sans `mission_id`, la course se termine
 avec `distance_source: "planned"` — la distance du devis, aucun tracé — et

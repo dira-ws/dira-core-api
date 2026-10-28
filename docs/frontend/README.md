@@ -1,6 +1,6 @@
 # Specs frontend — par rôle
 
-> **Version 4.84.1** · 28 octobre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics`
+> **Version 4.85.0** · 28 octobre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics`
 
 **Cinq** documents, un par application. Chacun est **autonome** : tout ce qu'un frontend doit savoir pour son rôle, sans avoir à ouvrir les vingt specs de modules.
 
@@ -355,6 +355,51 @@ Chaque document porte la même version en en-tête, et son propre journal des ch
 - [ ] ⚠️ **`TRACKING_JWT_SECRET` renseigné dans chaque environnement déployé.** Vide, l'authentification du service de suivi est **désactivée** : n'importe qui connaissant un `delivery_id` suit la course. Le secret doit valoir **exactement** le `JWT_SECRET` de `dira-food-api`.
 
 ## Journal
+
+### 4.85.0 — 28 octobre 2026
+
+🛣️ **LA ROUTE PRÉVUE D'UNE COURSE EST SERVIE DÈS SA CRÉATION** —
+`VTC-CLIENT.md`, note dans `VTC-DRIVER.md`.
+
+```
+GET /vtc/rides/{id}  ·  GET /vtc/rides
+    → { planned_polyline: "sgpd@kxlF{T{T_]_q@…", … }
+```
+
+Défaut signalé par l'exploitation : **« sur la carte du suivi en direct, tu
+affiches une ligne droite reliant le départ et l'arrivée au lieu d'afficher la
+route. »** C'était vrai de notre console, et de toute carte qui n'avait que les
+arrêts à dessiner.
+
+La cause n'était pas dans l'affichage : le réseau routier rend **déjà** la
+géométrie de l'itinéraire, et le pont vers lui ne décodait que la distance et
+la durée. Le tracé est désormais figé au devis — celui sur lequel `fare_xof`
+est calculé — et servi dès la création.
+
+⚠️ **TROIS TRACÉS, ET ILS NE DISENT PAS LA MÊME CHOSE :**
+
+| Tracé | Ce qu'il dit | Quand |
+|---|---|---|
+| `planned_polyline` | par où la course **devrait** passer | dès la création |
+| `traveled_polyline` | par où le chauffeur **est** passé | à `completed` |
+| `approach_polyline` | ce qu'il a roulé **pour venir** | à `arrived` |
+
+⚠️ **NE DESSINEZ PAS LE PRÉVU COMME UN PARCOURS RÉEL.** « Il a fait un détour »
+se tranche sur `traveled_polyline`. Quand les deux existent, montrez le réel
+par-dessus et le prévu atténué : l'écart entre les deux est ce qu'on vient
+lire.
+
+⚠️ **UN TRAIT PLEIN POUR UNE ROUTE, POINTILLÉ POUR DES ARRÊTS.** Quand
+`planned_polyline` est absent — le réseau routier n'a pas rendu de géométrie —
+retombez sur `stops`, en pointillé : un trait plein entre deux points dirait
+« la voiture passe par là », ce que personne ne sait.
+
+⚠️ **ET UN TRACÉ DE MOINS DE DEUX POINTS N'EST PAS UNE ROUTE.** Vérifiez-le
+avant de sauter votre repli : un point ne dessine aucune ligne, et vous
+n'afficheriez plus rien là où vous affichiez au moins une ligne droite.
+
+Polyline Google (`[lat, lng]`, précision 1e-5), le même encodage que les deux
+autres. **Le prix ne dépend pas de ce tracé** : il vient du devis.
 
 ### 4.84.1 — 28 octobre 2026
 
