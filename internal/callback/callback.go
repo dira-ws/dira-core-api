@@ -50,7 +50,48 @@ func (c *Client) Target() string {
 // paiement portait un `purpose`. C'est ce mot, et lui seul, qui décide de qui
 // prévenir — envoyer la confirmation d'une course à la livraison la ferait
 // refuser, et le passager attendrait une voiture que personne n'a commandée.
-type Registry struct{ byPurpose map[string]*Client }
+type Registry struct {
+	byPurpose map[string]*Client
+	// told sont les services qu'on PRÉVIENT sans jamais leur confirmer de
+	// paiement — voir `AlsoTell`.
+	told []*Client
+}
+
+// AlsoTell ajoute un service qui doit apprendre ce qui arrive à une PERSONNE,
+// sans jamais recevoir de confirmation de paiement.
+//
+// ⚠️⚠️ UN AJOUT QUI N'INVENTE PAS D'OBJET PAYÉ, et c'est toute la raison de
+// cette méthode. La table ci-dessus est indexée par `purpose` : « commande »,
+// « course », « abonnement de courses ». L'analytique ne confirme aucun de ces
+// objets — elle n'en possède aucun — mais elle détient désormais le FIL DE
+// CONVERSATION d'une personne et ses MESSAGES VOCAUX. L'y inscrire sous un
+// `purpose` inventé l'aurait rendue destinataire des confirmations de
+// paiement : elle aurait refusé chaque rappel, la tâche serait revenue vingt
+// fois, et une commande payée aurait fini en file morte.
+//
+// Un service ajouté ici n'apparaît donc QUE dans `All()`, c'est-à-dire dans
+// les annonces qui concernent la personne et non un objet — l'effacement d'un
+// compte, aujourd'hui le seul.
+//
+// ⚠️⚠️ ET IL FAUT L'ADRESSE *ET* LE SECRET, là où `Enabled()` se contente de
+// l'adresse. Ce n'est pas une sévérité gratuite : sur le chemin d'un PAIEMENT,
+// une adresse sans secret échoue BRUYAMMENT — le prestataire reçoit l'erreur,
+// réessaie, et le paiement d'un client qui n'avance pas se voit. Ici, il n'y a
+// ni prestataire ni écran : la tâche repasse vingt fois sur un `401`, meurt en
+// file morte, et le fil de conversation d'une personne effacée reste pour
+// toujours sans que rien ne le dise. Mieux vaut ne PAS être inscrit — le
+// démarrage le crie alors, une fois, à un endroit qu'on lit.
+func (r *Registry) AlsoTell(clients ...*Client) *Registry {
+	if r == nil {
+		return r
+	}
+	for _, c := range clients {
+		if c != nil && c.Enabled() && c.token != "" {
+			r.told = append(r.told, c)
+		}
+	}
+	return r
+}
 
 // NewRegistry branche les verticales. Une entrée sans client est ignorée : en
 // développement, un paiement reste confirmé au socle sans que personne ne soit
@@ -102,7 +143,18 @@ func (r *Registry) All() []*Client {
 		return nil
 	}
 	seen := map[string]*Client{}
+	// ⚠️ LES DEUX SOURCES, ET DÉDOUBLONNÉES PAR ADRESSE : les courses
+	// apparaissent sous deux `purpose` (une course, un abonnement de courses)
+	// et ne doivent être prévenues qu'une fois.
 	for _, c := range r.byPurpose {
+		if c == nil || !c.Enabled() {
+			continue
+		}
+		if _, dup := seen[c.baseURL]; !dup {
+			seen[c.baseURL] = c
+		}
+	}
+	for _, c := range r.told {
 		if c == nil || !c.Enabled() {
 			continue
 		}

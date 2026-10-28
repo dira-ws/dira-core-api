@@ -1,6 +1,6 @@
 # Specs frontend — par rôle
 
-> **Version 4.83.0** · 26 octobre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics`
+> **Version 4.84.0** · 28 octobre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics`
 
 **Cinq** documents, un par application. Chacun est **autonome** : tout ce qu'un frontend doit savoir pour son rôle, sans avoir à ouvrir les vingt specs de modules.
 
@@ -355,6 +355,69 @@ Chaque document porte la même version en en-tête, et son propre journal des ch
 - [ ] ⚠️ **`TRACKING_JWT_SECRET` renseigné dans chaque environnement déployé.** Vide, l'authentification du service de suivi est **désactivée** : n'importe qui connaissant un `delivery_id` suit la course. Le secret doit valoir **exactement** le `JWT_SECRET` de `dira-food-api`.
 
 ## Journal
+
+### 4.84.0 — 28 octobre 2026
+
+🎙️🧵 **LE VOCAL EST GARDÉ, LE FIL NE S'ÉVAPORE PLUS, ET UN HUMAIN PEUT REPRENDRE
+LA MAIN** — `DIRA-CLIENT.md` §8 et §8 bis ; notes dans `FOOD-CLIENT.md` et
+`VTC-CLIENT.md`.
+
+```
+POST /analytics/ai/voice    multipart : file, language?, origin?, vertical?
+    → { voice_id, audio_url, seconds, text, language, vertical, reply, plan,
+        confidence, routed_by, state, ordered? }
+
+GET  /analytics/ai/thread
+    → { country, message_count, updated_at, messages[] }
+```
+
+Trois constats d'exploitation qui n'en font qu'un :
+
+1. **Les discussions avec l'assistant étaient volatiles.** La réponse partait,
+   rien n'était écrit : un client qui fermait l'application perdait tout son
+   échange, et le support qui le rappelait redemandait ce que la personne venait
+   d'expliquer. Les deux tours sont désormais écrits, par compte et par pays
+   (fenêtre de 200 messages, `message_count` dit le total réel).
+2. **Le vocal était transcrit puis jeté.** L'audio est maintenant **gardé** et
+   **réécoutable** — `audio_url` est porté par la bulle du fil elle-même, pas
+   seulement par la file du support. La transcription se trompe (« riz sauce »
+   devient « riz gras ») : sans le fichier, un litige se tranche sur la parole
+   de l'un contre celle de l'autre.
+3. **Le support peut écouter et commander à la place du client.** Un message de
+   rôle `support` apparaît alors dans le fil. ⚠️ **Il ne doit pas être déguisé
+   en assistant** : laisser croire que « l'IA » a commandé rendrait inexplicable
+   le jour où elle ne le fait pas.
+
+⚠️⚠️ **ET UN RENVERSEMENT ASSUMÉ DU CONTRAT.** Ces spécifications disaient
+depuis la v4.43.0 : « un plan ne commande rien », « un vocal n'est jamais
+exécuté directement ». C'était une règle de sûreté — les accents d'ici ne
+pardonnent pas, et une commande partie d'un vocal mal transcrit se découvre au
+prix. Elle reste vraie **par défaut** ; l'exploitation peut désormais poser un
+**seuil de confiance** (refusé sous 60 %, et 0 veut dire *jamais*), au-delà
+duquel la commande part toute seule.
+
+⚠️ **TRAITEZ LES QUATRE `state` MAINTENANT** — `understood`, `ordered`,
+`needs_support`, `failed` — même si vous ne verrez qu'`understood` aujourd'hui :
+le seuil est un **réglage**, pas un déploiement, et `ordered` peut arriver du
+jour au lendemain sans nouvelle version d'application.
+
+⚠️ **NE DÉDUISEZ JAMAIS « c'est commandé » DE LA PRÉSENCE D'UN `plan`** : il
+arrive dans les quatre cas. Seul `state` tranche, et seul `ordered` porte un
+identifiant.
+
+⚠️ **UNE COMMANDE NÉE D'UN VOCAL EST TOUJOURS EN ESPÈCES**, et passée au nom du
+client avec son jeton : la verticale lui applique exactement ce qu'elle lui
+appliquerait s'il avait appuyé lui-même, et un refus ramène `needs_support`,
+jamais `ordered`.
+
+⚠️ **`{food,vtc}/ai/voice` NE GARDENT TOUJOURS RIEN**, et c'est écrit dans leurs
+specs : ce sont les routes d'applications à **un seul métier**. Un vocal envoyé
+par là n'apparaîtra jamais dans la file du support — il n'y aura aucune trace
+réécoutable le jour d'une réclamation.
+
+**Fichier** : 2 Mio au plus, en `m4a` / `aac` / `mp3` / `ogg` / `opus` /
+`webm` / `3gp`. **Le WAV est refusé** — trente secondes pèsent cinq
+mégaoctets, et c'est l'envoi qui punirait la personne sur un réseau d'ici.
 
 ### 4.83.0 — 26 octobre 2026
 

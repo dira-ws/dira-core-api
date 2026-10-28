@@ -1,6 +1,6 @@
 # App CLIENT — LIVRAISON — contrat d'API
 
-> **Version 4.83.0** · 26 octobre 2026
+> **Version 4.84.0** · 28 octobre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Livraison : `https://api-staging.dira.llc/api/v1/food` · Suivi : `wss://tracking-staging.dira.llc`
 
 
@@ -2113,6 +2113,33 @@ ne le traduisez pas, montrez-le tel quel.
 l'**affichez dans le champ de saisie**, corrigible, et c'est le client qui
 l'envoie à `/ai/chat`. Commander depuis un vocal non relu ferait livrer
 « riz gras » à qui a dit « riz sauce ».
+
+> ### 🆕 ⚠️⚠️ CETTE ROUTE NE GARDE RIEN, ET C'EST VOULU (v4.84.0)
+>
+> `/food/ai/voice` **transcrit, puis oublie** : le fichier audio n'est
+> conservé nulle part, et l'échange n'est écrit dans aucun fil. Vous recevez du
+> texte, et c'est tout.
+>
+> Ce n'est pas un oubli de notre part : c'est la route d'une application **d'un
+> seul métier**, où nous ne pouvons rien composer de plus. Depuis la v4.84.0,
+> l'application cliente **unifiée** dispose d'une route — `POST
+> /analytics/ai/voice` — qui, elle, garde l'audio, le rend réécoutable, écrit
+> l'échange dans un fil durable, et alimente la file du support quand l'IA n'a
+> pas compris.
+>
+> ⚠️ **TROIS CONSÉQUENCES QUI VOUS CONCERNENT DIRECTEMENT :**
+>
+> 1. **Le support ne verra JAMAIS un vocal envoyé par cette route.** Un client
+>    qui se plaint (« j'ai dit riz sauce, on m'a livré riz gras ») ne laissera
+>    aucune trace réécoutable : il n'y aura que la parole de l'un contre celle
+>    de l'autre.
+> 2. **Aucune commande ne partira jamais toute seule d'ici.** La transcription
+>    revient à l'application, et c'est le client qui l'envoie. Le seuil de
+>    confiance réglable dans la console ne s'applique qu'à la route unifiée.
+> 3. **Si votre application est celle qui fait les deux métiers, utilisez la
+>    route unifiée** et non celle-ci. Si elle n'en fait qu'un, celle-ci reste la
+>    bonne — en sachant ce qu'elle ne fait pas.
+
 
 **Enregistrez en opus ou AAC, MONO, 16-24 kbit/s** — 60 s pèsent alors
 ~150 Ko. Le WAV est refusé : une minute fait 5 Mo, soit **des minutes**

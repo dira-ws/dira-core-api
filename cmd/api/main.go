@@ -299,12 +299,28 @@ func run(logger *slog.Logger) error {
 		// mais sous son propre nom, parce que son `ref_id` n'est pas une
 		// course.
 		payment.PurposeRideSubscription: callback.New("vtc", cfg.VTCBaseURL, cfg.VTCCallbackToken),
-	})
+	}).
+		// ⚠️⚠️ L'ANALYTIQUE EST PRÉVENUE DES FAITS QUI CONCERNENT UNE PERSONNE,
+		// pas des paiements — voir `AlsoTell`. Elle détient le FIL DE
+		// CONVERSATION de chaque client et ses MESSAGES VOCAUX : du texte
+		// qu'il a écrit et sa VOIX, que personne d'autre ne retrouvera. Sans
+		// cette ligne, un compte effacé laisserait tout cela derrière lui, et
+		// aucun écran ne le dirait.
+		AlsoTell(callback.New("analytics", cfg.AnalyticsBaseURL, cfg.AnalyticsCallbackToken))
 	if len(verticals.Purposes()) == 0 {
 		logger.Error("no vertical configured: no mobile-money payment can ever be confirmed",
 			"hint", "set FOOD_BASE_URL / VTC_BASE_URL and their callback tokens")
 	} else {
 		logger.Info("payment confirmations routed", "purposes", verticals.Purposes())
+	}
+	// ⚠️ UN CRI SI L'ANALYTIQUE N'EST PAS JOIGNABLE : l'effacement d'un compte
+	// laisserait alors son fil de conversation et ses vocaux là où ils sont,
+	// et le droit à l'effacement serait tenu à moitié sans que rien ne le
+	// dise. Le socle, lui, démarre : refuser de démarrer pour cela couperait
+	// la plateforme entière.
+	if cfg.AnalyticsBaseURL == "" || cfg.AnalyticsCallbackToken == "" {
+		logger.Error("analytics NOT told about erased accounts — their AI thread and voice notes would be kept",
+			"hint", "set ANALYTICS_BASE_URL and ANALYTICS_CALLBACK_TOKEN")
 	}
 	// ⚠️ LE RAPPEL PART EN FILE, il n'est plus émis en ligne.
 	//

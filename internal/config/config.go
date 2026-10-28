@@ -65,6 +65,21 @@ type Config struct {
 	VTCBaseURL       string
 	VTCCallbackToken string
 
+	// AnalyticsBaseURL et AnalyticsCallbackToken : L'ANALYTIQUE, qui ne
+	// confirme AUCUN paiement et doit pourtant apprendre qu'un compte a été
+	// effacé.
+	//
+	// ⚠️⚠️ ELLE DÉTIENT DÉSORMAIS LE FIL DE CONVERSATION D'UNE PERSONNE ET SES
+	// MESSAGES VOCAUX — du texte qu'elle a écrit, et sa voix. Tout le reste de
+	// ce service ne porte que des identifiants et des chiffres (faits,
+	// signaux, rapports) : cela reste, comme restent les courses et les
+	// commandes. Un fil et un enregistrement, non.
+	//
+	// ⚠️ VIDE = L'ANALYTIQUE GARDE CE QUE LA PERSONNE A DIT, et rien ne le
+	// dira jamais sauf le journal du démarrage. C'est pour cela qu'il crie.
+	AnalyticsBaseURL       string
+	AnalyticsCallbackToken string
+
 	// OTPSender nomme le canal de remise du code à usage unique :
 	// `echo` (défaut), `whatsapp` ou `sms`.
 	//
@@ -138,14 +153,19 @@ func Load() (*Config, error) {
 		// ⚠️ VIDE PAR DÉFAUT, ET C'EST VOULU : sans réglage, le QR porte un lien
 		// RELATIF. Fabriquer `https://dira.llc/...` enverrait les porteurs de la
 		// recette sur la production, et le QR aurait l'air de marcher.
-		AppLinkBase:          core.Env("APP_LINK_BASE", ""),
-		FoodBaseURL:          core.Env("FOOD_BASE_URL", ""),
-		FoodCallbackToken:    core.Env("FOOD_CALLBACK_TOKEN", ""),
-		VTCBaseURL:           core.Env("VTC_BASE_URL", ""),
-		VTCCallbackToken:     core.Env("VTC_CALLBACK_TOKEN", ""),
-		OTPSender:            core.Env("OTP_SENDER", "echo"),
-		CountryIPLookupURL:   core.Env("COUNTRY_IP_LOOKUP_URL", country.DefaultIPLookupURL),
-		CountryIPLookupField: core.Env("COUNTRY_IP_LOOKUP_FIELD", country.DefaultIPLookupField),
+		AppLinkBase:       core.Env("APP_LINK_BASE", ""),
+		FoodBaseURL:       core.Env("FOOD_BASE_URL", ""),
+		FoodCallbackToken: core.Env("FOOD_CALLBACK_TOKEN", ""),
+		VTCBaseURL:        core.Env("VTC_BASE_URL", ""),
+		VTCCallbackToken:  core.Env("VTC_CALLBACK_TOKEN", ""),
+		// ⚠️ Le MÊME secret que celui de la livraison et des courses n'est pas
+		// imposé : chaque service présente le sien, et un secret volé chez
+		// l'un n'ouvre pas la porte de l'autre.
+		AnalyticsBaseURL:       core.Env("ANALYTICS_BASE_URL", ""),
+		AnalyticsCallbackToken: core.Env("ANALYTICS_CALLBACK_TOKEN", ""),
+		OTPSender:              core.Env("OTP_SENDER", "echo"),
+		CountryIPLookupURL:     core.Env("COUNTRY_IP_LOOKUP_URL", country.DefaultIPLookupURL),
+		CountryIPLookupField:   core.Env("COUNTRY_IP_LOOKUP_FIELD", country.DefaultIPLookupField),
 	}
 
 	if cfg.FinanceIntegrityInterval, err = core.Duration("FINANCE_INTEGRITY_INTERVAL", 15*time.Minute); err != nil {
