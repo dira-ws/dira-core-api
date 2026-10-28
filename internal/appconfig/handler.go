@@ -24,7 +24,22 @@ func NewHandler(svc *Service, repo *Repository) *Handler {
 	return &Handler{svc: svc, repo: repo}
 }
 
-func (h *Handler) Mount(r chi.Router, authMW func(http.Handler) http.Handler) {
+func (h *Handler) Mount(r chi.Router, authMW, serviceMW func(http.Handler) http.Handler) {
+	// LE REGISTRE BRUT, POUR LES VERTICALES.
+	//
+	// ⚠️⚠️ LE REGISTRE, PAS LA VUE RÉSOLUE, et c'est la décision qui évite un
+	// appel HTTP par requête. Une verticale doit filtrer ses listes pour LE
+	// PAYS ET L'ÉDITION DE CHAQUE APPEL : lui servir `/app/config` l'aurait
+	// obligée à interroger le socle à chaque course. Elle lit donc le registre
+	// une fois, le garde quelques secondes, et le résout LOCALEMENT avec le
+	// même `pkg/appconfig` que nous — c'est exactement pour cela que la
+	// résolution est dans un paquet partagé et pure.
+	//
+	// ⚠️ ET DERRIÈRE LE JETON DE SERVICE, contrairement à `/app/config` : le
+	// registre brut porte les règles de TOUS les pays, et une application n'a
+	// pas à savoir ce qui est coupé ailleurs.
+	r.With(serviceMW).Get("/internal/app-config", h.rawRegistry)
+
 	// ⚠️⚠️ PUBLIQUE, SANS JETON, ET C'EST DÉLIBÉRÉ. Une application lit sa
 	// configuration AU DÉMARRAGE — avant l'écran de connexion, pour savoir
 	// quels menus dessiner. L'enfermer derrière un jeton aurait obligé Lite à
@@ -43,6 +58,11 @@ func (h *Handler) Mount(r chi.Router, authMW func(http.Handler) http.Handler) {
 		// et une édition choisis dans l'écran.
 		g.Get("/admin/app-config/preview", h.preview)
 	})
+}
+
+// GET /internal/app-config — le registre brut, pour les verticales.
+func (h *Handler) rawRegistry(w http.ResponseWriter, r *http.Request) {
+	httpx.JSON(w, http.StatusOK, h.svc.Registry(r.Context()))
 }
 
 // GET /app/config — ce que CETTE application voit dans CE pays.

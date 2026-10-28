@@ -57,6 +57,18 @@ var declaredSurface = []string{
 	// déjà. Elle NE LIT RIEN et n'écrit rien en base : elle relaie un texte,
 	// borné, vers des notifications.
 	"/internal/alerts",
+	// LE REGISTRE DES FONCTIONS PAR PAYS ET PAR ÉDITION (Dira Lite).
+	//
+	// ⚠️ LE REGISTRE BRUT, PAS LA VUE RÉSOLUE, et c'est ce qui évite un appel
+	// HTTP par requête : une verticale doit filtrer ses listes pour le pays ET
+	// l'édition de CHAQUE appel. Elle lit donc le registre une fois, le garde
+	// quelques secondes, et le résout localement avec le même `pkg/appconfig`
+	// que le socle.
+	//
+	// ⚠️ ET DERRIÈRE LE JETON DE SERVICE, là où `/app/config` est publique :
+	// le registre brut porte les règles de TOUS les pays, et une application
+	// n'a pas à savoir ce qui est coupé ailleurs.
+	"/internal/app-config",
 	"/internal/audit",
 	"/internal/backoffice/payments",
 	"/internal/backoffice/refund-order-payment",

@@ -866,7 +866,8 @@ func run(logger *slog.Logger) error {
 		// ⚠️ Le registre est VIDE par défaut, et un registre vide ne restreint
 		// rien : la plateforme se comporte exactement comme avant jusqu'à ce
 		// que quelqu'un coupe une fonction depuis la console.
-		appconfig.NewHandler(appConfigSvc, appConfigRepo).Mount(r, authMW)
+		appconfig.NewHandler(appConfigSvc, appConfigRepo).
+			Mount(r, authMW, middleware.Service(cfg.ServiceToken))
 		// LES OBJECTIFS : `/me/challenges` pour qui joue, `/admin/challenges`
 		// pour l'exploitation qui les écrit et les lance.
 		challenge.NewHandler(challengeSvc).Mount(r, authMW)
