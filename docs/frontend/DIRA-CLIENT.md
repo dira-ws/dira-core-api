@@ -1,6 +1,6 @@
 # App CLIENT UNIFIÉE — LIVRAISON **et** COURSES — contrat d'API
 
-> **Version 4.84.0** · 28 octobre 2026
+> **Version 4.84.1** · 28 octobre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Livraison : `…/api/v1/food` · Courses : `…/api/v1/vtc` · Combiné : `…/api/v1/analytics` · Suivi : `wss://tracking-staging.dira.llc`
 
 ---
@@ -693,6 +693,7 @@ toujours un chemin manuel.
 ```
 POST /analytics/ai/voice
     multipart :  file     = <audio>              (obligatoire, 2 Mio au plus)
+                 seconds  = 5                    (⚠️ ENVOYEZ-LA — voir plus bas)
                  language = <code>               (facultatif)
                  origin   = "9.45,0.41"          (facultatif)
                  vertical = "vtc" | "food"       (facultatif)
@@ -800,8 +801,24 @@ iOS (M4A) produisent nativement : il n'y a rien à faire de plus. Un
 enregistrement non compressé dépasse le plafond en vingt secondes, et c'est
 **l'envoi** qui punirait la personne sur un réseau d'ici, pas nous.
 
-⚠️ **`seconds` EST UNE ESTIMATION**, déduite du poids : elle sert à dessiner la
-largeur d'une bulle et à écrire « 0:07 ». N'en faites pas une durée exacte.
+#### ⚠️⚠️ `seconds` — ENVOYEZ LA DURÉE QUE VOUS AVEZ MESURÉE
+
+Votre enregistreur l'a **chronométrée**. Envoyez-la : un entier, en secondes,
+dans le même multipart.
+
+Sans elle, le serveur la déduit du **poids du fichier**, ce qui suppose un
+débit — et le débit varie du simple au quintuple d'un encodeur à l'autre. Nous
+l'avons mesuré sur la préprod : **cinq secondes de parole à 32 kbit/s
+s'affichaient « 0:01 »**. À l'autre bout, une minute à 16 kbit/s s'afficherait
+« 0:15 ».
+
+C'est bénin — ce chiffre ne sert qu'à dessiner la largeur d'une bulle et à
+écrire « 0:07 », rien ne se facture ni ne se décide dessus. Mais une bulle qui
+annonce « 0:01 » et qui joue pendant cinq secondes se lit comme un bogue, et
+c'est vous qui le recevrez.
+
+La valeur rendue est **celle que vous avez envoyée** (bornée à 600). À défaut,
+c'est l'estimation, et elle est fausse par construction.
 
 #### Les refus
 
@@ -829,7 +846,7 @@ GET /analytics/ai/thread
   →
 { "country": "GA",
   "message_count": 42,            // TOUT ce qui a été dit, même hors fenêtre
-  "updated_at": "2026-10-28T09:12:04Z",
+  "updated_at": "2026-10-28T09:12:04Z",   // ⚠️ ABSENT si rien n'a jamais été dit
   "messages": [
     { "id": "68f0…", "role": "client", "text": "emmène-moi à l'aéroport",
       "voice_id": "68f0…",
@@ -877,6 +894,18 @@ Un voyageur qui commande à Lomé puis à Dakar a **deux** fils, et cette route
 rend celui du pays de la requête (`X-Dira-Country`). Ses deux histoires ne se
 mêlent pas, et l'exploitation d'un pays ne lit que la sienne. Ne mettez donc
 pas en cache un fil au-delà d'un changement de pays.
+
+### ⚠️ UN FIL VIDE EST UNE RÉPONSE NORMALE, ET IL N'INVENTE RIEN
+
+Un compte qui n'a jamais rien dit reçoit `200` avec `messages: []` et
+`message_count: 0` — jamais un `404`. Vous pouvez donc itérer sans garde.
+
+⚠️ **ET `updated_at` EST ALORS ABSENT**, délibérément : il n'y a pas de date à
+formater. Nous servions auparavant `0001-01-01T00:00:00Z`, la date nulle du
+langage, et une application qui la formate affiche « 31/12/0000 » sous une
+conversation vide. Il n'y a pas non plus d'`id` de fil : les deux routes le
+désignent par la personne, et l'identifiant nul que nous servions avait
+l'apparence d'un vrai.
 
 ### Ce que la route N'EST PAS
 
@@ -1326,6 +1355,7 @@ du métier.
 - [ ] **Le vocal** (§8) : les **quatre** `state` traités — `understood`, `ordered`, `needs_support`, `failed` —, et jamais « c'est commandé » déduit de la présence d'un `plan`.
 - [ ] `ordered.kind` ouvre le bon suivi (`ride` → la course, `order` → la commande).
 - [ ] 2 Mio au plus, en opus/AAC/M4A/3GP — **pas de WAV** ; `audio_url` absent n'est pas une erreur.
+- [ ] **`seconds` envoyé** avec le vocal : la durée mesurée par votre enregistreur, sans quoi la bulle annonce « 0:01 » pour cinq secondes de parole.
 - [ ] **Le fil** (§8 bis) rechargé à l'ouverture de la boîte de dialogue, et **vidé au changement de pays**.
 - [ ] Une bulle `client` avec `audio_url` porte un **lecteur**, et une bulle `support` est **visiblement humaine**.
 - [ ] `message_count > messages.length` écrit « les 200 derniers messages », et ne laisse pas croire que c'est tout.
@@ -1392,6 +1422,12 @@ peut arriver du jour au lendemain sans nouvelle version d'application.
 portefeuille : la personne paie à l'arrivée et peut refuser à la porte. Au
 portefeuille, il faudrait un remboursement pour réparer ce qu'un « non merci »
 règle.
+
+⚠️ **ENVOYEZ `seconds`**, la durée que votre enregistreur a mesurée. Sans
+elle, le serveur la déduit du poids, ce qui suppose un débit : cinq secondes de
+parole à 32 kbit/s s'affichaient « 0:01 » (mesuré sur la préprod). Et
+`updated_at` du fil est **absent** quand rien n'a jamais été dit — non
+`0001-01-01`, qui s'affiche « 31/12/0000 » sous une conversation vide.
 
 Le fichier : **2 Mio** au plus, en `m4a` / `aac` / `mp3` / `ogg` / `opus` /
 `webm` / `3gp` — **le WAV est refusé** (trente secondes pèsent cinq mégaoctets).

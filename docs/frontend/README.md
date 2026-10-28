@@ -1,6 +1,6 @@
 # Specs frontend — par rôle
 
-> **Version 4.84.0** · 28 octobre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics`
+> **Version 4.84.1** · 28 octobre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics`
 
 **Cinq** documents, un par application. Chacun est **autonome** : tout ce qu'un frontend doit savoir pour son rôle, sans avoir à ouvrir les vingt specs de modules.
 
@@ -356,6 +356,22 @@ Chaque document porte la même version en en-tête, et son propre journal des ch
 
 ## Journal
 
+### 4.84.1 — 28 octobre 2026
+
+🔧 **DEUX CORRECTIONS DE RECETTE sur le vocal et le fil**, trouvées en envoyant
+un vrai message vocal à la préprod — pas dans un test.
+
+- ⚠️ **`seconds` S'ENVOIE MAINTENANT AVEC LE VOCAL.** Cinq secondes de parole à
+  32 kbit/s s'affichaient « 0:01 » : déduire une durée d'un poids suppose un
+  débit, et le débit varie du simple au quintuple d'un encodeur à l'autre.
+  Votre enregistreur l'a chronométrée — envoyez-la. Sans elle, l'estimation
+  reste, et elle est fausse par construction.
+- ⚠️ **`updated_at` DU FIL EST ABSENT quand rien n'a jamais été dit**, et il n'y
+  a plus d'`id` de fil. Nous servions `0001-01-01T00:00:00Z` (la date nulle du
+  langage, qu'`omitempty` n'omet pas) et un ObjectID nul d'apparence valide.
+  Une application qui formate cette date affiche « 31/12/0000 » sous une
+  conversation vide.
+
 ### 4.84.0 — 28 octobre 2026
 
 🎙️🧵 **LE VOCAL EST GARDÉ, LE FIL NE S'ÉVAPORE PLUS, ET UN HUMAIN PEUT REPRENDRE
@@ -418,6 +434,13 @@ réécoutable le jour d'une réclamation.
 **Fichier** : 2 Mio au plus, en `m4a` / `aac` / `mp3` / `ogg` / `opus` /
 `webm` / `3gp`. **Le WAV est refusé** — trente secondes pèsent cinq
 mégaoctets, et c'est l'envoi qui punirait la personne sur un réseau d'ici.
+
+⚠️ **ENVOYEZ `seconds`** avec le vocal : la durée que votre enregistreur a
+mesurée. Sans elle, le serveur la déduit du poids, ce qui suppose un débit —
+cinq secondes de parole à 32 kbit/s s'affichaient « 0:01 », mesuré sur la
+préprod. Et `updated_at` du fil est **absent** quand rien n'a jamais été dit,
+non `0001-01-01` : cette date-là s'affiche « 31/12/0000 » sous une
+conversation vide.
 
 ### 4.83.0 — 26 octobre 2026
 
