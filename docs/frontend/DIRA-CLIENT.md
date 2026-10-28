@@ -1,6 +1,6 @@
 # App CLIENT UNIFIÉE — LIVRAISON **et** COURSES — contrat d'API
 
-> **Version 4.83.0** · 26 octobre 2026
+> **Version 4.84.0** · 28 octobre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Livraison : `…/api/v1/food` · Courses : `…/api/v1/vtc` · Combiné : `…/api/v1/analytics` · Suivi : `wss://tracking-staging.dira.llc`
 
 ---
@@ -688,16 +688,205 @@ elle a les adresses du compte.
 **tel quel**, code et phrase déjà traduite : affichez la phrase, et laissez
 toujours un chemin manuel.
 
-### 🎙️ Le vocal
+### 🎙️ 🆕 LE VOCAL COMBINÉ — gardé, réécoutable, parfois exécuté (v4.84.0)
 
-Il n'y a **pas** de route de transcription combinée : utilisez celle du métier
-que vous visez (`POST /food/ai/voice` ou `POST /vtc/ai/voice`), ou celle de
-l'onglet d'où vient la personne.
+```
+POST /analytics/ai/voice
+    multipart :  file     = <audio>              (obligatoire, 2 Mio au plus)
+                 language = <code>               (facultatif)
+                 origin   = "9.45,0.41"          (facultatif)
+                 vertical = "vtc" | "food"       (facultatif)
+  →
+{ "voice_id": "68f0…",
+  "audio_url": "https://files.dira.llc/voice/…/a1b2.m4a",   // RÉÉCOUTABLE
+  "seconds": 7,
+  "text": "emmène-moi à l'aéroport",
+  "language": "fr",
+  "vertical": "vtc",
+  "reply": "Voici deux options depuis votre position.",
+  "plan": { … },                  // la même forme qu'au chat, verbatim
+  "confidence": 0.91,
+  "routed_by": "lexical",
+  "state": "understood" }         // ⚠️ CE QUI A ÉTÉ FAIT — voir le tableau
+```
 
-⚠️ **UN VOCAL N'EST JAMAIS EXÉCUTÉ DIRECTEMENT.** La transcription revient à
-l'application, qui l'**affiche** et laisse **corriger** avant de l'envoyer à
-`POST /analytics/ai/chat`. Les accents d'ici ne pardonnent pas : « riz sauce »
-transcrit « riz gras » se répare avant la commande, pas après.
+Un seul appel fait tout : l'audio est **gardé**, transcrit, porté à l'assistant
+du métier comme un message écrit, et le tour entier est **écrit dans le fil**.
+
+> ⚠️ **L'AUDIO EST LA SEULE PIÈCE QUI NE MENTE PAS, et c'est pour cela qu'on le
+> garde.** La transcription se trompe — « riz sauce » devient « riz gras » — et
+> le plan aussi. Sans le fichier, un litige se tranche sur la parole de l'un
+> contre celle de l'autre ; avec lui, le support **réécoute** et tranche en
+> dix secondes.
+
+#### ⚠️⚠️ `state` DIT CE QUI A ÉTÉ FAIT, et c'est lui qui choisit votre écran
+
+| `state` | Ce qui s'est passé | Ce que vous montrez |
+|---|---|---|
+| `understood` | transcrit, un `plan` proposé, **la main vous reste** | le plan à **confirmer** — c'est le comportement de toujours |
+| `ordered` | **la commande est PARTIE** | « c'est parti », et `ordered.kind` / `ordered.id` ouvrent le suivi |
+| `needs_support` | l'IA n'a pas été assez sûre pour décider | « **nous vous rappelons** » — un humain va écouter |
+| `failed` | la transcription a échoué | « nous n'avons pas entendu, réessayez » — l'audio est **conservé** |
+
+```jsonc
+// state: "ordered"
+{ "state": "ordered", "ordered": { "kind": "ride", "id": "68f0aa…" } }
+// kind = "ride" → suivez la course ; kind = "order" → suivez la commande
+```
+
+⚠️ **NE DÉDUISEZ JAMAIS « c'est commandé » DE LA PRÉSENCE D'UN `plan`.** Un
+`plan` arrive dans **les quatre** cas. Seul `state` tranche, et seul `ordered`
+porte un identifiant. Afficher « c'est parti » sur un `needs_support` ferait
+attendre une voiture que personne n'a commandée.
+
+#### ⚠️⚠️ LE RENVERSEMENT, DIT EN TOUTES LETTRES
+
+Cette spécification disait, depuis la v4.43.0 : « **un vocal n'est jamais
+exécuté directement** », et « **un plan ne commande rien** ». C'était une règle
+de sûreté, et elle avait une bonne raison : les accents d'ici ne pardonnent
+pas, et une commande partie d'un vocal mal transcrit se découvre **au prix**.
+
+Elle reste vraie **par défaut**, et elle ne s'ouvre que si l'exploitation pose
+un **seuil de confiance** dans la console. Ce qu'il faut en retenir côté
+application :
+
+- **Ne changez rien à votre écran de confirmation.** `understood` est ce que
+  vous recevrez tant qu'aucun pays n'a posé de seuil, c'est-à-dire aujourd'hui
+  partout. Une application qui ne sait traiter que `understood` continue de
+  marcher — elle affichera simplement un plan là où un autre pays verrait
+  « c'est parti ».
+- **Mais `ordered` peut arriver du jour au lendemain**, sans nouvelle version
+  d'application : le seuil est un réglage, pas un déploiement. Traitez les
+  quatre états **maintenant**.
+- **Une commande née d'un vocal est toujours EN ESPÈCES.** Jamais le
+  portefeuille, jamais en ligne : un vocal ne déplace pas d'argent. La personne
+  paie à l'arrivée et peut refuser à la porte si ce n'est pas ce qu'elle
+  voulait ; au portefeuille, il faudrait un remboursement pour réparer ce qu'un
+  « non merci » règle.
+- **Elle est passée en son nom, avec son jeton.** La verticale lui applique
+  exactement ce qu'elle lui appliquerait s'il avait appuyé lui-même : son
+  solde, les bornes de son pays, le nombre de courses qu'il a déjà en cours.
+  Un refus du métier ramène donc `state: "needs_support"`, jamais `ordered`.
+
+#### La langue parlée
+
+Ajoutez `language=<code>` quand la personne a **choisi** sa langue ; **n'envoyez
+rien** sinon — le serveur prend alors la première langue du pays, réglée par
+l'exploitation (au Sénégal ce peut être le wolof, au Togo le français).
+
+⚠️ **CE N'EST PAS `Accept-Language`** : celui-ci dit la langue de l'interface,
+et un téléphone réglé en français n'empêche pas son propriétaire de parler
+wolof. Douze codes sont admis, tout autre est refusé (`422 unknown_language`) :
+
+| Code | Langue | Pays |
+|---|---|---|
+| `fr` · `en` | français · anglais | tous |
+| `ee` · `kbp` | éwé · kabiyè | Togo |
+| `wo` · `ff` · `srr` | wolof · peul (pulaar) · sérère | Sénégal |
+| `man` · `sus` · `ff` | malinké · soussou · peul (pular) | Guinée |
+| `shu` · `sba` · `ff` | arabe tchadien · ngambay (sara) · peul (fulfulde) | Tchad |
+| `fan` | fang | Gabon |
+
+#### Le fichier
+
+| | |
+|---|---|
+| Plafond | **2 Mio** — une minute large en opus ou en AAC mono |
+| Types acceptés | `audio/mp4`, `audio/m4a`, `audio/x-m4a`, `audio/aac`, `audio/mpeg`, `audio/ogg`, `audio/opus`, `audio/webm`, `audio/3gpp` |
+| Refusé | **le WAV** — trente secondes pèsent cinq mégaoctets |
+
+⚠️ **ENCODEZ, N'ENVOYEZ PAS DU BRUT.** C'est ce qu'Android (3GP, WebM/Opus) et
+iOS (M4A) produisent nativement : il n'y a rien à faire de plus. Un
+enregistrement non compressé dépasse le plafond en vingt secondes, et c'est
+**l'envoi** qui punirait la personne sur un réseau d'ici, pas nous.
+
+⚠️ **`seconds` EST UNE ESTIMATION**, déduite du poids : elle sert à dessiner la
+largeur d'une bulle et à écrire « 0:07 ». N'en faites pas une durée exacte.
+
+#### Les refus
+
+| Refus | Ce que ça veut dire | Ce que vous affichez |
+|---|---|---|
+| `413 audio_too_large` | plus de 2 Mio | « message trop long », et proposez de recommencer plus court |
+| `422 unknown_language` | code de langue inconnu | un bogue d'application : corrigez le code envoyé |
+| `429 ai_quota_reached` | quota du jour épuisé | « réessayez demain », **et laissez écrire** |
+| `429 ai_budget_reached` | plafond de la plateforme | idem, sans accuser la personne |
+| `502 transcription_failed` | l'audio n'a pas pu être transcrit | « nous n'avons pas entendu » — ⚠️ **l'audio est gardé**, le support peut reprendre |
+| `503 transcription_unavailable` | aucun fournisseur audio sur ce déploiement | **masquez le bouton micro** |
+| `503 language_not_served` | rien ne transcrit cette langue (`reason` = la langue) | proposez d'écrire, ou une autre langue |
+
+⚠️ **`audio_url` PEUT ÊTRE ABSENT SUR UNE RÉPONSE PAR AILLEURS NORMALE.** Cela
+veut dire que l'archivage n'a pas répondu : la transcription, le plan et l'état
+sont justes, mais la bulle n'aura pas de lecteur. **N'échouez pas** pour cela —
+affichez la bulle avec son texte seul.
+
+---
+
+## 8 bis. 🆕 🧵 LE FIL DE CONVERSATION — il ne s'évapore plus (v4.84.0)
+
+```
+GET /analytics/ai/thread
+  →
+{ "country": "GA",
+  "message_count": 42,            // TOUT ce qui a été dit, même hors fenêtre
+  "updated_at": "2026-10-28T09:12:04Z",
+  "messages": [
+    { "id": "68f0…", "role": "client", "text": "emmène-moi à l'aéroport",
+      "voice_id": "68f0…",
+      "audio_url": "https://files.dira.llc/voice/…/a1b2.m4a",  // RÉÉCOUTABLE
+      "seconds": 7, "at": "2026-10-28T09:12:01Z" },
+    { "id": "68f1…", "role": "assistant", "text": "Voici deux options.",
+      "vertical": "vtc", "plan": { … }, "at": "2026-10-28T09:12:03Z" },
+    { "id": "68f2…", "role": "support", "text": "Course commandée depuis votre message.",
+      "ref_kind": "ride", "ref_id": "68f3…", "at": "2026-10-28T09:19:40Z" }
+  ] }
+```
+
+**Les échanges avec l'assistant étaient volatils** : la réponse partait, rien
+n'était gardé, et fermer l'application perdait tout. Ils sont désormais
+**écrits**, par compte et **par pays**. Appelez cette route à l'ouverture de la
+boîte de dialogue : c'est l'historique que la personne s'attend à retrouver.
+
+### Les trois rôles
+
+| `role` | Qui parle | Ce que vous montrez |
+|---|---|---|
+| `client` | la personne | sa bulle. ⚠️ Avec un **lecteur audio** quand `audio_url` est là |
+| `assistant` | l'IA | sa bulle, et le `plan` s'il y en a un |
+| `support` | **un être humain** de chez nous | ⚠️ une bulle **visiblement différente** |
+
+⚠️⚠️ **LE RÔLE `support` N'EST PAS DÉGUISÉ EN ASSISTANT, ET VOUS NE DEVEZ PAS LE
+DÉGUISER NON PLUS.** Quand quelqu'un a repris la main — parce que l'IA n'avait
+pas compris —, la personne doit le **voir**. Lui laisser croire que « l'IA » a
+commandé pour elle rendrait inexplicable le jour où l'IA ne le fait pas, et
+transformerait un service rendu en comportement erratique.
+
+### ⚠️ UNE FENÊTRE, PAS UN HISTORIQUE
+
+La route rend les **200 derniers** messages ; `message_count` dit combien il y
+en a eu **en tout**. Quand les deux diffèrent, écrivez-le (« les 200 derniers
+messages ») plutôt que de laisser croire que c'est tout.
+
+> La borne n'est pas une économie : un document de base de données plafonne, et
+> un fil sans limite finit par refuser l'écriture qui l'aurait sauvé — la
+> personne perdrait alors **tout**, au lieu de perdre le plus ancien.
+
+### ⚠️ UN FIL PAR PAYS
+
+Un voyageur qui commande à Lomé puis à Dakar a **deux** fils, et cette route
+rend celui du pays de la requête (`X-Dira-Country`). Ses deux histoires ne se
+mêlent pas, et l'exploitation d'un pays ne lit que la sienne. Ne mettez donc
+pas en cache un fil au-delà d'un changement de pays.
+
+### Ce que la route N'EST PAS
+
+- **Elle n'envoie rien.** On écrit avec `POST /analytics/ai/chat` (texte) ou
+  `POST /analytics/ai/voice` (vocal) ; chacun ajoute les deux tours au fil tout
+  seul, et vous n'avez **rien** à pousser vous-même.
+- **Elle ne pagine pas**, et n'a pas de curseur : la fenêtre est la réponse.
+- **Elle ne porte aucune liste de courses ni de commandes.** Un message peut
+  nommer celle qui en est née (`ref_kind` / `ref_id`) ; l'historique des
+  activités est une autre route.
 
 ---
 
@@ -1107,7 +1296,7 @@ commande ou une course. Ne devinez pas le métier d'après la clé ; lisez
 | `503 otp_delivery_failed` | **rien n'a été consommé** : redemander tout de suite est légitime |
 | `403 otp_not_available` | ce compte se connecte par mot de passe — nommer l'application à ouvrir |
 
-**Le combiné (§8, §9)**
+**Le combiné (§8, §8 bis, §9)**
 
 | Code | Geste |
 |---|---|
@@ -1115,6 +1304,11 @@ commande ou une course. Ne devinez pas le métier d'après la clé ; lisez
 | `429 ai_quota_reached` · `429 ai_budget_reached` | proposer la composition à la main |
 | `503 verticals_unavailable` | aucun métier joignable — réessayer |
 | `502 vertical_unreachable` | ce métier ne répond pas — réessayer |
+| `413 audio_too_large` | **le vocal** dépasse 2 Mio — recommencer plus court |
+| `422 unknown_language` | code de langue inconnu : un bogue d'application |
+| `502 transcription_failed` | ⚠️ **l'audio est gardé** — dire « nous n'avons pas entendu », le support peut reprendre |
+| `503 transcription_unavailable` | masquer le **bouton micro** (le texte marche) |
+| `503 language_not_served` | `reason` = la langue — proposer d'écrire, ou une autre langue |
 
 **Les métiers** : leurs refus sont décrits dans leurs specs, et ils arrivent
 **tels quels** à travers l'assistant combiné — traitez-les comme s'ils venaient
@@ -1129,6 +1323,12 @@ du métier.
 - [ ] Porte par code : compte à rebours rendu depuis `expires_at`, « renvoyer » gouverné par `resend_after`, nom demandé **seulement** si `created: true`, `dev_code` jamais nécessaire au fonctionnement.
 - [ ] Verrou : `app_lock` relu à **chaque** réponse qui le porte (y compris le rafraîchissement) et appliqué à chaud ; code de secours toujours possible ; au-delà de `max_attempts`, **déconnexion** — jamais blocage.
 - [ ] `X-Dira-Country` sur **chaque** requête ; monnaie formatée depuis le pays de l'**opération**.
+- [ ] **Le vocal** (§8) : les **quatre** `state` traités — `understood`, `ordered`, `needs_support`, `failed` —, et jamais « c'est commandé » déduit de la présence d'un `plan`.
+- [ ] `ordered.kind` ouvre le bon suivi (`ride` → la course, `order` → la commande).
+- [ ] 2 Mio au plus, en opus/AAC/M4A/3GP — **pas de WAV** ; `audio_url` absent n'est pas une erreur.
+- [ ] **Le fil** (§8 bis) rechargé à l'ouverture de la boîte de dialogue, et **vidé au changement de pays**.
+- [ ] Une bulle `client` avec `audio_url` porte un **lecteur**, et une bulle `support` est **visiblement humaine**.
+- [ ] `message_count > messages.length` écrit « les 200 derniers messages », et ne laisse pas croire que c'est tout.
 - [ ] `X-Request-ID` affiché sur les écrans d'erreur et joint aux rapports.
 - [ ] Fond de carte : choix de la personne → pays où elle opère → `dira` ; la carte **renaît** au changement.
 - [ ] `vertical` envoyé depuis un onglet, **omis** depuis l'accueil.
@@ -1144,6 +1344,58 @@ du métier.
 ---
 
 ## 15. Journal
+
+### 4.84.0 — 28 octobre 2026
+
+🎙️ **LE VOCAL EST GARDÉ, LE FIL NE S'ÉVAPORE PLUS, ET LE SUPPORT PEUT REPRENDRE
+LA MAIN** (§8, §8 bis).
+
+```
+POST /analytics/ai/voice    multipart : file, language?, origin?, vertical?
+    → { voice_id, audio_url, seconds, text, language, vertical, reply, plan,
+        confidence, routed_by, state, ordered? }
+
+GET  /analytics/ai/thread
+    → { country, message_count, updated_at, messages[] }
+```
+
+Trois choses qui n'en font qu'une :
+
+1. **Les échanges étaient volatils.** `POST /analytics/ai/chat` répondait et
+   n'écrivait rien : fermer l'application perdait tout, et le support qui
+   rappelait redemandait ce que la personne venait d'expliquer. Les deux tours
+   sont désormais écrits, par compte et par pays.
+2. **Le vocal était transcrit puis jeté.** L'audio est maintenant **gardé** et
+   **réécoutable** (`audio_url`, porté par la bulle elle-même) : la
+   transcription se trompe — « riz sauce » devient « riz gras » — et sans le
+   fichier, un litige se tranche sur la parole de l'un contre celle de l'autre.
+3. **Un humain peut reprendre la main.** Un message de rôle `support` dit qu'il
+   l'a fait, et ⚠️ **il ne doit pas être déguisé en assistant** : laisser croire
+   que « l'IA » a commandé rendrait inexplicable le jour où elle ne le fait pas.
+
+⚠️⚠️ **ET UN RENVERSEMENT, DIT EN TOUTES LETTRES.** Cette spécification disait
+depuis la v4.43.0 : « un vocal n'est jamais exécuté directement ». Elle reste
+vraie **par défaut** — rien ne change si l'exploitation ne touche à rien — mais
+un **seuil de confiance** peut désormais être posé dans la console, et alors la
+commande part toute seule. `state` dit ce qui a été fait : `understood`
+(confirmez, comme toujours), `ordered` (c'est parti — `ordered.kind` / `.id`),
+`needs_support` (« nous vous rappelons »), `failed`.
+
+⚠️ **TRAITEZ LES QUATRE ÉTATS MAINTENANT**, même si vous ne verrez
+qu'`understood` : le seuil est un **réglage**, pas un déploiement, et `ordered`
+peut arriver du jour au lendemain sans nouvelle version d'application.
+
+⚠️ **NE DÉDUISEZ JAMAIS « c'est commandé » DE LA PRÉSENCE D'UN `plan`** : un
+`plan` arrive dans les quatre cas. Seul `state` tranche.
+
+⚠️ **UNE COMMANDE NÉE D'UN VOCAL EST TOUJOURS EN ESPÈCES**, jamais le
+portefeuille : la personne paie à l'arrivée et peut refuser à la porte. Au
+portefeuille, il faudrait un remboursement pour réparer ce qu'un « non merci »
+règle.
+
+Le fichier : **2 Mio** au plus, en `m4a` / `aac` / `mp3` / `ogg` / `opus` /
+`webm` / `3gp` — **le WAV est refusé** (trente secondes pèsent cinq mégaoctets).
+C'est déjà ce qu'Android et iOS produisent nativement.
 
 ### 4.59.0 — 9 octobre 2026
 
