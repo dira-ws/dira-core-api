@@ -339,3 +339,43 @@ func TestTheCatalogueKeysComeBackSorted(t *testing.T) {
 		assert.Contains(t, keys, f.Key)
 	}
 }
+
+// ⚠️⚠️ LE REFUS EST AU PAQUET PARTAGÉ, ET IL DOIT Y RESTER.
+//
+// Trois services refusent cette même chose : le socle pour le portefeuille et
+// les codes promo, les courses pour la location et le partage de trajet, la
+// livraison pour le fil des plats. Il a d'abord vécu dans
+// `internal/appconfig` — hors d'atteinte des verticales, qui s'apprêtaient
+// donc à le recopier. Une règle écrite deux fois est perdue une fois : une
+// application qui sait cacher un bouton sur `feature_unavailable_in_edition`
+// ne saurait rien faire d'un `feature_disabled` qu'une verticale aurait
+// inventé de son côté.
+//
+// ⚠️ ET LE CODE EST CE QUE LES APPLICATIONS LISENT : le changer casse des
+// écrans déjà livrés. Il est figé ici, pas dans un commentaire.
+func TestTheRefusalIsSharedAndNamed(t *testing.T) {
+	err := Refuse(FeatureRental)
+	require.Error(t, err)
+	assert.Equal(t, "feature_unavailable_in_edition", err.Code,
+		"les applications cachent leurs boutons sur ce code précis")
+	assert.Equal(t, 403, err.HTTPStatus)
+	assert.Equal(t, FeatureRental, err.Meta["feature"],
+		"sans la fonction nommée, l'écran ne sait pas laquelle cacher")
+
+	// ⚠️ ET LA PHRASE NE PARLE NI D'ÉDITION NI DE PAYS : la personne n'a qu'une
+	// application, elle ne sait pas qu'il en existe deux, et elle ne peut rien
+	// faire de cette information. Lite la LIT À VOIX HAUTE (#239), donc elle
+	// reste courte.
+	assert.NotContains(t, err.Message, "lite")
+	assert.NotContains(t, err.Message, "edition")
+	assert.NotContains(t, err.Message, "country")
+}
+
+// Et nommer deux fonctions différentes donne deux refus différents : le `Meta`
+// ne doit pas être partagé entre les appels.
+func TestTwoRefusalsDoNotShareTheirFeature(t *testing.T) {
+	a, b := Refuse(FeatureRental), Refuse(FeatureRaffle)
+	assert.Equal(t, FeatureRental, a.Meta["feature"])
+	assert.Equal(t, FeatureRaffle, b.Meta["feature"],
+		"le second refus a écrasé le premier : un `Meta` partagé")
+}

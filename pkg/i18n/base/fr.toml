@@ -111,3 +111,16 @@ other = "Vous ne pouvez signaler qu'un message que vous avez reçu"
 
 [errors.message_not_found]
 other = "Ce message n'existe pas"
+
+# ⚠️⚠️ LA PHRASE D'UNE FONCTION RETIRÉE EST DANS LA BASE, parce que TROIS
+# services la lèvent : le socle, les courses, la livraison. Rangée dans le
+# fichier d'un seul, les deux autres l'auraient servie en anglais — et Dira
+# Lite la LIT À VOIX HAUTE à quelqu'un qui ne lit pas. Un refus prononcé dans
+# une langue qu'on ne parle pas est un silence.
+#
+# ⚠️ ET ELLE NE PARLE NI D'ÉDITION NI DE PAYS : la personne n'a qu'une
+# application, elle ne sait pas qu'il en existe deux, et elle ne peut rien
+# faire de cette information. Courte, pour qu'une synthèse vocale la finisse
+# avant de perdre son auditeur.
+[errors.feature_unavailable_in_edition]
+other = "Cette fonction n'est pas disponible dans votre application"
