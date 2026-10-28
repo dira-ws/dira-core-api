@@ -209,6 +209,91 @@ installé continue de recevoir ses notifications sans rien changer.
 
 ---
 
+## 4 ter. 🆕 ⚙️ CE QUE VOTRE APPLICATION VOIT — `GET /app/config` (v4.86.0)
+
+```
+GET /app/config          # SANS jeton — lu AVANT l'écran de connexion
+  →
+{ "edition": "lite", "country": "TD",
+  "features": {
+    "scheduled_rides": false, "rental": false, "pool": false,
+    "multi_car": false, "trip_share": true, "subscriptions": false,
+    "promo_codes": false, "challenges": false, "raffle": false,
+    "banners": false, "feed": true, "assistant": true,
+    "assistant_auto_order": false, "voice_messages": true, "wallet": false
+  },
+  "lists": {
+    "payment_methods": ["cash", "mobile_money"],
+    "vehicle_modes": ["comfort", "eco", "moto"]
+  } }
+```
+
+**Lisez-la une fois à l'ouverture**, gardez-la en mémoire, et **cachez vos
+entrées de menu** sur ce qu'elle dit. C'est ce qui évite de proposer un bouton
+qui échoue — et, pour Lite, d'avoir à lire à voix haute un refus qu'on pouvait
+éviter.
+
+### ⚠️ Pourquoi elle est publique, sans jeton
+
+Vous la lisez **avant** l'écran de connexion : c'est là que vous décidez quels
+menus dessiner. L'enfermer derrière un jeton vous obligerait à afficher
+l'application complète puis à la réduire après connexion — la personne verrait
+des entrées de menu **apparaître puis disparaître**.
+
+Rien ici n'est secret : ce sont les fonctions d'un pays, que n'importe quelle
+application découvre en s'en servant.
+
+### `features` — toutes les clés, y compris celles à `true`
+
+⚠️⚠️ **NE SUPPOSEZ RIEN D'UNE CLÉ ABSENTE.** Nous servons le catalogue
+**entier** à chaque appel, précisément pour que vous n'ayez pas à le connaître.
+Si une clé que vous attendez manque, c'est que votre serveur est plus ancien
+que votre application : traitez-la comme **disponible** (`true`), jamais comme
+coupée — sinon une fonction nouvelle disparaîtrait de vos écrans le jour où le
+serveur l'annonce.
+
+### `lists` — des listes blanches, et une liste absente veut dire « tout »
+
+⚠️ `lists` ne contient que les listes **restreintes**. Une liste absente veut
+dire « tout ce que le métier sert » — ce n'est **jamais** « rien ».
+
+⚠️ **Croisez, ne remplacez pas.** `vehicle_modes` dit ce que vous avez le droit
+de montrer, pas ce qui existe : la liste réelle reste celle de
+`GET /settings/modes` et `GET /classes`. Afficher les clés de `lists`
+telles quelles montrerait des modes que ce pays ne sert pas.
+
+### ⚠️ Les routes existantes appliquent le MÊME filtre
+
+Une application qui ne lit pas `/app/config` ne voit pas pour autant une
+fonction exclue : les routes concernées la refusent. Cette route ne remplace
+donc aucune vérification — elle vous évite de **proposer** ce qui sera refusé.
+
+### Le refus, quand vous le provoquez quand même
+
+```jsonc
+// 403
+{ "error": { "code": "feature_unavailable_in_edition",
+             "message": "Cette fonction n'est pas disponible dans votre application",
+             "meta": { "feature": "scheduled_rides" } } }
+```
+
+⚠️ **Ce n'est PAS un problème de droits** — ne proposez pas de se reconnecter.
+`meta.feature` nomme la fonction : **cachez-la** au prochain démarrage plutôt
+que de reproposer un bouton qui échoue.
+
+⚠️ **La phrase est courte exprès** : Lite la lit à voix haute. Elle ne parle ni
+d'édition ni de pays, délibérément — la personne n'a qu'une application, elle
+ne sait pas qu'il en existe deux, et elle ne peut rien faire de cette
+information.
+
+### ⚠️ Rien n'est coupé par défaut
+
+Un déploiement neuf sert `true` partout et aucune liste : la plateforme se
+comporte **exactement comme avant**. Les restrictions sont posées pays par pays
+et édition par édition depuis la console.
+
+---
+
 ## 5. 🗺️ LE FOND DE CARTE — `basemap`
 
 Les deux métiers affichent des cartes. Le serveur ne répond qu'à **une**
@@ -1429,6 +1514,10 @@ du métier.
 - [ ] **`X-Dira-Edition`** sur **chaque** requête (§4 bis), et `?edition=` sur le WebSocket du suivi.
 - [ ] L'édition **republiée** par le serveur est lue au moins une fois : recevoir `full` en se croyant `lite` veut dire que l'en-tête n'arrive pas.
 - [ ] `POST /me/devices` porte `edition` : sans elle, une notification arrive **deux fois**, dont une dans l'application qui n'a rien commandé.
+- [ ] **`GET /app/config`** lu à l'ouverture (§4 ter), gardé en mémoire, et les menus cachés dessus.
+- [ ] Une clé **absente** de `features` est traitée comme **disponible**, jamais comme coupée.
+- [ ] Les listes de `lists` sont **croisées** avec les listes réelles du métier, jamais affichées telles quelles.
+- [ ] `403 feature_unavailable_in_edition` ne propose **pas** de se reconnecter ; `meta.feature` dit quoi cacher.
 - [ ] **Le vocal** (§8) : les **quatre** `state` traités — `understood`, `ordered`, `needs_support`, `failed` —, et jamais « c'est commandé » déduit de la présence d'un `plan`.
 - [ ] `ordered.kind` ouvre le bon suivi (`ride` → la course, `order` → la commande).
 - [ ] 2 Mio au plus, en opus/AAC/M4A/3GP — **pas de WAV** ; `audio_url` absent n'est pas une erreur.

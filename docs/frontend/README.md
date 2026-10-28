@@ -386,6 +386,37 @@ une fois : recevoir `full` en se croyant `lite` veut dire que l'en-tête
 n'arrive pas (une passerelle qui le filtre, un cache qui le mange) — sinon on
 cherche deux jours pourquoi la configuration n'est pas réduite.
 
+⚙️ **ET CE QUE L'APPLICATION VOIT SE RÈGLE PAR PAYS *ET* PAR ÉDITION** —
+`DIRA-CLIENT.md` §4 ter.
+
+```
+GET /app/config          # SANS jeton, lu AVANT l'écran de connexion
+    → { edition, country, features: {…}, lists: {…} }
+```
+
+Le propriétaire peut retirer de Lite une fonction ou une valeur **qui reste
+disponible dans l'application normale**, sans nouvelle version des
+applications — comme les réglages par pays aujourd'hui.
+
+⚠️ **TOUTES LES CLÉS SONT SERVIES, y compris celles à `true`.** Une clé absente
+veut dire « votre serveur est plus ancien que votre application » : traitez-la
+comme **disponible**, jamais comme coupée — sinon une fonction nouvelle
+disparaîtrait de vos écrans le jour où le serveur l'annonce.
+
+⚠️ **`lists` NE CONTIENT QUE LES LISTES RESTREINTES**, et une liste absente veut
+dire « tout ce que le métier sert », jamais « rien ». **Croisez**, ne remplacez
+pas : `vehicle_modes` dit ce que vous avez le droit de montrer, pas ce qui
+existe.
+
+⚠️ **LES ROUTES EXISTANTES APPLIQUENT LE MÊME FILTRE** : une application qui ne
+lit pas `/app/config` ne voit pas pour autant une fonction exclue. Le refus est
+nommé — `403 feature_unavailable_in_edition`, avec `meta.feature` — et **ce
+n'est pas un problème de droits** : ne proposez pas de se reconnecter, cachez
+la fonction.
+
+⚠️ **ET RIEN N'EST COUPÉ PAR DÉFAUT.** Un déploiement neuf sert `true` partout
+et aucune liste : la plateforme se comporte exactement comme avant.
+
 ⚠️ **ET L'APPAREIL ENREGISTRÉ DIT SON ÉDITION.** Une même personne peut avoir
 les deux applications : sans ce champ, une notification de course arrivait
 **deux fois**, dont une dans l'application qui n'avait rien commandé.

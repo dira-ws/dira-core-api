@@ -752,3 +752,6 @@ other = "A store wallet is read from the merchant app: this service cannot tell 
 
 [errors.unknown_scope]
 other = "This scope is not a vertical of the platform"
+
+[errors.feature_unavailable_in_edition]
+other = "This feature is not available in your app"
