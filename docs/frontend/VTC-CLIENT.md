@@ -1,6 +1,6 @@
 # App CLIENT — COURSES (VTC) — contrat d'API
 
-> **Version 4.86.0** · 29 octobre 2026
+> **Version 4.87.0** · 28 octobre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Courses : `https://api-staging.dira.llc/api/v1/vtc` · Suivi : `wss://tracking-staging.dira.llc`
 
 ---
@@ -351,6 +351,134 @@ session** : la résolution du démarrage suivant peut le changer.
 > déploiement, et l'application ne saura jamais qu'elle a été rangée
 > ailleurs que là où elle croit être. L'en-tête est ce qui rend l'écart
 > visible — dans la réponse.
+
+## 🆕 ⚙️ L'ÉDITION — `X-Dira-Edition` (v4.87.0)
+
+**Dira Lite** est une seconde application passager, pour les zones de faible
+alphabétisation. L'exploitation peut en **retirer** des fonctions ou des
+valeurs qui restent disponibles dans l'application normale — sans nouvelle
+version des applications, exactement comme les réglages par pays.
+
+**Envoyez votre édition dans l'en-tête `X-Dira-Edition`, sur chaque
+requête** — socle, courses, suivi (et `?edition=` sur le WebSocket) :
+
+```
+X-Dira-Edition: lite        # ou `full`
+X-Dira-App-Version: 0.1.0 (26102901)     # facultatif, utile
+X-Dira-Platform: android                 # facultatif
+```
+
+⚠️ **Absent ou inconnu = `full`**, l'application COMPLÈTE. Une faute de frappe
+ne doit pas vous amputer : dégrader vers l'édition réduite ferait disparaître
+des menus sur une erreur d'en-tête.
+
+⚠️ **Le serveur republie l'édition retenue** dans le même en-tête. **Lisez-la
+au moins une fois** : recevoir `full` en se croyant `lite` veut dire que votre
+en-tête n'arrive pas — et vous afficheriez alors l'application entière.
+
+⚠️ **Ce n'est pas une sécurité.** N'importe qui peut écrire
+`X-Dira-Edition: lite` ; l'en-tête sert à **adapter** ce qu'on sert, pas à
+protéger quoi que ce soit.
+
+### Lisez `GET /app/config` au démarrage
+
+```
+GET /app/config          # SOCLE, sans jeton — AVANT l'écran de connexion
+  →
+{ "edition": "lite", "country": "TD",
+  "features": { "rental": false, "pool": false, "multi_car": false,
+                "trip_share": false, "subscriptions": false,
+                "scheduled_rides": true, … },
+  "lists": { "vehicle_modes": ["free"], "vehicle_classes": ["moto", "eco"] } }
+```
+
+Gardez-la en mémoire et **cachez vos entrées de menu dessus**. C'est ce qui
+évite de proposer un bouton qui échoue — et, pour Lite, d'avoir à lire à voix
+haute un refus qu'on pouvait éviter.
+
+⚠️ **Ne supposez rien d'une clé absente de `features`** : le catalogue entier
+est servi à chaque appel. Une clé qui manque veut dire que votre serveur est
+plus ancien que votre application — traitez-la comme **disponible** (`true`),
+jamais comme coupée.
+
+⚠️ **`lists` ne contient que les listes RESTREINTES**, et une liste absente
+veut dire « tout ce que le métier sert » — **jamais** « rien ».
+
+### ⚠️⚠️ Ce que les routes des COURSES filtrent déjà pour vous
+
+Vous n'avez **rien à croiser** : nos routes appliquent le filtre elles-mêmes.
+
+| Route | Ce qu'elle fait dans Lite |
+|---|---|
+| `GET /classes` | ne rend que les **classes** permises, et dans chaque classe, que les **modes** permis |
+| `GET /settings/modes` | sert `enabled: false` sur un mode retiré |
+
+⚠️ **Un mode retiré est ÉTEINT, pas absent.** `rental.enabled: false` est
+exactement la forme que vous lisez déjà pour un pays qui ne loue pas : une
+seule façon de dire la même absence. Un champ **manquant**, lui, veut dire
+« serveur plus ancien », pas « mode coupé ».
+
+⚠️ **L'ordre de nos listes ne change pas.** La classe la moins chère vient
+toujours avant : ce que vous affichez d'abord reste ce que nous proposons
+d'abord.
+
+⚠️ **Et nous ne rendons JAMAIS une liste vide.** Si une liste blanche mal
+saisie ne croisait aucune de nos classes, nous servons le catalogue **entier**
+plutôt qu'une application sans aucune voiture à commander. Vous n'avez donc
+jamais à gérer « zéro véhicule » à cause d'un réglage.
+
+### Les refus, quand vous les provoquez quand même
+
+```jsonc
+// 403
+{ "error": { "code": "feature_unavailable_in_edition",
+             "message": "Cette fonction n'est pas disponible dans votre application",
+             "meta": { "feature": "rental" } } }
+```
+
+Trois routes des courses peuvent le rendre :
+
+| Route | Fonction |
+|---|---|
+| `POST /rides` sur un devis en **location** | `rental` |
+| `POST /rides` sur un devis en **partage** | `pool` |
+| `POST /rides` avec `cars > 1` | `multi_car` |
+| `POST /rides/{id}/share` | `trip_share` |
+| `POST /subscriptions` | `subscriptions` |
+
+⚠️ **Ce n'est PAS un problème de droits** — ne proposez pas de se reconnecter.
+`meta.feature` nomme la fonction : **cachez-la** au prochain démarrage plutôt
+que de reproposer un bouton qui échoue.
+
+⚠️ **La phrase est courte exprès** : Lite la lit à voix haute. Elle ne parle ni
+d'édition ni de pays, délibérément — la personne n'a qu'une application, elle
+ne sait pas qu'il en existe deux, et elle ne peut rien faire de cette
+information.
+
+⚠️ **Et la route refuse même si vous n'avez pas lu `/app/config`.** Cette
+lecture sert à ne pas **proposer** ce qui sera refusé ; elle ne remplace aucune
+vérification. Une version ancienne de l'application, un écran en cache, un
+appel direct : le refus arrive quand même.
+
+⚠️ **Le refus du MODE se dit avant celui du nombre de voitures.** Si vous
+demandez trois locations dans une édition qui n'a ni l'une ni l'autre, le refus
+parle de la **location** — ce que la personne a choisi à l'écran. Ne la faites
+pas repasser à une voiture pour découvrir ensuite que la location non plus
+n'est pas là.
+
+### ⚠️ Deux filtres qui se cumulent, et le plus restrictif gagne
+
+Le **pays** dit ce que Dira vend ici ; l'**édition** dit ce que CETTE
+application a le droit de montrer. Un mode que le pays n'ouvre pas reste fermé
+quoi qu'on règle par édition — on ne rouvre pas un marché par un réglage
+d'application.
+
+### ⚠️ Rien n'est coupé par défaut
+
+Un déploiement neuf sert tout, à tout le monde : l'application normale ne perd
+**rien** tant que personne n'a explicitement restreint quelque chose.
+
+---
 
 ## 🔒 LE VERROU DE L'APPLICATION — `app_lock` (v4.46.0)
 

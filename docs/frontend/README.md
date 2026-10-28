@@ -1,6 +1,6 @@
 # Specs frontend — par rôle
 
-> **Version 4.86.0** · 29 octobre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics`
+> **Version 4.87.0** · 28 octobre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics`
 
 **Cinq** documents, un par application. Chacun est **autonome** : tout ce qu'un frontend doit savoir pour son rôle, sans avoir à ouvrir les vingt specs de modules.
 
@@ -356,7 +356,57 @@ Chaque document porte la même version en en-tête, et son propre journal des ch
 
 ## Journal
 
-### 4.86.0 — 29 octobre 2026
+### 4.87.0 — 28 octobre 2026
+
+⚙️ **DIRA LITE : LES COURSES FILTRENT CE QUE L'ÉDITION A LE DROIT DE VOIR** —
+`VTC-CLIENT.md` §🆕 L'ÉDITION.
+
+Le serveur reconnaissait l'édition depuis 4.86.0 ; les routes des courses
+l'appliquent maintenant.
+
+```
+GET /classes            → les classes permises, et dans chacune les modes permis
+GET /settings/modes     → `enabled: false` sur un mode retiré
+```
+
+⚠️ **Vous n'avez RIEN à croiser** : les routes appliquent le filtre
+elles-mêmes. `GET /app/config` vous sert à ne pas **proposer** ce qui sera
+refusé, pas à filtrer vous-mêmes.
+
+⚠️ **Un mode retiré est ÉTEINT, pas absent** — `enabled: false`, exactement la
+forme que vous lisez déjà pour un pays qui ne loue pas. Une clé **manquante**
+veut dire « serveur plus ancien », pas « mode coupé ».
+
+⚠️ **L'ordre de nos listes ne change pas**, et **une liste n'est JAMAIS vide** :
+si une liste blanche mal saisie ne croisait aucune de nos classes, nous servons
+le catalogue entier plutôt qu'une application sans aucune voiture à commander.
+
+Cinq routes peuvent refuser `403 feature_unavailable_in_edition`, avec
+`meta.feature` :
+
+| Route | Fonction |
+|---|---|
+| `POST /rides` (devis en location) | `rental` |
+| `POST /rides` (devis en partage) | `pool` |
+| `POST /rides` avec `cars > 1` | `multi_car` |
+| `POST /rides/{id}/share` | `trip_share` |
+| `POST /subscriptions` | `subscriptions` |
+
+⚠️ **La route refuse même si vous n'avez pas lu `/app/config`** : une version
+ancienne, un écran en cache, un appel direct.
+
+⚠️ **Le refus du MODE se dit avant celui du nombre de voitures** : trois
+locations dans une édition qui n'a ni l'une ni l'autre s'entendent refuser la
+**location** — ce que la personne a choisi à l'écran.
+
+⚠️ **Deux filtres se cumulent, et le plus restrictif gagne** : le pays dit ce
+que Dira vend ici, l'édition dit ce que cette application a le droit de
+montrer. On ne rouvre pas un marché par un réglage d'application.
+
+⚠️ **Rien n'est coupé par défaut** : l'application normale ne perd rien tant
+que personne n'a explicitement restreint.
+
+### 4.86.0 — 28 octobre 2026
 
 📱 **DIRA LITE : LE SERVEUR RECONNAÎT L'ÉDITION DE L'APPLICATION** —
 `DIRA-CLIENT.md` §4 bis.
