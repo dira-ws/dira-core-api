@@ -2,7 +2,6 @@ package appconfig
 
 import (
 	"context"
-	"net/http"
 	"strings"
 	"sync"
 	"time"
@@ -12,26 +11,6 @@ import (
 	"github.com/kgtech-org/dira-core-api/pkg/country"
 	"github.com/kgtech-org/dira-core-api/pkg/edition"
 )
-
-// ErrFeatureUnavailable refuse une action vers une fonction retirée de cette
-// édition ou de ce pays.
-//
-// ⚠️⚠️ UN REFUS NOMMÉ, et il faut qu'il le reste. « 403 » tout court se lit
-// comme un problème de droits : l'application proposerait de se reconnecter,
-// et la personne appellerait le support pour un compte qui n'a rien. Le code
-// dit la vraie raison — cette fonction n'existe pas dans cette application —
-// et `meta.feature` dit laquelle, pour que l'écran la cache au prochain
-// démarrage plutôt que de reproposer un bouton qui échoue.
-//
-// ⚠️ ET LA PHRASE EST COURTE EXPRÈS : Lite la LIT À VOIX HAUTE (#239). Une
-// phrase de trois lignes, lue par une synthèse, perd la personne avant la fin.
-var ErrFeatureUnavailable = apperr.New("feature_unavailable_in_edition",
-	"this feature is not available in this app", http.StatusForbidden)
-
-// Refuse compose le refus d'une fonction, en nommant laquelle.
-func Refuse(feature string) *apperr.Error {
-	return ErrFeatureUnavailable.WithMeta(map[string]any{"feature": feature})
-}
 
 // store est ce que le service demande à son dépôt.
 type store interface {
@@ -116,7 +95,7 @@ func (s *Service) Require(ctx context.Context, feature string) error {
 	if s.Allows(ctx, feature) {
 		return nil
 	}
-	return Refuse(feature)
+	return appconfig.Refuse(feature)
 }
 
 // AllowedIn réduit une liste servie par un module à ce que cette requête a le
