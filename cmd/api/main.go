@@ -28,6 +28,7 @@ import (
 	"github.com/redis/go-redis/v9"
 
 	"github.com/kgtech-org/dira-core-api/api"
+	"github.com/kgtech-org/dira-core-api/internal/appconfig"
 	"github.com/kgtech-org/dira-core-api/internal/auditlog"
 	"github.com/kgtech-org/dira-core-api/internal/callback"
 	"github.com/kgtech-org/dira-core-api/internal/challenge"
@@ -439,6 +440,12 @@ func run(logger *slog.Logger) error {
 	// LES PANNES : capturées ici, rangées groupées, servies à la console.
 	// ⚠️ La capture est ASYNCHRONE — une supervision qui ralentit ce qu'elle
 	// observe finit par être coupée, et on devient aveugle pour de bon.
+	// LE REGISTRE DES FONCTIONS PAR PAYS ET PAR ÉDITION — voir
+	// `internal/appconfig`. Construit tôt : les routes qui filtrent une liste
+	// le consultent, et une dépendance posée après leur montage serait nulle.
+	appConfigRepo := appconfig.NewRepository(mongo)
+	appConfigSvc := appconfig.NewService(appConfigRepo)
+
 	faultRepo := faults.NewRepository(mongo)
 	faultSvc := faults.NewService(ctx, faultRepo, version)
 	metrics.SetSink(faultSvc)
@@ -854,6 +861,12 @@ func run(logger *slog.Logger) error {
 		// LE BOUTON D'ALERTE : `POST /sos` pour qui est en danger,
 		// `/admin/sos` pour l'exploitation qui doit le voir dans la seconde.
 		sos.NewHandler(sosSvc).Mount(r, authMW)
+		// CE QU'UNE APPLICATION VOIT — par pays ET par édition (Dira Lite).
+		//
+		// ⚠️ Le registre est VIDE par défaut, et un registre vide ne restreint
+		// rien : la plateforme se comporte exactement comme avant jusqu'à ce
+		// que quelqu'un coupe une fonction depuis la console.
+		appconfig.NewHandler(appConfigSvc, appConfigRepo).Mount(r, authMW)
 		// LES OBJECTIFS : `/me/challenges` pour qui joue, `/admin/challenges`
 		// pour l'exploitation qui les écrit et les lance.
 		challenge.NewHandler(challengeSvc).Mount(r, authMW)

@@ -850,3 +850,16 @@ other = "Le portefeuille d'un point de vente se lit depuis l'application marchan
 
 [errors.unknown_scope]
 other = "Ce périmètre n'est pas une verticale de la plateforme"
+
+# ⚠️⚠️ LE REFUS D'UNE FONCTION RETIRÉE DE CETTE ÉDITION — Dira Lite.
+#
+# COURTE EXPRÈS : Lite la LIT À VOIX HAUTE. Une phrase de trois lignes, passée
+# par une synthèse vocale, perd la personne avant la fin.
+#
+# ⚠️ ET ELLE NE PARLE NI D'ÉDITION NI DE PAYS. « Cette fonction n'est pas
+# disponible dans l'édition Lite au Tchad » est exact et inutile : la personne
+# n'a qu'une application, elle ne sait pas qu'il en existe deux, et elle ne
+# peut rien faire de cette information. `meta.feature` dit laquelle à
+# l'application, qui la cachera au prochain démarrage.
+[errors.feature_unavailable_in_edition]
+other = "Cette fonction n'est pas disponible dans votre application"
