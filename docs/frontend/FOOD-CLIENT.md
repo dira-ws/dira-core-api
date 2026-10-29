@@ -1,6 +1,6 @@
 # App CLIENT — LIVRAISON — contrat d'API
 
-> **Version 4.91.0** · 29 octobre 2026
+> **Version 4.92.0** · 29 octobre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Livraison : `https://api-staging.dira.llc/api/v1/food` · Suivi : `wss://tracking-staging.dira.llc`
 
 
@@ -1363,7 +1363,8 @@ qu'il faut.
     "id": "6ab…",                       // ← la MISSION du suivi
     "tracking_mission_id": "6ab…",      // présent quand il diffère de `id`
     "status": "accepted",
-    "planned_route": [[1.2255, 6.1319], [1.2301, 6.1402]],
+    "planned_route": [[1.2255, 6.1319], [1.2301, 6.1402]],   // les ARRÊTS, pas un chemin
+    "planned_path": "ihkFqtkA_seK_seK…",                     // le TRACÉ routier (v4.92.0)
     "planned_distance_m": 3400, "planned_duration_s": 720,
     "courier": { "name": "Koffi M.", "phone": "+228…", "vehicle": "Haojue HJ125 · TG-3421-AB",
                  "rating_avg": 4.8, "rating_count": 126 } } }
@@ -1443,8 +1444,30 @@ mais l'état a pu changer pendant la coupure.
 - **La première position peut tarder** *(moins souvent depuis la v4.28.0 :
   l'accueil la porte quand elle est connue)* : le téléphone du livreur émet
   toutes les quelques secondes, et il vient peut-être de démarrer. En
-  attendant, centrez sur la **boutique** et tracez `planned_route` — le
+  attendant, centrez sur la **boutique** et tracez **`planned_path`** — le
   client voit le chemin prévu avant de voir la moto.
+
+  ⚠️⚠️ **CE DOCUMENT DISAIT « TRACEZ `planned_route` », ET C'ÉTAIT FAUX**
+  (corrigé en v4.92.0). `planned_route` n'est que la **suite des arrêts** —
+  collectes dans l'ordre de passage, puis le dépôt. Dessinée telle quelle,
+  c'est **une ligne droite à travers la ville**, en trait plein, présentée
+  comme le chemin. Les deux apps l'ont fait, parce que le contrat le demandait.
+
+  | Champ | Ce que c'est | Ce qu'on en fait |
+  |---|---|---|
+  | `planned_route` | les **arrêts**, `[[lng, lat], …]` | centrer la carte, poser les épingles |
+  | `planned_path` | le **tracé routier**, polyline encodée (précision 1e-5, comme `traveled_polyline`) | **dessiner le trait** |
+
+  ⚠️ **`planned_path` est absent quand le SIG n'a pas répondu.** Dessinez alors
+  une esquisse **dite comme telle** (pointillé), ou rien — jamais un trait
+  plein entre les arrêts. On ne doute pas d'un trait plein.
+
+  ⚠️ **Et `planned_distance_m` ne vaut PAS la longueur de `planned_path`.**
+  Elle est mesurée **à vol d'oiseau** entre les arrêts, et c'est elle qui
+  **tarifie** : la faire dépendre du réseau routier ferait varier le prix
+  d'une commande selon la disponibilité d'un service tiers. Ne les comparez
+  pas, et n'en déduisez pas un écart à signaler. `planned_duration_s`, elle,
+  vient bien du réseau routier.
 - **Interpolez** entre deux trames, sinon le marqueur saute. `heading`
   oriente la flèche ; `heading_source` dit si le cap est mesuré (`gps`) ou
   déduit — un cap déduit à l'arrêt tourne dans le vide, ne l'animez pas.

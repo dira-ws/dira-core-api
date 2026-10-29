@@ -1,6 +1,6 @@
 # Specs frontend — par rôle
 
-> **Version 4.91.0** · 29 octobre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics`
+> **Version 4.92.0** · 29 octobre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics`
 
 **Cinq** documents, un par application. Chacun est **autonome** : tout ce qu'un frontend doit savoir pour son rôle, sans avoir à ouvrir les vingt specs de modules.
 
@@ -355,6 +355,43 @@ Chaque document porte la même version en en-tête, et son propre journal des ch
 - [ ] ⚠️ **`TRACKING_JWT_SECRET` renseigné dans chaque environnement déployé.** Vide, l'authentification du service de suivi est **désactivée** : n'importe qui connaissant un `delivery_id` suit la course. Le secret doit valoir **exactement** le `JWT_SECRET` de `dira-food-api`.
 
 ## Journal
+
+### 4.92.0 — 29 octobre 2026
+
+🛣️ **`planned_route` N'EST PAS UNE ROUTE — ET CE DOCUMENT DISAIT DE LA TRACER**
+— `FOOD-CLIENT.md` § suivi, `FOOD-DELIVERY.md` § tournée (core#230).
+
+```
+GET /orders/{id} → delivery.planned_path   ← le TRACÉ routier, polyline encodée
+                   delivery.planned_route  ← les ARRÊTS, inchangé
+```
+
+⚠️⚠️ **LE CONTRAT ÉTAIT LA CAUSE DU DÉFAUT.** Il disait « centrez sur la
+boutique et **tracez `planned_route`** », et les deux apps l'ont fait.
+`planned_route` n'est que la **suite des arrêts** — collectes dans l'ordre de
+passage, puis le dépôt. Dessinée telle quelle : **une ligne droite à travers la
+ville**, en trait plein, présentée comme le chemin.
+
+| Champ | Ce que c'est | Ce qu'on en fait |
+|---|---|---|
+| `planned_route` | les **arrêts** | cadrer la carte, poser les épingles |
+| `planned_path` | le **tracé routier** (polyline 1e-5, comme `traveled_polyline`) | **dessiner le trait** |
+
+⚠️ **`planned_path` est absent quand le SIG n'a pas répondu** : esquisse **dite
+comme telle** (pointillé), ou rien. Jamais un trait plein entre les arrêts — on
+ne doute pas d'un trait plein.
+
+⚠️ **Il est RECALCULÉ quand l'ordre des arrêts change** (à l'acceptation, les
+collectes sont réordonnées depuis la position du livreur). Relisez-le après
+`accept` ; et si le SIG se tait à ce moment-là, le tracé est **effacé** plutôt
+que laissé périmé.
+
+⚠️⚠️ **ET `planned_distance_m` NE VAUT PAS LA LONGUEUR DE `planned_path`.** Elle
+est mesurée **à vol d'oiseau** entre les arrêts, et c'est elle qui **tarifie** —
+le prix d'une commande et le droit d'entrée du livreur. La faire dépendre du
+réseau routier ferait varier un prix selon la disponibilité d'un service tiers.
+Ne les comparez pas, et n'en déduisez pas un écart à signaler.
+`planned_duration_s`, elle, vient bien du réseau routier.
 
 ### 4.91.0 — 29 octobre 2026
 

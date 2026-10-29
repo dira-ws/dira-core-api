@@ -1,6 +1,6 @@
 # App LIVREUR — LIVRAISON — contrat d'API
 
-> **Version 4.91.0** · 29 octobre 2026
+> **Version 4.92.0** · 29 octobre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Livraison : `https://api-staging.dira.llc/api/v1/food` · Suivi : `wss://tracking-staging.dira.llc` · SIG : `https://maps.dira.llc/api`
 
 
@@ -1353,6 +1353,31 @@ Les `pickups` sont **omis des listes** : ils n'arrivent qu'au détail. Nombre de
 ### Combien de temps — v1.3.0
 
 `planned_duration_s` est la durée de la tournée **par le réseau routier** (dira-maps), et non à vol d'oiseau. C'est ce qu'il faut afficher à côté de `planned_distance_m` : cinq kilomètres ne veulent pas dire la même chose selon qu'on traverse le marché ou qu'on longe le boulevard.
+
+### 🆕 Dessiner la tournée : `planned_path`, et PAS les arrêts (v4.92.0)
+
+⚠️⚠️ **`planned_route` N'EST PAS UNE ROUTE** — c'est la **suite des arrêts**,
+collectes dans l'ordre de passage puis le dépôt. Dessinée telle quelle, c'est
+une ligne droite à travers la ville présentée comme le chemin. L'aperçu d'une
+course le faisait.
+
+| Champ | Ce que c'est | Ce qu'on en fait |
+|---|---|---|
+| `planned_route` | les **arrêts**, `[[lng, lat], …]` | cadrer la carte, poser les épingles numérotées |
+| `planned_path` | le **tracé routier**, polyline encodée (précision 1e-5, comme `traveled_polyline`) | **dessiner le trait** |
+
+⚠️ **Absent quand le SIG n'a pas répondu** : esquisse **dite comme telle**
+(pointillé), ou rien. Jamais un trait plein entre les arrêts.
+
+⚠️ **Le tracé est RECALCULÉ quand l'ordre des arrêts change** — à
+l'acceptation, les collectes sont réordonnées depuis votre position. Relisez
+`planned_path` après `POST /deliveries/{id}/accept` ; un tracé gardé en cache
+montrerait un chemin qui ne passe plus par où vous allez.
+
+⚠️ **Et `planned_distance_m` ne vaut PAS la longueur de `planned_path`.** Elle
+est mesurée **à vol d'oiseau** entre les arrêts, et c'est elle qui fixe votre
+**droit d'entrée** (`token_cost`) : la faire dépendre du réseau routier ferait
+varier le coût d'une course selon la disponibilité d'un service tiers.
 
 Elle est calculée **une fois, à la création**, et figée sur la course : la redemander à chaque affichage ferait un appel externe par ouverture d'écran, et la durée changerait sous les yeux du livreur sans qu'il ait bougé.
 
