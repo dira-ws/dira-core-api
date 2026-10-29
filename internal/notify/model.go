@@ -94,7 +94,9 @@ const (
 	KeyOrderDelivered = "order_delivered"
 	KeyOrderCancelled = "order_cancelled"
 	KeyChatMessage    = "chat_message"
-	KeyDriverCall     = "driver_call"
+	// KeyChatVoiceMessage : un vocal SANS transcription — voir son gabarit.
+	KeyChatVoiceMessage = "chat_voice_message"
+	KeyDriverCall       = "driver_call"
 	// KeyCallRing est le texte que l'APPEL affiche sur un iPhone.
 	//
 	// ⚠️ IL N'EXISTE QUE POUR iOS, et il n'écrit RIEN dans la boîte de
@@ -468,6 +470,27 @@ var defaults = map[string]Template{
 		Locales: map[string]Text{
 			LocaleFR: {Title: "Nouveau message", Body: "[body]"},
 			LocaleEN: {Title: "New message", Body: "[body]"},
+		},
+	},
+	KeyChatVoiceMessage: {
+		Key: KeyChatVoiceMessage,
+		// ⚠️⚠️ IL FAUT UN GABARIT À LUI, ET PAS `chat_message`. Celui-ci met
+		// `[body]` dans le corps : sur un vocal dont la TRANSCRIPTION A
+		// ÉCHOUÉ, il n'y a rien à mettre, et la notification arrivait
+		// « Nouveau message » suivi de rien — sur l'écran verrouillé de
+		// quelqu'un qui attend justement de savoir s'il doit écouter.
+		//
+		// ⚠️ ET LA DURÉE N'Y EST PAS NON PLUS, exprès : elle est dans les
+		// DONNÉES de la poussée (`seconds`), que l'application lit pour
+		// dessiner la barre. L'écrire dans la phrase (« vocal de 7 s ») aurait
+		// obligé à la traduire au pluriel dans douze langues pour une
+		// information que l'écran affiche déjà.
+		Description: "Message VOCAL reçu dans une conversation, sans transcription. " +
+			"Ne nomme JAMAIS l'expéditeur, comme `chat_message`.",
+		Enabled: true,
+		Locales: map[string]Text{
+			LocaleFR: {Title: "Nouveau message", Body: "Message vocal"},
+			LocaleEN: {Title: "New message", Body: "Voice message"},
 		},
 	},
 	KeyDriverCall: {
@@ -1140,7 +1163,21 @@ var provided = map[string][]string{
 	// livreur se parlent sans échanger leurs coordonnées : offrir un
 	// `sender_name` ici défairait cela sur l'écran verrouillé.
 	KeyChatMessage: {"body"},
-	KeyDriverCall:  {"distance_km", "token_cost", "cash_line"},
+	// ⚠️ `seconds` EST DÉCLARÉE MAIS N'EST PAS DANS LE GABARIT PAR DÉFAUT, et
+	// les deux décisions tiennent ensemble :
+	//
+	//   - DÉCLARÉE, pour que l'exploitation puisse écrire « Message vocal de
+	//     [seconds] s » si elle le veut. Sans déclaration, l'enregistrement
+	//     REFUSERAIT cette variable, et personne ne saurait pourquoi ;
+	//   - ABSENTE DU DÉFAUT, parce qu'une durée dans une phrase demande un
+	//     pluriel juste dans douze langues, pour une information que l'écran
+	//     affiche déjà à partir des données de la poussée.
+	//
+	// ⚠️ ET PAS `body` : un vocal arrive ici PARCE QUE sa transcription a
+	// échoué. Déclarer un corps qu'on ne remplira jamais ferait écrire à
+	// l'exploitation un gabarit qui rend du vide.
+	KeyChatVoiceMessage: {"seconds"},
+	KeyDriverCall:       {"distance_km", "token_cost", "cash_line"},
 	// L'appel sur iOS : le temps qu'il reste pour répondre, et rien d'autre.
 	// Le prix et la distance ne voyagent pas sur le signal du suivi — les
 	// inventer ici afficherait un montant que personne n'a calculé.
