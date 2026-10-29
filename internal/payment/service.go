@@ -229,7 +229,7 @@ func (s *Service) Initiate(ctx context.Context, userID string, req InitiatePayme
 		RefID:    refID,
 		Provider: providerName,
 		Amount:   req.Amount,
-		Currency: DefaultCurrency,
+		Currency: currencyOf(ctx),
 		Status:   StatusPending,
 		Country:  country.FromContext(ctx),
 		Meta:     meta,

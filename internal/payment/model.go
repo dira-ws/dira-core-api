@@ -5,10 +5,13 @@
 package payment
 
 import (
+	"context"
 	"strings"
 	"time"
 
 	"go.mongodb.org/mongo-driver/bson/primitive"
+
+	"github.com/kgtech-org/dira-core-api/pkg/country"
 )
 
 // Collection is the MongoDB collection storing payments.
@@ -53,8 +56,36 @@ const (
 	StatusRefunded = "refunded"
 )
 
-// DefaultCurrency is the platform currency (smallest unit, integer amounts).
+// DefaultCurrency est le repli quand le pays de la requête est inconnu.
+//
+// ⚠️⚠️ CE N'EST PLUS « LA MONNAIE DE LA PLATEFORME », et ça ne l'a jamais
+// vraiment été. Chaque paiement était étiqueté `XOF`, quel que soit le pays :
+// un Gabonais payait en « XOF » (il paie en XAF), un Guinéen aussi (il paie en
+// GNF, une unité quinze fois plus petite), et un Ghanéen aussi (le cedi porte
+// deux décimales). Le MONTANT était juste — les deux francs CFA sont à parité
+// —, l'ÉTIQUETTE était fausse, et c'est l'étiquette qui part chez l'opérateur
+// mobile et sur l'écran.
+//
+// Vu en direct sur la préprod : `GET /wallet` annonçait des bornes de recharge
+// en `XAF` (Gabon, #250) et le paiement initié juste après revenait en `XOF`.
+// Deux monnaies pour un seul geste, dans la même minute.
+//
+// Le reste du socle faisait déjà bien : `internal/finance` tire la monnaie du
+// PAYS depuis `pkg/country`. Le paiement était le seul à décider tout seul.
 const DefaultCurrency = "XOF"
+
+// currencyOf rend la monnaie du pays de la requête.
+//
+// ⚠️ LE REPLI N'EST PAS UNE FORMALITÉ : un paiement sans pays (un travail de
+// fond, un service mal câblé) doit garder une monnaie plutôt que de partir
+// vide. Une étiquette vide ne se lit pas mieux qu'une fausse, et un montant
+// sans monnaie n'est pas un montant.
+func currencyOf(ctx context.Context) string {
+	if info, ok := country.Lookup(country.FromContext(ctx)); ok && info.Currency != "" {
+		return info.Currency
+	}
+	return DefaultCurrency
+}
 
 // PendingWindow est la durée pendant laquelle un paiement « en cours » vaut
 // encore la peine d'être attendu.
