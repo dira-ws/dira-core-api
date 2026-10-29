@@ -1,6 +1,6 @@
 # Specs frontend — par rôle
 
-> **Version 4.89.0** · 29 octobre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics`
+> **Version 4.90.0** · 29 octobre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics`
 
 **Cinq** documents, un par application. Chacun est **autonome** : tout ce qu'un frontend doit savoir pour son rôle, sans avoir à ouvrir les vingt specs de modules.
 
@@ -355,6 +355,30 @@ Chaque document porte la même version en en-tête, et son propre journal des ch
 - [ ] ⚠️ **`TRACKING_JWT_SECRET` renseigné dans chaque environnement déployé.** Vide, l'authentification du service de suivi est **désactivée** : n'importe qui connaissant un `delivery_id` suit la course. Le secret doit valoir **exactement** le `JWT_SECRET` de `dira-food-api`.
 
 ## Journal
+
+### 4.90.0 — 29 octobre 2026
+
+🪙 **L'HISTORIQUE DES JETONS SE LIT À L'ENDROIT** — `FOOD-MERCHANT.md` §5
+(core#237).
+
+```
+GET /wallet/transactions?store_id=&unit=token|xof&order=desc|asc
+```
+
+⚠️ **Le plus récent d'abord, désormais** (c'était l'inverse), et le curseur
+**recule vers le passé** : « afficher plus » déroule l'historique. Vous n'aviez
+d'autre choix que de lire TOUTES les pages puis de retourner la liste.
+`order=asc` garde l'ancien sens pour rejouer un relevé.
+
+⚠️ **`unit=token` retient aussi les mouvements SANS unité**, et c'est voulu :
+ceux d'avant l'arrivée de l'argent n'ont pas ce champ. **Ne filtrez pas
+vous-mêmes** sur `unit === "token"` — vous perdriez tout l'historique ancien
+d'un compte, avec un solde pourtant juste.
+
+⚠️ **`amount` est toujours POSITIF** : c'est `kind` qui dit le sens. Le schéma
+de la réponse est désormais écrit (`kind`, `amount`, `unit`, `reason`,
+`ref_kind`, `ref_id`, `created_at`) — il ne l'était nulle part, et l'app l'avait
+lu dans le code du serveur.
 
 ### 4.89.0 — 29 octobre 2026
 

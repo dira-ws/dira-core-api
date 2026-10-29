@@ -183,48 +183,85 @@ func (r *Repository) InsertTransaction(ctx context.Context, t *Transaction) erro
 	return nil
 }
 
-// ListTransactions returns one page of transactions for a wallet, most recent
-// ids first is not used: cursor pagination follows _id ascending order.
-// ListTransactionsNewest pages le grand livre du PLUS RÉCENT au plus ancien
-// — ce qu'une fiche lit : les derniers mouvements d'abord. `ListTransactions`
-// reste ascendant pour les applications qui rejouent un relevé.
-func (r *Repository) ListTransactionsNewest(ctx context.Context, walletID primitive.ObjectID, limit int, cursor string) ([]Transaction, string, error) {
-	filter := bson.M{"wallet_id": walletID}
-	if cursor != "" {
-		cursorID, err := primitive.ObjectIDFromHex(cursor)
-		if err != nil {
-			return nil, "", fmt.Errorf("token: invalid cursor: %w", err)
-		}
-		filter["_id"] = bson.M{"$lt": cursorID}
-	}
-	opts := options.Find().SetSort(bson.D{{Key: "_id", Value: -1}}).SetLimit(int64(limit + 1))
-	cur, err := r.transactions.Find(ctx, filter, opts)
-	if err != nil {
-		return nil, "", fmt.Errorf("token: list transactions: %w", err)
-	}
-	var items []Transaction
-	if err := cur.All(ctx, &items); err != nil {
-		return nil, "", fmt.Errorf("token: decode transactions: %w", err)
-	}
-	next := ""
-	if len(items) > limit {
-		items = items[:limit]
-		next = items[limit-1].ID.Hex()
-	}
-	return items, next, nil
+// TransactionPage dit COMMENT lire une page du grand livre.
+type TransactionPage struct {
+	Limit  int
+	Cursor string
+	// Unit : `token`, `xof`, ou vide pour les deux.
+	Unit string
+	// Oldest : l'ordre ASCENDANT, pour une application qui rejoue un relevé
+	// du début. Le défaut est le plus récent d'abord — c'est ce qu'un
+	// historique montre.
+	Oldest bool
 }
 
-func (r *Repository) ListTransactions(ctx context.Context, walletID primitive.ObjectID, limit int, cursor string) ([]Transaction, string, error) {
+// unitFilter borne une unité du grand livre.
+//
+// ⚠️⚠️ L'ABSENCE DU CHAMP VAUT « JETON », et c'est le piège de cette requête.
+// `unit` est `omitempty` : tous les mouvements écrits AVANT l'arrivée de
+// l'argent n'ont pas ce champ, et aucune migration ne les a touchés — c'est
+// assumé. Un filtre naïf `{"unit": "token"}` rendrait donc ZÉRO ligne sur tout
+// l'historique d'un compte ancien, et la page paraîtrait vide alors que le
+// solde, lui, est juste. Voir #237.
+func unitFilter(unit string) bson.M {
+	switch unit {
+	case UnitToken:
+		return bson.M{"$or": []bson.M{{"unit": UnitToken}, {"unit": bson.M{"$exists": false}}, {"unit": ""}}}
+	case UnitXOF:
+		return bson.M{"unit": UnitXOF}
+	}
+	return nil
+}
+
+// orderOf rend le SENS du tri et la BORNE du curseur, qui vont toujours
+// ensemble.
+//
+// ⚠️⚠️ ENSEMBLE, ET C'EST TOUT L'OBJET DE CETTE FONCTION. Trier du plus récent
+// au plus ancien avec une borne `$gt` rend une page VIDE au deuxième appel —
+// et rien ne le signale : l'application croit simplement être arrivée au bout
+// de l'historique. Les deux valeurs se décident donc au même endroit, et se
+// vérifient sans base.
+func orderOf(oldest bool) (sens int, borne string) {
+	if oldest {
+		return 1, "$gt"
+	}
+	return -1, "$lt"
+}
+
+// ListTransactionsPage pages le grand livre d'un portefeuille.
+//
+// ⚠️ LE PLUS RÉCENT D'ABORD PAR DÉFAUT. Un historique se lit dans ce sens :
+// ascendant, une application devait lire TOUTES les pages puis retourner la
+// liste pour montrer les derniers mouvements, et ne pouvait pas proposer
+// « afficher plus » vers le passé. La console le faisait déjà correctement
+// (`TransactionsOf`) ; seule la route de la personne restait à l'envers.
+// transactionsFilter construit la requête — PURE, pour être vérifiable sans
+// base. C'est elle qui porte les deux pièges : l'unité absente, et la
+// cohabitation du curseur avec le filtre.
+func transactionsFilter(walletID primitive.ObjectID, p TransactionPage) bson.M {
 	filter := bson.M{"wallet_id": walletID}
-	if cursor != "" {
-		cursorID, err := primitive.ObjectIDFromHex(cursor)
-		if err != nil {
+	if u := unitFilter(p.Unit); u != nil {
+		// ⚠️ EN `$and` : le filtre d'unité porte un `$or`, et le poser à plat
+		// l'aurait fait écraser par la borne du curseur — ou l'inverse. Deux
+		// `$or` dans un même document ne cohabitent pas.
+		filter = bson.M{"$and": []bson.M{filter, u}}
+	}
+	_, borne := orderOf(p.Oldest)
+	if cursorID, err := primitive.ObjectIDFromHex(p.Cursor); err == nil {
+		filter = bson.M{"$and": []bson.M{filter, {"_id": bson.M{borne: cursorID}}}}
+	}
+	return filter
+}
+
+func (r *Repository) ListTransactionsPage(ctx context.Context, walletID primitive.ObjectID, p TransactionPage) ([]Transaction, string, error) {
+	if p.Cursor != "" {
+		if _, err := primitive.ObjectIDFromHex(p.Cursor); err != nil {
 			return nil, "", fmt.Errorf("token: invalid cursor: %w", err)
 		}
-		filter["_id"] = bson.M{"$gt": cursorID}
 	}
-
-	opts := options.Find().SetSort(bson.D{{Key: "_id", Value: 1}}).SetLimit(int64(limit + 1))
+	filter := transactionsFilter(walletID, p)
+	sens, _ := orderOf(p.Oldest)
+	opts := options.Find().SetSort(bson.D{{Key: "_id", Value: sens}}).SetLimit(int64(p.Limit + 1))
 	cur, err := r.transactions.Find(ctx, filter, opts)
 	if err != nil {
 		return nil, "", fmt.Errorf("token: list transactions: %w", err)
@@ -233,11 +270,10 @@ func (r *Repository) ListTransactions(ctx context.Context, walletID primitive.Ob
 	if err := cur.All(ctx, &items); err != nil {
 		return nil, "", fmt.Errorf("token: decode transactions: %w", err)
 	}
-
 	next := ""
-	if len(items) > limit {
-		items = items[:limit]
-		next = items[limit-1].ID.Hex()
+	if len(items) > p.Limit {
+		items = items[:p.Limit]
+		next = items[p.Limit-1].ID.Hex()
 	}
 	return items, next, nil
 }

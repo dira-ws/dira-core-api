@@ -1,6 +1,6 @@
 # App / console MARCHAND — LIVRAISON — contrat d'API
 
-> **Version 4.89.0** · 29 octobre 2026
+> **Version 4.90.0** · 29 octobre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Livraison : `https://api-staging.dira.llc/api/v1/food`
 
 
@@ -887,9 +887,43 @@ Un membre est un **compte** : il se connecte avec son propre téléphone et son 
 
 ```
 GET  /wallet?store_id={id}
-GET  /wallet/transactions?store_id={id}
+GET  /wallet/transactions?store_id={id}&unit=token|xof&order=desc|asc&limit=&cursor=
 POST /wallet/purchase          { tokens }
 ```
+
+### 🆕 L'historique — le plus récent d'abord (v4.90.0)
+
+```jsonc
+{ "items": [
+    { "id": "68f0…",
+      "kind": "consume",            // "purchase" | "consume"
+      "amount": 1,                  // TOUJOURS positif — c'est `kind` qui dit le sens
+      "unit": "token",              // "token" | "xof"
+      "reason": "order_accepted",   // le motif, stable et traduisible
+      "ref_kind": "order",          // à quoi ce mouvement se rattache
+      "ref_id": "68ef…",
+      "created_at": "2026-10-29T08:12:03Z" } ],
+  "next_cursor": "68ef…" }
+```
+
+⚠️ **Le plus récent d'abord, désormais** (c'était l'inverse). Le curseur
+**recule vers le passé** : « afficher plus » déroule l'historique. Vous n'avez
+plus à lire toutes les pages pour retourner la liste.
+
+⚠️ **`order=asc` garde l'ancien sens**, pour rejouer un relevé depuis le début.
+
+⚠️ **`unit=token` RETIENT AUSSI LES MOUVEMENTS SANS UNITÉ**, et c'est voulu :
+tous ceux d'avant l'arrivée de l'argent n'ont pas ce champ. Ne filtrez pas
+vous-mêmes sur `unit === "token"` côté application — vous perdriez tout
+l'historique ancien d'un compte.
+
+⚠️ **`amount` est toujours POSITIF** : c'est `kind` qui dit le sens
+(`purchase` crédite, `consume` débite). Afficher `amount` tel quel sous un
+signe deviné donnerait un historique où tout monte.
+
+⚠️ **N'additionnez jamais les deux unités** — et avec le filtre, vous n'avez
+plus à les séparer après coup : une page `unit=token` ne contient que des
+jetons, et son compte est juste.
 
 > **Un portefeuille par POINT DE VENTE**, pas par enseigne. `store_id` est **obligatoire** pour un marchand : sans lui, `422`.
 
