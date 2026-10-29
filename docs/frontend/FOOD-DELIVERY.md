@@ -1,6 +1,6 @@
 # App LIVREUR — LIVRAISON — contrat d'API
 
-> **Version 4.96.0** · 29 octobre 2026
+> **Version 4.97.0** · 29 octobre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Livraison : `https://api-staging.dira.llc/api/v1/food` · Suivi : `wss://tracking-staging.dira.llc` · SIG : `https://maps.dira.llc/api`
 
 
@@ -1571,8 +1571,32 @@ Trois suites possibles, et votre écran doit les tenir **toutes les trois** :
 | | Ce qui se passe | Votre écran |
 |---|---|---|
 | **quelqu'un reprend** | la commande passe à lui, votre part est **figée et versée** | `delivery_transfer_done` avec **votre montant**, et la course quitte votre écran |
-| **personne ne reprend** | `transfer.state: "failed"` — **la commande est toujours la vôtre** | « personne n'a pu reprendre : la livraison continue avec vous ». ⚠️ **Ne fermez pas l'écran** |
+| **personne ne reprend** | `transfer.state: "failed"` — **la commande est toujours la vôtre** | 🆕 **`delivery_transfer_kept`** (v4.97.0) : « la commande reste à vous — reprenez la route ». ⚠️ **Ne fermez pas l'écran** |
 | **vous changez d'avis** | `POST /deliveries/{id}/transfer/cancel` | retour à l'état normal |
+
+### 🆕 ⚠️ CE QUE LES DEUX POUSSÉES PORTENT (v4.97.0)
+
+```jsonc
+// delivery_transfer_done — à VOUS, quand quelqu'un reprend
+{ "type": "delivery_status", "order_id": "…", "delivery_id": "…",
+  "transfer_state": "done", "amount_xof": "1500" }        // 🆕 le NOMBRE
+
+// delivery_transfer_kept — à VOUS, quand personne n'a pu reprendre
+{ "type": "delivery_status", "order_id": "…", "delivery_id": "…",
+  "transfer_state": "failed" }                             // 🆕 poussée au LIVREUR
+```
+
+⚠️ **`amount_xof` est le NOMBRE, pas la phrase.** Le texte de la notification
+dit « 1 500 F » — traduit, et formaté selon la langue. Une application qui en
+extrairait les chiffres finirait par lire `1` ou `500`. Affichez et comparez
+`data.amount_xof`.
+
+⚠️⚠️ **« Personne n'a pu reprendre » vous est poussé À VOUS depuis la v4.97.0.**
+Avant, il ne partait qu'au **client** : vous ne l'appreniez qu'en relisant la
+commande, c'est-à-dire en vous demandant d'abord pourquoi personne n'arrive. Or
+c'est **vous** qui devez repartir — vous attendiez un remplaçant, et le repas
+est encore à vous. ⚠️ Et ce n'est **pas** le texte du client : lui lit « votre
+livreur continue », vous lisez « la commande reste à vous ».
 
 ⚠️ **NE FERMEZ PAS LA COURSE EN DEMANDANT UN TRANSFERT.** Un livreur qui range
 son téléphone en croyant avoir rendu la commande laisse **un repas dans un sac
@@ -1595,7 +1619,8 @@ que plus personne ne suit** — et, en espèces, l'argent du marchand avec.
 #### 🆕 Demandez la liste, n'écrivez pas les codes (v4.79.0)
 
 ```
-GET /deliveries/transfer-reasons   → { "by": "courier", "items": [ { "code": "wrong_vehicle", "grave": false }, … ] }
+GET /deliveries/transfer-reasons
+→ { "by": "courier", "items": [ { "code": "wrong_vehicle", "label": "Mon véhicule ne peut pas transporter cette commande", "grave": false }, … ] }
 ```
 
 ⚠️ **Un motif ajouté côté serveur n'apparaîtrait sur aucun téléphone non
@@ -1606,8 +1631,30 @@ est, par construction, celle que la validation accepte.
 ⚠️ **`grave: true` se dit à l'écran** (`accident`, `courier_unwell`, `unsafe`) :
 ces motifs ouvrent un **incident de support**. Dites-le, et affichez-les à part.
 
-Le serveur sert des **codes**, pas des phrases : les étiquettes françaises
-restent à votre charge, et le tableau ci-dessous en donne une pour chacun.
+Le tableau ci-dessous donne le sens de chaque code.
+
+### 🆕 ⚠️⚠️ `label` : LE TEXTE À AFFICHER, TRADUIT (v4.97.0)
+
+Chaque élément porte désormais un **`label`** dans la langue de la requête
+(`Accept-Language`), et à la **première personne** — c'est vous qui choisissez :
+
+```jsonc
+{ "code": "vehicle_breakdown", "label": "Mon véhicule est en panne", "grave": false }
+```
+
+⚠️ **N'écrivez plus de table de phrases.** C'était le reste du piège : la liste
+des codes venait bien du serveur, mais les **phrases** étaient chez vous — donc
+un motif ajouté côté serveur s'affichait comme un code brut
+(« vehicle_breakdown ») jusqu'à la prochaine publication sur les magasins. Des
+semaines, pendant lesquelles quelqu'un en panne choisit un identifiant dans une
+liste.
+
+⚠️ **Ne renvoyez JAMAIS `label` au serveur.** C'est `code` qui voyage, et lui
+seul : un texte traduit n'est pas un identifiant.
+
+⚠️ **Si une phrase manque, `label` vaut le code** — jamais une chaîne vide. Un
+bouton muet ne se diagnostique pas ; un code brut, si. Vous pouvez donc
+l'afficher sans garde.
 
 ⚠️ **LE MOTIF EST OBLIGATOIRE** : il est **traduit et montré au client**.
 « Votre livreur ne peut pas continuer » sans la moitié de la phrase se lit
@@ -1679,7 +1726,7 @@ n'arrivent qu'une fois la commande à vous.
 
 ### Le champ `transfer`, sur la course
 
-```json
+```jsonc
 "transfer": {
   "state": "searching" | "done" | "failed" | "cancelled",
   "reason": "vehicle_breakdown",
@@ -1687,7 +1734,9 @@ n'arrivent qu'une fois la commande à vous.
   "grave": false,
   "meet_courier": true,
   "requested_at": "2026-10-24T15:12:00Z",
-  "ended_at": null
+  "ended_at": null,
+  "from_position": { "lng": 1.2255, "lat": 6.1319, "at": "2026-10-29T14:04:11Z" },  // 🆕 v4.97.0
+  "handed_at": null                                                                  // 🆕 v4.97.0
 }
 ```
 
@@ -1695,6 +1744,56 @@ n'arrivent qu'une fois la commande à vous.
 peut ouvrir un transfert depuis la console — vous ne bougez plus, le client a
 appelé, vos papiers ne sont plus valides. Votre écran doit l'afficher comme
 l'autre : la commande reste la vôtre jusqu'à ce que quelqu'un la reprenne.
+
+### 🆕 🛰️ OÙ EST LE LIVREUR QUI A LE REPAS (v4.97.0)
+
+Vous reprenez une commande **dont le repas est déjà dans un sac**
+(`meet_courier: true`). Jusqu'ici ce document vous disait de « rejoindre le
+livreur » — et sa position n'était servie à personne.
+
+⚠️⚠️ **LE CANAL `WS /track/subscribe/{delivery_id}` NE VOUS Y MÈNERA PAS**, et
+ce n'est pas un réglage : il ne relaie que les positions émises **sous la
+mission**. Le premier livreur l'a lâchée, la mission est repointée sur **votre**
+véhicule, et **vous** y émettez désormais la vôtre. Le canal pointe donc sur
+votre propre moto. C'est une propriété du suivi, pas un défaut à corriger.
+
+La position arrive donc **sur la commande**, dans `transfer.from_position` :
+relisez **`GET /deliveries/{id}`**, le point est rafraîchi.
+
+⚠️ **`at` FAIT PARTIE DE LA RÉPONSE, pas de la décoration.** Une position sans
+son instant ne dit pas si elle est vieille : à trente secondes on y va, à six
+minutes l'autre livreur n'est plus là. Si la plateforme n'a pas d'instant, elle
+ne sert **rien** — affichez « position inconnue », n'affichez pas un point.
+
+⚠️ **Servie à VOUS seul** (le preneur), et **seulement quand le repas est déjà
+parti**. Un remplaçant qui va au restaurant n'a personne à rejoindre : il a
+l'adresse de la boutique, qui ne bouge pas. Et le client ne la reçoit jamais —
+sa carte suit **sa** commande, une seconde moto y apparaîtrait sans qu'il
+l'attende.
+
+### 🆕 ✋ « J'AI LE REPAS EN MAIN » (v4.97.0)
+
+```
+POST /deliveries/{id}/transfer/handed   → 204
+```
+
+À appeler quand le paquet a changé de sac, et **par vous seul** : le livreur qui
+passe la main ne peut pas déclarer que vous êtes arrivé, et le client non plus.
+
+⚠️ **Vous le posiez en LOCAL**, et un geste local ne se voit de nulle part : la
+garde des étapes ne pouvait pas couvrir cette étape, et l'exploitation qui
+regarde une commande en retard ne savait pas si le repas était encore dans le
+sac du premier.
+
+⚠️ **C'est aussi lui qui arrête de servir `from_position`** : une fois le paquet
+passé, la position de l'autre ne regarde plus personne.
+
+⚠️ **Idempotent, et sans effet de bord** : la commande ne change pas de statut,
+rien n'est facturé, personne n'est prévenu. Deux appuis ou un réseau qui bégaie
+ne produisent pas deux remises — le second appel **réussit** (`204`), il ne
+repousse pas l'instant de la rencontre. Refus : `403` (ce n'est pas votre
+commande), `409 no_transfer_to_hand` (le repas n'était pas encore parti, ou la
+remise est déjà notée).
 
 ---
 

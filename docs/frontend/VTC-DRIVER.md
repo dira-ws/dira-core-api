@@ -1,6 +1,6 @@
 # App CHAUFFEUR — COURSES (VTC) — contrat d'API
 
-> **Version 4.96.0** · 29 octobre 2026
+> **Version 4.97.0** · 29 octobre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Courses : `https://api-staging.dira.llc/api/v1/vtc` · Suivi : `wss://tracking-staging.dira.llc` · SIG : `https://maps.dira.llc/api`
 
 ---
@@ -1556,7 +1556,8 @@ suit le trajet — et la course se facturera sur un parcours interrompu.
 #### 🆕 Demandez la liste, n'écrivez pas les codes (v4.79.0)
 
 ```
-GET /rides/transfer-reasons     → { "by": "driver", "items": [ { "code": "vehicle_breakdown", "grave": false }, … ] }
+GET /rides/transfer-reasons
+→ { "by": "driver", "items": [ { "code": "vehicle_breakdown", "label": "Mon véhicule est en panne", "grave": false }, … ] }
 ```
 
 ⚠️ **LA MÊME RÈGLE QUE LES MOTIFS D'ANNULATION, et le même piège évité.** Un
