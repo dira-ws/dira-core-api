@@ -504,3 +504,53 @@ func TestTheCourierIsCloseMessageCarriesTheDelay(t *testing.T) {
 		}
 	}
 }
+
+// ⚠️⚠️ LE VOCAL A SON PROPRE GABARIT, ET IL NE PROMET PAS DE CORPS.
+//
+// `chat_message` met `[body]` dans le corps. Un vocal arrive ici PARCE QUE sa
+// transcription a échoué : réutiliser ce gabarit aurait produit « Nouveau
+// message » suivi de RIEN, sur l'écran verrouillé de quelqu'un qui attend
+// justement de savoir s'il doit écouter.
+func TestTheVoiceMessageKeyHasItsOwnFixedPhrase(t *testing.T) {
+	var d Template
+	for _, t := range Defaults() {
+		if t.Key == KeyChatVoiceMessage {
+			d = t
+		}
+	}
+	require.Equal(t, KeyChatVoiceMessage, d.Key, "le gabarit du vocal doit exister")
+
+	for loc, txt := range d.Locales {
+		assert.NotEmpty(t, txt.Body, "le corps du vocal ne doit jamais être vide (%s)", loc)
+		assert.Empty(t, Variables(txt.Title, txt.Body),
+			"⚠️ le DÉFAUT ne doit porter aucune variable (%s) : une durée dans la "+
+				"phrase demande un pluriel juste dans douze langues, pour une "+
+				"information que l'écran affiche déjà", loc)
+	}
+
+	// ⚠️ MAIS `seconds` EST DÉCLARÉE : sans cela, l'enregistrement refuserait
+	// cette variable à une exploitation qui voudrait écrire « Message vocal de
+	// [seconds] s », et personne ne saurait pourquoi.
+	assert.Equal(t, []string{"seconds"}, Provided(KeyChatVoiceMessage))
+
+	// ⚠️ ET PAS `body` : déclarer un corps qu'on ne remplira jamais ferait
+	// écrire un gabarit qui rend du vide.
+	assert.NotContains(t, Provided(KeyChatVoiceMessage), "body")
+}
+
+// ⚠️ ET IL EST RANGÉ AVEC LES MESSAGES ÉCRITS : c'est la même conversation.
+// L'oublier l'aurait mis dans la catégorie par défaut — donc sous un autre
+// interrupteur que le texte, ce qu'aucun utilisateur n'attend.
+func TestAVoiceMessageSitsUnderTheSameSwitchAsText(t *testing.T) {
+	assert.Equal(t, categoryOf(KeyChatMessage), categoryOf(KeyChatVoiceMessage))
+	assert.Equal(t, CategoryChatMessages, categoryOf(KeyChatVoiceMessage))
+}
+
+// ⚠️ ET IL NE NOMME PAS L'EXPÉDITEUR, comme `chat_message` : le canal existe
+// pour que les deux se parlent SANS échanger leurs coordonnées.
+func TestTheVoiceKeyNamesNobody(t *testing.T) {
+	for _, v := range Provided(KeyChatVoiceMessage) {
+		assert.NotContains(t, []string{"name", "phone", "driver", "client"}, v,
+			"`%s` nommerait l'expéditeur sur l'écran verrouillé", v)
+	}
+}

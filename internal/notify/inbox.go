@@ -52,7 +52,11 @@ const (
 // pas pour l'interrupteur.
 func categoryOf(key string) string {
 	switch key {
-	case KeyChatMessage:
+	// ⚠️ LE VOCAL EST RANGÉ AVEC LE TEXTE : c'est la même conversation, et
+	// l'oublier ici l'aurait rangé dans la catégorie par défaut — donc sous un
+	// autre interrupteur que les messages écrits, ce qu'aucun utilisateur
+	// n'attend.
+	case KeyChatMessage, KeyChatVoiceMessage:
 		return CategoryChatMessages
 	case KeyDriverCall:
 		return CategoryDriverCall
