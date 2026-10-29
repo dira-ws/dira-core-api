@@ -1,6 +1,6 @@
 # App CLIENT UNIFIÉE — LIVRAISON **et** COURSES — contrat d'API
 
-> **Version 4.98.0** · 29 octobre 2026
+> **Version 4.99.0** · 29 octobre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Livraison : `…/api/v1/food` · Courses : `…/api/v1/vtc` · Combiné : `…/api/v1/analytics` · Suivi : `wss://tracking-staging.dira.llc`
 
 ---
@@ -967,6 +967,22 @@ La position du téléphone. Elle sert de **départ** aux courses quand le passag
 n'en nomme pas — « je vais à l'aéroport » part d'ici. La livraison l'ignore :
 elle a les adresses du compte.
 
+⚠️⚠️ **LA LONGITUDE D'ABORD (v4.99.0)**, dans les deux formes, comme partout sur
+cette plateforme (`geo: [lng, lat]`) :
+
+```
+POST /analytics/ai/chat    "origin": [9.45, 0.41]       ← [longitude, latitude]
+POST /analytics/ai/voice   origin = "9.45,0.41"         ← "longitude,latitude"
+```
+
+À Libreville, 9,45 **est** et 0,41 **nord**. Lu à l'envers, cela donne 0,41 E ·
+9,45 N — **mille kilomètres au nord-est**, en pleine brousse malienne — et
+**rien ne le signalerait** : les deux nombres sont valides, le devis se calcule,
+et c'est le chauffeur qui découvre l'erreur.
+
+⚠️ **Illisible = ignorée, jamais refusée.** Un GPS qui renvoie du charabia ne
+doit pas faire perdre le message : l'assistant demandera le départ.
+
 ### Les refus
 
 | Refus | Ce que ça veut dire | Ce que vous affichez |
@@ -1285,7 +1301,11 @@ GET /analytics/ai/thread
       "audio_url": "https://files.dira.llc/voice/…/a1b2.m4a",  // RÉÉCOUTABLE
       "seconds": 7, "at": "2026-10-28T09:12:01Z" },
     { "id": "68f1…", "role": "assistant", "text": "Voici deux options.",
-      "vertical": "vtc", "plan": { … }, "at": "2026-10-28T09:12:03Z" },
+      "vertical": "vtc", "plan": { … },
+      "voice_id": "68f0…",                                    // 🆕 le même que la bulle du client
+      "state": "ordered",                                     // 🆕 v4.99.0
+      "ref_kind": "ride", "ref_id": "68f4…",                  // 🆕 v4.99.0
+      "at": "2026-10-28T09:12:03Z" },
     { "id": "68f2…", "role": "support", "text": "Course commandée depuis votre message.",
       "ref_kind": "ride", "ref_id": "68f3…", "at": "2026-10-28T09:19:40Z" }
   ] }
@@ -1296,12 +1316,55 @@ n'était gardé, et fermer l'application perdait tout. Ils sont désormais
 **écrits**, par compte et **par pays**. Appelez cette route à l'ouverture de la
 boîte de dialogue : c'est l'historique que la personne s'attend à retrouver.
 
+### 🆕 ⚠️⚠️ L'ISSUE DU TOUR, SUR LA BULLE D'ASSISTANT (v4.99.0)
+
+Une bulle `assistant` porte désormais **ce que son tour est devenu** : `state`
+(les quatre états du §8) et, dès qu'une course ou une commande en est née,
+`ref_kind` + `ref_id`.
+
+⚠️⚠️ **SANS EUX, VOUS POUVIEZ FAIRE COMMANDER DEUX FOIS.** Un tour abouti en
+`ordered` réapparaissait dans l'historique comme un plan tout neuf, avec son
+bouton « Confirmer » — et à des prix périmés. **Lisez `state`** : un plan dont
+le tour est `ordered` est de l'**historique**, pas une proposition. Proposez
+« Suivre la course » sur `ref_kind`/`ref_id`, pas « Confirmer ».
+
+⚠️ **`ref_id` arrive quelques instants APRÈS la bulle.** La commande ne part
+qu'une fois le fil écrit, pour ne jamais annoncer une course qui n'existe pas.
+Un fil relu plus tard le porte ; un fil relu dans la seconde peut ne pas encore
+l'avoir — l'absence de `ref_id` sur un tour `ordered` n'est donc pas une erreur.
+
+⚠️ **`voice_id` apparie les deux bulles** d'un même tour : celle du client (son
+enregistrement) et celle de l'assistant (sa réponse). C'est aussi par lui que le
+serveur retrouve la bonne bulle quand la commande aboutit — deux vocaux qui se
+suivent ne se mélangent pas.
+
+⚠️ **La bulle `client` n'a ni `state` ni `ref_*`** : elle porte ce qui a été
+**dit**, pas ce qui en est advenu.
+
+> **Un plan confirmé à la main ne laisse pas encore de trace.** Si la personne
+> appuie sur « Confirmer » et que vous passez par `POST /vtc/rides`, le fil ne
+> le sait pas : la confirmation ne passe pas par l'assistant. Gardez
+> l'historique en lecture seule — c'est de toute façon la bonne règle.
+
+### 🆕 ⚠️ `audio_url` : COMMENT ON LE LIT (v4.99.0)
+
+- **Lisible SANS en-tête.** L'adresse est publique et **ne porte aucune
+  signature** : ni jeton, ni échéance. Un lecteur audio dans une bulle de
+  conversation n'envoie pas nos en-têtes, et exiger le jeton Dira aurait rendu
+  les vocaux injouables sur les deux plateformes.
+- **Elle ne périme pas.** Un fil relu une semaine — ou un an — plus tard se
+  réécoute. C'est voulu : le vocal **est** le message.
+- ⚠️ **Et c'est donc une adresse à ne pas laisser traîner.** Son secret est son
+  identifiant, long et non devinable : qui l'a peut écouter. Ne la recopiez pas
+  dans vos journaux, ne la mettez pas dans un lien de partage, et ne la montrez
+  pas hors de la conversation.
+
 ### Les trois rôles
 
 | `role` | Qui parle | Ce que vous montrez |
 |---|---|---|
 | `client` | la personne | sa bulle. ⚠️ Avec un **lecteur audio** quand `audio_url` est là |
-| `assistant` | l'IA | sa bulle, et le `plan` s'il y en a un |
+| `assistant` | l'IA | sa bulle, le `plan` s'il y en a un — et son `state` (ci-dessus) |
 | `support` | **un être humain** de chez nous | ⚠️ une bulle **visiblement différente** |
 
 ⚠️⚠️ **LE RÔLE `support` N'EST PAS DÉGUISÉ EN ASSISTANT, ET VOUS NE DEVEZ PAS LE
