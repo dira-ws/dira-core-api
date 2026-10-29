@@ -31,6 +31,13 @@ var (
 	// le renvoie trois fois, puis on appelle le support. La phrase doit dire
 	// que c'est un REFUS et pourquoi — sans nommer le mot, ce qui apprendrait
 	// seulement à l'écrire autrement.
+	// errVoiceUnavailable : cette verticale n'a pas branché les vocaux.
+	//
+	// ⚠️ `503` ET NON `422` : la requête est parfaitement valide, c'est le
+	// serveur qui ne sait pas la servir ici. Un `422` ferait chercher à
+	// l'application ce qu'elle a mal envoyé.
+	errVoiceUnavailable = apperr.New("voice_messages_unavailable",
+		"voice messages are not available on this deployment", http.StatusServiceUnavailable)
 	errBlockedByModeration = apperr.New("message_blocked",
 		"this message was not sent: it contains a threat or an insult that we do not relay",
 		http.StatusUnprocessableEntity)
@@ -70,12 +77,51 @@ type Notifier interface {
 // ⚠️ Il reçoit le côté et le corps, JAMAIS une identité : la notification ne
 // doit pas nommer sur l'écran verrouillé ce que la conversation protège.
 type Pusher interface {
-	NotifyChatMessage(ctx context.Context, recipientUserID, refID, body string)
+	NotifyChat(ctx context.Context, recipientUserID, refID string, p Push)
+}
+
+// pushFor rend ce qu'une notification doit transporter pour CE message.
+//
+// ⚠️ UN SEUL ENDROIT POUR LES DEUX GENRES. Les deux envois construisaient leur
+// `Push` sur place, avec la même connaissance recopiée : une mutation qui
+// annonçait un vocal comme du TEXTE survivait à toutes les épreuves — rien
+// n'observait la poussée, et la seconde copie ne pouvait pas contredire la
+// première. L'application se serait fiée à `data.kind` pour dessiner, et aurait
+// dessiné un message texte vide.
+func pushFor(m Message) Push {
+	p := Push{Body: m.Body, Kind: kindOf(m)}
+	if p.Kind == KindVoice {
+		p.Seconds = m.Seconds
+	}
+	return p
+}
+
+// Push est ce qu'une notification de conversation transporte.
+//
+// ⚠️⚠️ UNE SEULE MÉTHODE POUR LES DEUX GENRES, et la signature a changé exprès.
+// L'ancienne (`NotifyChatMessage(…, body string)`) n'avait aucun moyen de dire
+// « c'est un vocal » : il aurait fallu soit une seconde méthode — morte dans la
+// verticale qui n'a pas de vocaux —, soit deviner le genre à la présence d'une
+// durée. Changer la signature force les deux verticales à relire ce qu'elles
+// poussent, UNE fois, consciemment. Une méthode ajoutée à côté les aurait
+// laissées pousser un vocal comme du texte sans rien casser.
+type Push struct {
+	// Body : l'aperçu — la transcription pour un vocal. Peut être vide quand
+	// la transcription a échoué ; c'est alors à la verticale de nommer la
+	// chose dans la langue de l'appareil, ce paquet ne traduit pas.
+	Body string
+	// Kind : `text` ou `voice`. Part dans les données de la poussée, pour que
+	// l'application sache quoi dessiner avant d'ouvrir la conversation.
+	Kind string
+	// Seconds : la durée d'un vocal, zéro sur du texte.
+	Seconds int
 }
 
 type Service struct {
 	repo    *Repository
 	parties Parties
+	// intake reçoit les vocaux — voir `VoiceIntake`. Facultatif.
+	intake VoiceIntake
 	// refKind est écrit sur chaque message : « order » ou « ride ». Il tient
 	// dans le service et non dans l'appel, parce qu'une instance ne sert
 	// qu'une verticale — le passer à chaque envoi laisserait la possibilité
@@ -269,11 +315,157 @@ func (s *Service) Send(ctx context.Context, userID, role, refID, body string) (*
 			recipient = conv.ClientID
 		}
 		if recipient != "" {
-			s.pusher.NotifyChatMessage(ctx, recipient, refID, body)
+			s.pusher.NotifyChat(ctx, recipient, refID, pushFor(*m))
 		}
 	}
 	resp := toResponse(*m)
 	return &resp, nil
+}
+
+// VoiceIntake reçoit un vocal d'une requête multipart : la VERTICALE le
+// vérifie, le stocke et le transcrit, puis rend de quoi poser le message.
+//
+// ⚠️ DÉCLARÉE ICI, CÔTÉ CONSOMMATEUR, et FACULTATIVE : sans elle, la route
+// refuse les vocaux (`503`) et le texte continue de marcher. Une verticale sans
+// stockage ni transcription ne perd pas sa conversation.
+type VoiceIntake interface {
+	Receive(r *http.Request) (Voice, error)
+}
+
+// SetVoiceIntake branche la réception des vocaux (câblage).
+func (s *Service) SetVoiceIntake(in VoiceIntake) { s.intake = in }
+
+// VoicePolicy dit ce que cette conversation accepte comme vocal, ou nil.
+func (s *Service) VoicePolicy() *VoicePolicy {
+	if s.intake == nil {
+		return nil
+	}
+	return &VoicePolicy{Enabled: true, MaxSeconds: MaxVoiceSeconds}
+}
+
+// Voice est un message vocal DÉJÀ stocké et DÉJÀ transcrit.
+//
+// ⚠️⚠️ CE PAQUET NE STOCKE RIEN ET NE TRANSCRIT RIEN, et c'est voulu. Le
+// stockage a son paquet (`pkg/storage`) et TOUTE L'IA de la plateforme vit
+// dans `dira-analytics` : une bibliothèque de conversation qui appellerait un
+// modèle ferait du socle le client d'un service dont il ne dépend pas. La
+// verticale téléverse, transcrit par son pont, et pose ici le résultat.
+type Voice struct {
+	// AudioURL : l'adresse du fichier, déjà stocké.
+	AudioURL string
+	// Seconds : la durée DÉCLARÉE par le téléphone.
+	Seconds int
+	// Transcript : ce que la transcription a entendu, ou VIDE si elle a échoué.
+	Transcript string
+}
+
+// SendVoice pose un message vocal dans la conversation.
+//
+// ⚠️⚠️ LA TRANSCRIPTION VA DANS `body`, ET C'EST CE QUI REND LES VOCAUX
+// COMPATIBLES. Une application chauffeur qui ne connaît pas encore `kind`
+// affiche alors du texte au lieu de rien : le vocal arrive, lisible, sans
+// qu'elle ait été republiée. Sans cela, déployer les vocaux côté passager
+// aurait rendu muets tous les chauffeurs dont l'app n'était pas à jour.
+//
+// ⚠️ ET LA TRANSCRIPTION PASSE PAR LA MODÉRATION, exactement comme du texte.
+// Une menace dite à voix haute est une menace. Y échapper aurait fait du micro
+// la porte de service de tout ce que le lexique refuse.
+//
+// ⚠️⚠️ TROU NOMMÉ : UN VOCAL NON TRANSCRIT N'EST PAS MODÉRÉ. Quand la
+// transcription échoue — service indisponible, langue non servie —, le message
+// part quand même, parce que refuser priverait de parole précisément les gens
+// qui ne savent pas écrire, et c'est pour eux que cette fonction existe. Le
+// lexique ne voit alors rien. Le signalement humain
+// (`POST …/messages/{id}/report`) reste la seule prise sur ces messages-là, et
+// c'est de toute façon lui qui attrape ce qu'un automate rate.
+func (s *Service) SendVoice(ctx context.Context, userID, role, refID string, v Voice) (*MessageResponse, error) {
+	oid, conv, party, err := s.access(ctx, userID, role, refID)
+	if err != nil {
+		return nil, err
+	}
+	if party == "" {
+		return nil, errNotParty
+	}
+	if strings.TrimSpace(v.AudioURL) == "" {
+		return nil, apperr.Validation("a stored audio url is required")
+	}
+	if v.Seconds <= 0 || v.Seconds > MaxVoiceSeconds {
+		return nil, apperr.Validation("`seconds` must be between 1 and 60").
+			WithMeta(map[string]any{"fields": []string{"seconds"}})
+	}
+	if err := writable(conv); err != nil {
+		return nil, err
+	}
+	senderOID, err := primitive.ObjectIDFromHex(userID)
+	if err != nil {
+		return nil, apperr.Validation("invalid user id").WithCause(err)
+	}
+
+	m, err := voiceMessage(oid, s.refKind, senderOID, party, v, s.lexiconFor(ctx))
+	if err != nil {
+		return nil, err
+	}
+	if err := s.repo.Insert(ctx, m); err != nil {
+		return nil, err
+	}
+	// ⚠️ L'APERÇU DE LA NOTIFICATION EST LA TRANSCRIPTION, pas le mot
+	// « vocal » : le destinataire doit pouvoir décider s'il écoute MAINTENANT
+	// sans ouvrir l'application. Sans transcription, c'est la verticale qui
+	// nomme la chose dans la langue de l'appareil — ce paquet ne traduit pas.
+	if s.notifier != nil {
+		s.notifier.NotifyMessage(ctx, refID, conv.ClientID, conv.DriverUserID, party, m.Body)
+	}
+	if s.pusher != nil {
+		recipient := conv.DriverUserID
+		if party == SenderDriver {
+			recipient = conv.ClientID
+		}
+		if recipient != "" {
+			s.pusher.NotifyChat(ctx, recipient, refID, pushFor(*m))
+		}
+	}
+	resp := toResponse(*m)
+	return &resp, nil
+}
+
+// voiceMessage monte le message vocal à écrire, modération comprise.
+//
+// ⚠️ EXTRAITE ET PURE PARCE QUE LE DÉPÔT N'EST PAS ATTEIGNABLE DANS LES
+// ÉPREUVES. `NewService` prend un `*Repository` concret — il n'y a pas de
+// couture où glisser une doublure —, et sans cette fonction le chemin heureux
+// d'un vocal (la transcription dans `body`, le genre, la durée, la marque de
+// modération) n'était vérifiable par rien. C'est le même geste que pour les
+// filtres des dépôts ailleurs sur cette plateforme.
+func voiceMessage(refID primitive.ObjectID, refKind string, sender primitive.ObjectID,
+	party string, v Voice, lex Lexicon) (*Message, error) {
+	body := strings.TrimSpace(v.Transcript)
+	if len([]rune(body)) > MaxBody {
+		// ⚠️ TRONQUÉE, PAS REFUSÉE : une transcription trop longue est le
+		// problème du serveur, pas celui de la personne qui a parlé. Refuser
+		// lui ferait perdre son message pour une limite qu'elle ne connaît pas.
+		body = string([]rune(body)[:MaxBody])
+	}
+	verdict := Check(body, lex)
+	if verdict.Blocked() {
+		return nil, errBlockedByModeration
+	}
+	m := &Message{
+		RefID:      refID,
+		RefKind:    refKind,
+		SenderID:   sender,
+		SenderRole: party,
+		Body:       body,
+		Kind:       KindVoice,
+		AudioURL:   v.AudioURL,
+		Seconds:    v.Seconds,
+		CreatedAt:  time.Now().UTC(),
+	}
+	if verdict.Flagged() {
+		m.Flagged = true
+		m.FlagTerms = verdict.Terms
+		m.FlagSeverity = string(verdict.Severity)
+	}
+	return m, nil
 }
 
 // SendAs posts a message ON BEHALF of one side, for the back-office

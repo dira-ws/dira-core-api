@@ -3,6 +3,7 @@ package chat
 import (
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 
@@ -140,6 +141,10 @@ func (h *Handler) list(w http.ResponseWriter, r *http.Request) {
 	if len(items) > 0 {
 		resp.NextCursor = items[len(items)-1].ID
 	}
+	// ⚠️ SERVIE À CHAQUE LECTURE, pas une fois à l'ouverture : l'application
+	// doit pouvoir faire apparaître ou disparaître le micro si le stockage ou
+	// la transcription tombent en cours de course.
+	resp.Voice = h.svc.VoicePolicy()
 	httpx.JSON(w, http.StatusOK, resp)
 }
 
@@ -150,12 +155,46 @@ func (h *Handler) send(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, r, apperr.Unauthorized("missing_token", "missing bearer token"))
 		return
 	}
+	// ⚠️⚠️ LA MÊME ROUTE POUR LE TEXTE ET LE VOCAL, choisie par le TYPE DE
+	// CONTENU. Une seconde route (`…/messages/voice`) aurait obligé chaque
+	// application à deux chemins de code pour un seul geste — « envoyer ce que
+	// je viens de composer » —, et aurait doublé les refus à gérer.
+	if strings.HasPrefix(r.Header.Get("Content-Type"), "multipart/") {
+		h.sendVoice(w, r, userID, role)
+		return
+	}
 	var req SendMessageRequest
 	if err := httpx.Decode(r, &req); err != nil {
 		httpx.Error(w, r, err)
 		return
 	}
 	msg, err := h.svc.Send(r.Context(), userID, role, chi.URLParam(r, "id"), req.Body)
+	if err != nil {
+		httpx.Error(w, r, err)
+		return
+	}
+	httpx.JSON(w, http.StatusCreated, msg)
+}
+
+// sendVoice reçoit le vocal, le fait stocker et transcrire par la VERTICALE,
+// puis le pose dans la conversation.
+//
+// ⚠️ LE TRAVAIL EST DÉLÉGUÉ, et ce n'est pas de la timidité : ce paquet est au
+// socle, et TOUTE L'IA de la plateforme vit dans `dira-analytics`. Transcrire
+// ici ferait du socle le client d'un service dont il ne dépend pas, et
+// stocker ici lui ferait connaître les seaux d'une verticale.
+func (h *Handler) sendVoice(w http.ResponseWriter, r *http.Request, userID, role string) {
+	intake := h.svc.intake
+	if intake == nil {
+		httpx.Error(w, r, errVoiceUnavailable)
+		return
+	}
+	v, err := intake.Receive(r)
+	if err != nil {
+		httpx.Error(w, r, err)
+		return
+	}
+	msg, err := h.svc.SendVoice(r.Context(), userID, role, chi.URLParam(r, "id"), v)
 	if err != nil {
 		httpx.Error(w, r, err)
 		return

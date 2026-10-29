@@ -32,6 +32,34 @@ type MessageResponse struct {
 	// garde sa place et son heure, parce que l'autre partie a vu qu'il y avait
 	// quelque chose là.
 	Hidden bool `json:"hidden,omitempty"`
+	// Kind : `text` ou `voice`. ⚠️ TOUJOURS SERVI, même pour du texte : une
+	// application qui doit deviner le genre d'un message en regardant si
+	// `audio_url` est là finit par traiter un vocal dont l'audio a disparu
+	// comme un message texte vide.
+	Kind string `json:"kind"`
+	// AudioURL : où réécouter le vocal. Absent sur du texte.
+	//
+	// ⚠️ LISIBLE SANS EN-TÊTE : un lecteur audio ne porte pas notre
+	// `Authorization`. L'adresse est donc signée et datée côté stockage, et
+	// c'est elle qui protège — pas un jeton que le lecteur n'enverra jamais.
+	AudioURL string `json:"audio_url,omitempty"`
+	// Seconds : la durée déclarée par le téléphone de l'envoyeur, pour
+	// dessiner la barre avant de télécharger le fichier. ⚠️ Déclarée, pas
+	// mesurée — voir `Message.Seconds`.
+	Seconds int `json:"seconds,omitempty"`
+}
+
+// VoicePolicy dit si cette conversation accepte les vocaux, et jusqu'à quelle
+// durée.
+//
+// ⚠️⚠️ ELLE EXISTE POUR QUE L'APPLICATION NE MONTRE LE MICRO QUE LÀ OÙ IL
+// MARCHE. Un bouton d'enregistrement sur un déploiement sans transcription et
+// sans stockage produit un échec après que la personne a parlé — le pire
+// moment pour apprendre que ça ne marche pas, surtout pour quelqu'un qui ne
+// lit pas le message d'erreur.
+type VoicePolicy struct {
+	Enabled    bool `json:"enabled"`
+	MaxSeconds int  `json:"max_seconds"`
 }
 
 // ConversationResponse is a page of the conversation.
@@ -43,13 +71,23 @@ type ConversationResponse struct {
 	// NextCursor : l'identifiant du dernier message servi. Le renvoyer demande
 	// la suite — c'est aussi le rattrapage après une coupure.
 	NextCursor string `json:"next_cursor,omitempty"`
+	// Voice : ce que cette conversation accepte comme vocal. Absent = la
+	// verticale n'a pas branché les vocaux ; l'application ne montre pas le
+	// micro.
+	Voice *VoicePolicy `json:"voice,omitempty"`
 }
 
 func toResponse(m Message) MessageResponse {
 	out := MessageResponse{
-		ID:        m.ID.Hex(),
-		From:      m.SenderRole,
-		Body:      m.Body,
+		ID:   m.ID.Hex(),
+		From: m.SenderRole,
+		Body: m.Body,
+		// ⚠️ `text` POUR UN MESSAGE SANS GENRE : ceux d'avant les vocaux n'en
+		// portent pas, et servir une chaîne vide obligerait chaque application
+		// à écrire le même `?? "text"` de son côté.
+		Kind:      kindOf(m),
+		AudioURL:  m.AudioURL,
+		Seconds:   m.Seconds,
 		ReadAt:    m.ReadAt,
 		CreatedAt: m.CreatedAt,
 	}
@@ -64,8 +102,22 @@ func toResponse(m Message) MessageResponse {
 	if m.Hidden {
 		out.Body = ""
 		out.Hidden = true
+		// ⚠️⚠️ ET L'AUDIO DISPARAÎT AVEC LE CORPS. Retirer la transcription
+		// d'un message tout en laissant son enregistrement réécoutable
+		// n'aurait retiré que la trace écrite — le destinataire n'aurait eu
+		// qu'à appuyer sur « écouter ». C'est le genre de demi-mesure qui fait
+		// croire à une modération qui n'existe pas.
+		out.AudioURL = ""
 	}
 	return out
+}
+
+// kindOf rend le genre d'un message, `text` par défaut.
+func kindOf(m Message) string {
+	if m.Kind == KindVoice {
+		return KindVoice
+	}
+	return KindText
 }
 
 func toResponses(items []Message) []MessageResponse {
