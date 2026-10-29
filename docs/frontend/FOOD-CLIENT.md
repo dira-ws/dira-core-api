@@ -1,6 +1,6 @@
 # App CLIENT — LIVRAISON — contrat d'API
 
-> **Version 4.90.0** · 29 octobre 2026
+> **Version 4.91.0** · 29 octobre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Livraison : `https://api-staging.dira.llc/api/v1/food` · Suivi : `wss://tracking-staging.dira.llc`
 
 
@@ -821,6 +821,39 @@ GET /banners
 - **`lat` + `lng` vont ensemble.** Sans position **ni** `q`, la requête est refusée : rendre la plateforme entière n'aiderait personne.
 - Avec position, chaque boutique porte `distance_m` et la liste est triée du plus proche. Sans position, tri par nom et **pas de `distance_m`** — c'est le cas d'un utilisateur qui a refusé la localisation.
 - `tags=italien,libanais` **élargit** (l'un OU l'autre) : personne ne cherche un restaurant qui serait les deux.
+
+#### 🆕 Le carrousel : réservez sa place AVANT de charger les images (v4.91.0)
+
+`GET /banners` porte désormais le **format de chaque emplacement**, à côté des
+cartes :
+
+```jsonc
+{
+  "items": [ /* … */ ],
+  "formats": {
+    "wide":  { "width": 1280, "height": 720,  "aspect_ratio": 1.7777777777777777 },
+    "short": { "width": 1080, "height": 1920, "aspect_ratio": 0.5625 }
+  }
+}
+```
+
+- `wide` est la carte du **carrousel d'accueil** (horizontale), `short`
+  l'insertion **plein écran vertical** dans le feed.
+- Dimensionnez la boîte avec `aspect_ratio` (= largeur / hauteur), **calculé par
+  le serveur** : trois applications qui le divisent chacune de leur côté
+  finissent par arrondir différemment.
+
+⚠️ **C'est le format de l'EMPLACEMENT, pas la mesure de chaque image**, et c'est
+délibéré : un carrousel dont chaque carte aurait son propre rapport **sauterait
+à chaque glissement**. Posez toutes les cartes dans la même boîte.
+
+⚠️ **`formats` part même quand `items` est vide** — c'est précisément le cas où
+vous en avez besoin : réservez la hauteur du carrousel avant de savoir s'il y
+aura une campagne, et l'écran ne sautera pas quand la première arrivera.
+(`items` est toujours une liste, jamais `null`.)
+
+⚠️ Et **ne recadrez plus à une hauteur fixe.** C'est ce que vous faisiez faute
+de rapport, et le visuel était coupé au mauvais endroit, texte tronqué.
 
 > ⚠️ **UNE PROMOTION PEUT S'ARRÊTER EN COURS DE JOURNÉE (v4.17.0).** Chaque
 > opération a une **enveloppe** — ce que la plateforme s'engage à dépenser —
@@ -1971,6 +2004,108 @@ POST /payments/initiate   { purpose: "wallet_topup", ref_id: <user_id>, amount, 
 - La recharge n'est créditée qu'à la **confirmation** du prestataire.
 - **Le portefeuille s'ouvre à la première lecture — v3.0.0.** `GET /wallet` répond toujours `200` à un client, vide au besoin ; il n'y a pas de « pas encore de portefeuille » à gérer.
 
+### 🆕 Recharger : les bornes du pays, et retrouver une recharge perdue (v4.91.0)
+
+```
+GET /wallet
+  → "topup": { "min": 500, "max": 2000000,
+               "presets": [1000, 2000, 5000, 10000],
+               "currency": "XOF", "decimals": 0 }
+```
+
+⚠️⚠️ **CES NOMBRES NE SONT PAS DES FRANCS CFA — LISEZ `currency`.** Vous codiez
+1 000 / 2 000 / 5 000 / 10 000 et un montant libre de sept chiffres : ce sont
+les nombres du **Togo**. Le franc guinéen vaut ~15 fois moins — « 1 000 FG »
+affiché à Conakry propose sept centimes d'euro. Le cedi et le naira portent en
+plus **deux décimales** : `decimals: 2` veut dire que l'entier est en
+centièmes, et `2000` s'affiche **20,00 GH₵**. N'écrivez plus aucun montant en
+dur.
+
+- `presets` sont les montants proposés d'un geste, **triés**. Gardez le montant
+  libre à côté, borné par `min`..`max`.
+- ⚠️ **Les bornes sont APPLIQUÉES, pas suggérées.** Hors bornes,
+  `POST /payments/initiate` refuse en `422` sous un code **nommé** :
+
+| Code | Ce que l'écran dit |
+|---|---|
+| `topup_below_minimum` | le `message` traduit porte déjà le minimum et la monnaie — affichez-le tel quel |
+| `topup_above_maximum` | idem avec le maximum |
+
+Les deux portent `fields: ["amount"]`. ⚠️ Les **chiffres sont dans la phrase
+traduite**, pas dans un champ à part : l'enveloppe d'erreur ne sert que `code`,
+`message`, `fields`, `reason` et `feature`.
+
+#### La route de recharge d'un passager
+
+```
+POST /payments/initiate
+  Idempotency-Key: <une clé que VOUS choisissez>        ← v4.91.0
+  { "purpose": "wallet_topup", "ref_id": "<votre propre id>",
+    "amount": 5000, "provider": "tmoney" }
+
+→ 201 { "payment": { "id", "status": "pending", "amount", "currency",
+                     "operator_reached": true, "expires_at": "…",
+                     "payment_url": "…" },
+        "payment_url": "…" }
+```
+
+⚠️ **`POST /wallet/purchase` N'EST PAS LA RECHARGE D'UN PASSAGER.** Elle achète
+des **jetons** — le droit d'entrée d'un livreur, l'outil de promotion d'un
+marchand — et le socle la **refuse à un client** (`403`). Le solde `balance`
+d'un client reste à zéro, c'est normal.
+
+#### ⚠️⚠️ Quand la réponse se perd : trois champs et une clé
+
+Vous reteniez « Payer » **dix minutes** à l'aveugle, parce que rien ne disait si
+une demande était partie chez l'opérateur. Trois choses changent.
+
+**1. `Idempotency-Key` — réessayez sans risque.** Une clé par *intention* de
+paiement (pas par tentative), que vous gardez tant que l'écran est ouvert. La
+même clé rend **le même paiement**, et ne déclenche **aucune seconde demande**
+chez l'opérateur. Elle se lit aussi dans le corps (`idempotency_key`) si
+l'en-tête vous est plus difficile à poser.
+
+**2. `GET /payments` — retrouvez un paiement sans son `id`.**
+
+```
+GET /payments?purpose=wallet_topup&ref_id=<votre id>&status=pending&limit=5
+→ 200 { "items": [ { "id", "status", "amount", "operator_reached",
+                      "expires_at", "payment_url" } ],
+        "next_cursor": "…", "has_more": false }
+```
+
+Le plus récent d'abord, **vos paiements seulement**. ⚠️ `purpose` **est** le
+`ref_kind` que vous demandiez : `?purpose=order&ref_id=<order_id>` donne les
+paiements d'une commande, `?purpose=ride&ref_id=<ride_id>` ceux d'une course.
+Un `purpose`, `status` ou `ref_id` illisible est **refusé** (`422`, le champ
+nommé) — jamais ignoré, parce qu'un filtre ignoré vous rendrait *tous* vos
+paiements et vous feriez croire à un paiement en cours là où il n'y en a aucun.
+
+**3. `operator_reached` — la seule chose honnête.**
+
+| `status` | `operator_reached` | Ce que ça veut dire | Ce que l'écran fait |
+|---|---|---|---|
+| `pending` | `true` | la demande est **partie**, le client doit valider chez l'opérateur | « validez sur votre téléphone », ouvrez `payment_url` |
+| `pending` | `false` | ⚠️ **on a demandé et on ne sait pas** | « un paiement est peut-être en cours » → **Reprendre** (même `Idempotency-Key`), jamais « Payer » à neuf |
+| `succeeded` | — | encaissé et crédité | — |
+| `failed` | — | refusé par l'opérateur | proposez de recommencer, **nouvelle** clé |
+
+⚠️ **`operator_reached: false` ne veut PAS dire « rien n'est parti ».** Un délai
+dépassé, une coupure, un `5xx` : une demande de paiement peut dormir sur le
+téléphone du client. Proposer « Payer » comme si rien ne s'était passé peut
+déclencher une **seconde** demande.
+
+⚠️ **`expires_at` remplace vos dix minutes codées en dur.** Après cet instant,
+un paiement `pending` ne vaut plus la peine d'être attendu — rendez la main.
+**Rien ne le marque `failed` à cette date** : un rappel tardif de l'opérateur
+peut encore le faire aboutir, donc gardez `GET /payments/{id}` accessible depuis
+l'historique.
+
+⚠️ Et une initiation qui **échoue** (`5xx`) laisse désormais le paiement
+**retrouvable** — c'est l'inverse d'avant, où il n'existait aucune trace. Si
+votre appel n'aboutit pas, interrogez `GET /payments` avant de proposer quoi que
+ce soit.
+
 ---
 
 ## 10. Nutrition
@@ -2610,6 +2745,8 @@ du livreur) vous arrive en **`ticket_reply`**, la clôture en
 relisez `GET /tickets/{id}` à l'ouverture et sur chaque notification.
 
 ⚠️ **`POST /uploads` est au socle — v3.0.0** : `…/api/v1/uploads`, plus `/food/uploads` (404). Multipart, champ `file`, le **type déclaré** de la part fait foi (jpeg, png, webp, svg ; ≤ 5 MiB). Réponse `201 { url }` : téléversez **d'abord**, rattachez l'URL ensuite (`PATCH /me { avatar_url }`) — un envoi qui échoue ne doit pas faire perdre la saisie.
+
+⚠️ **RETIRER la photo : `PATCH /me { "avatar_url": "" }`** (v4.91.0). Le serveur l'a toujours accepté, et ce document ne le disait pas — la seule façon connue de « supprimer sa photo » était donc d'en téléverser une autre. La chaîne **vide**, pas `null` : `null` vaut « inchangé ».
 
 Un crédit tombola en attente est appliqué **automatiquement** en remise à la commande suivante — il apparaît dans `discount`.
 

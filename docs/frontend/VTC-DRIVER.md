@@ -1,6 +1,6 @@
 # App CHAUFFEUR — COURSES (VTC) — contrat d'API
 
-> **Version 4.90.0** · 29 octobre 2026
+> **Version 4.91.0** · 29 octobre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Courses : `https://api-staging.dira.llc/api/v1/vtc` · Suivi : `wss://tracking-staging.dira.llc` · SIG : `https://maps.dira.llc/api`
 
 ---
@@ -4270,6 +4270,13 @@ champ absent n'est pas un champ vide à afficher.
 | `GET /me/notifications` · `POST /me/devices` | les notifications |
 | `GET /agents/{id}/ratings` | vos avis — `id` = votre **profil** (`GET /drivers/me` → `id`) |
 
+⚠️ **ET `topup` N'EST PAS SERVI SUR VOTRE PORTEFEUILLE** (v4.91.0). Les bornes
+de recharge par pays (`min`, `max`, `presets`) ne partent que sur le
+portefeuille d'un **client**, qui se recharge en argent par mobile money. Le
+vôtre s'alimente autrement — n'affichez pas d'écran « Recharger » en argent, et
+si `topup` est absent de la réponse, c'est normal et définitif.
+
+
 - **Téléphone en E.164 avec le `+`** ; sans indicatif, `422` avec `fields: ["phone"]`. `account_suspended` (403) à la connexion : le dire tel quel.
 - **Durées de vie des jetons — v3.1.0.** Access token **15 min** (staging : **10 min**), refresh token **30 jours**, consommé à la rotation (le rejouer → 401 → revenir à la connexion). ⚠️ Le socket du suivi est ouvert avec l'access token et **vit plus longtemps que lui** : à l'échéance, le suivi le ferme avec le code **4401 `token_expired`** — rafraîchir (`POST /auth/refresh`) **puis** reconnecter, jamais reconnecter avec le même jeton. Poignée de main : **401** = rafraîchir et revenir ; **403** = ce rôle ne peut pas pousser de positions, ne pas réessayer. L'ancien access token reste valide jusqu'à son échéance après une rotation : un court chevauchement socket / REST est normal.
 - **Un `422` nomme ses champs** (`fields`, `reason`) — §1 bis.
@@ -4684,6 +4691,10 @@ Aucune conséquence : il n'y a personne à déconnecter, et rien ne s'affiche.
   `PATCH /me { "avatar_url": url }` → la réponse est le compte à jour, à
   garder en session. Deux étapes pour qu'un envoi qui échoue ne fasse pas
   perdre le reste de la saisie.
+- **🆕 RETIRER la photo : `PATCH /me { "avatar_url": "" }`** (v4.91.0). Le
+  serveur l'a toujours accepté, et ce document ne le disait pas — faute de
+  quoi la seule façon connue de « supprimer sa photo » était d'en téléverser
+  une autre. ⚠️ La chaîne **vide**, et non `null` : `null` vaut « inchangé ».
 - **`PATCH /me` n'envoie que ce qui change** :
   `{ name?, first_name?, last_name?, birth_date?, gender?, email?, avatar_url? }`.
   Une clé inconnue → `422 reason: unknown_field`. Quand `name` n'a jamais

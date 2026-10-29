@@ -1,6 +1,6 @@
 # Specs frontend — par rôle
 
-> **Version 4.90.0** · 29 octobre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics`
+> **Version 4.91.0** · 29 octobre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics`
 
 **Cinq** documents, un par application. Chacun est **autonome** : tout ce qu'un frontend doit savoir pour son rôle, sans avoir à ouvrir les vingt specs de modules.
 
@@ -355,6 +355,97 @@ Chaque document porte la même version en en-tête, et son propre journal des ch
 - [ ] ⚠️ **`TRACKING_JWT_SECRET` renseigné dans chaque environnement déployé.** Vide, l'authentification du service de suivi est **désactivée** : n'importe qui connaissant un `delivery_id` suit la course. Le secret doit valoir **exactement** le `JWT_SECRET` de `dira-food-api`.
 
 ## Journal
+
+### 4.91.0 — 29 octobre 2026
+
+💳 **UN PAIEMENT MOBILE MONEY DONT LA RÉPONSE SE PERD RESTE RETROUVABLE** —
+`DIRA-CLIENT.md` §6, `VTC-CLIENT.md` §💳, `FOOD-CLIENT.md` §9
+(core#248, core#250).
+
+```
+POST /payments/initiate
+  Idempotency-Key: <une clé que VOUS choisissez>
+GET  /payments?purpose=&ref_id=&status=&limit=&cursor=
+```
+
+Vous reteniez « Payer » **dix minutes** à l'aveugle, faute de savoir si une
+demande était partie chez l'opérateur. Trois choses changent.
+
+⚠️⚠️ **LA LIGNE DU PAIEMENT EXISTE MAINTENANT AVANT L'APPEL À L'OPÉRATEUR.**
+C'était l'inverse : un `5xx`, un délai, une coupure — et une demande de paiement
+pouvait dormir sur le téléphone du client **sans aucune trace** chez nous.
+« Réessayer » déclenchait une **seconde** demande. Et la route que vous
+demandiez pour retrouver un paiement perdu n'aurait rien trouvé dans le seul cas
+où elle sert : l'ordre devait changer d'abord.
+
+⚠️ **`operator_reached: false` sur un `pending` ne veut PAS dire « rien n'est
+parti »** — il veut dire « on a demandé et on ne sait pas ». Proposez
+**Reprendre** (même `Idempotency-Key`), jamais « Payer » à neuf.
+
+⚠️ **`expires_at` remplace vos dix minutes codées en dur.** Rien ne marque le
+paiement `failed` à cette date : un rappel tardif de l'opérateur peut encore le
+faire aboutir, donc gardez `GET /payments/{id}` joignable depuis l'historique.
+
+⚠️ **`purpose` EST le `ref_kind` que vous demandiez.**
+`?purpose=order&ref_id=<order_id>` donne les paiements d'une commande. Un second
+nom pour la même chose est la façon habituelle dont un contrat se met à se
+contredire. Un filtre illisible est **refusé** (`422`, champ nommé), jamais
+ignoré.
+
+💰 **DES BORNES DE RECHARGE PAR PAYS, ANNONCÉES *ET* APPLIQUÉES** —
+`DIRA-CLIENT.md`, `VTC-CLIENT.md`, `FOOD-CLIENT.md` (core#250 §2).
+
+```
+GET /wallet → "topup": { "min", "max", "presets": [], "currency", "decimals" }
+```
+
+Le contrat ne fixait que `amount > 0`. Vous codiez donc 1 000 / 2 000 / 5 000 /
+10 000 et un montant libre de sept chiffres.
+
+⚠️⚠️ **CES NOMBRES SONT CEUX DU TOGO — LISEZ `currency`.** Le franc guinéen vaut
+~15 fois moins : « 1 000 FG » à Conakry propose sept centimes d'euro. Le cedi et
+le naira portent **deux décimales** (`decimals: 2`) : l'entier est en centièmes,
+et `2000` s'affiche **20,00 GH₵**. N'écrivez plus aucun montant en dur.
+
+⚠️ Hors bornes, `POST /payments/initiate` **refuse** en `422` sous un code
+nommé — `topup_below_minimum`, `topup_above_maximum`, `fields: ["amount"]`, les
+chiffres **dans la phrase traduite**. Une borne qu'aucune route n'applique n'est
+pas une borne.
+
+⚠️ **`topup` ne part QUE sur le portefeuille d'un client.** Celui d'un livreur
+ou d'un marchand s'alimente autrement : son absence est normale et définitive.
+
+⚠️⚠️ **ET `POST /wallet/purchase` N'EST PAS LA RECHARGE D'UN PASSAGER.**
+`VTC-CLIENT.md` l'indiquait à **trois endroits**, depuis des mois. Elle achète
+des **jetons** et le socle la **refuse à un client** (`403`) : une application
+qui l'a suivie envoyait le passager vers un refus, au moment précis où il venait
+de lire « solde insuffisant ». La bonne route est
+`POST /payments/initiate { purpose: "wallet_topup" }`. Corrigé partout.
+
+🖼️ **LE CARROUSEL DIT LE FORMAT DE SES EMPLACEMENTS** — `FOOD-CLIENT.md` §4
+(core#250 §4).
+
+```
+GET /banners → "formats": { "wide":  { width, height, aspect_ratio },
+                            "short": { width, height, aspect_ratio } }
+```
+
+Rien ne disait le rapport largeur/hauteur : vous recadriez à une **hauteur
+fixe**, et le visuel était coupé au mauvais endroit, texte tronqué.
+
+⚠️ C'est le format de l'**emplacement**, pas la mesure de chaque image : un
+carrousel dont chaque carte aurait son propre rapport sauterait à chaque
+glissement. ⚠️ Et `formats` part **même quand `items` est vide** — c'est
+précisément là que vous en avez besoin, pour réserver la hauteur avant qu'une
+campagne n'arrive.
+
+🖼️ **RETIRER SA PHOTO DE PROFIL** — `FOOD-CLIENT.md`, `FOOD-DELIVERY.md`,
+`VTC-DRIVER.md`, `PARTNER-FLEET.md` (core#250 §5).
+
+`PATCH /me { "avatar_url": "" }`, la chaîne **vide** et non `null` (qui vaut
+« inchangé »). Le serveur l'acceptait depuis toujours et aucun contrat ne le
+disait : la seule façon connue de supprimer sa photo était d'en téléverser une
+autre. Une épreuve la tient désormais.
 
 ### 4.90.0 — 29 octobre 2026
 

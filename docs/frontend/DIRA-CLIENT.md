@@ -1,6 +1,6 @@
 # App CLIENT UNIFIÉE — LIVRAISON **et** COURSES — contrat d'API
 
-> **Version 4.90.0** · 29 octobre 2026
+> **Version 4.91.0** · 29 octobre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Livraison : `…/api/v1/food` · Courses : `…/api/v1/vtc` · Combiné : `…/api/v1/analytics` · Suivi : `wss://tracking-staging.dira.llc`
 
 ---
@@ -630,6 +630,108 @@ métiers.
 `GET /payments/{id}` jusqu'à `succeeded`, ou attendez le passage de l'opération
 à son statut payé. Un écran qui annonce « payé » sur un `202` fait réclamer un
 remboursement pour un paiement qui n'a jamais abouti.
+
+### 🆕 Recharger : les bornes du pays, et retrouver une recharge perdue (v4.91.0)
+
+```
+GET /wallet
+  → "topup": { "min": 500, "max": 2000000,
+               "presets": [1000, 2000, 5000, 10000],
+               "currency": "XOF", "decimals": 0 }
+```
+
+⚠️⚠️ **CES NOMBRES NE SONT PAS DES FRANCS CFA — LISEZ `currency`.** Vous codiez
+1 000 / 2 000 / 5 000 / 10 000 et un montant libre de sept chiffres : ce sont
+les nombres du **Togo**. Le franc guinéen vaut ~15 fois moins — « 1 000 FG »
+affiché à Conakry propose sept centimes d'euro. Le cedi et le naira portent en
+plus **deux décimales** : `decimals: 2` veut dire que l'entier est en
+centièmes, et `2000` s'affiche **20,00 GH₵**. N'écrivez plus aucun montant en
+dur.
+
+- `presets` sont les montants proposés d'un geste, **triés**. Gardez le montant
+  libre à côté, borné par `min`..`max`.
+- ⚠️ **Les bornes sont APPLIQUÉES, pas suggérées.** Hors bornes,
+  `POST /payments/initiate` refuse en `422` sous un code **nommé** :
+
+| Code | Ce que l'écran dit |
+|---|---|
+| `topup_below_minimum` | le `message` traduit porte déjà le minimum et la monnaie — affichez-le tel quel |
+| `topup_above_maximum` | idem avec le maximum |
+
+Les deux portent `fields: ["amount"]`. ⚠️ Les **chiffres sont dans la phrase
+traduite**, pas dans un champ à part : l'enveloppe d'erreur ne sert que `code`,
+`message`, `fields`, `reason` et `feature`.
+
+#### La route de recharge d'un passager
+
+```
+POST /payments/initiate
+  Idempotency-Key: <une clé que VOUS choisissez>        ← v4.91.0
+  { "purpose": "wallet_topup", "ref_id": "<votre propre id>",
+    "amount": 5000, "provider": "tmoney" }
+
+→ 201 { "payment": { "id", "status": "pending", "amount", "currency",
+                     "operator_reached": true, "expires_at": "…",
+                     "payment_url": "…" },
+        "payment_url": "…" }
+```
+
+⚠️ **`POST /wallet/purchase` N'EST PAS LA RECHARGE D'UN PASSAGER.** Elle achète
+des **jetons** — le droit d'entrée d'un livreur, l'outil de promotion d'un
+marchand — et le socle la **refuse à un client** (`403`). Le solde `balance`
+d'un client reste à zéro, c'est normal.
+
+#### ⚠️⚠️ Quand la réponse se perd : trois champs et une clé
+
+Vous reteniez « Payer » **dix minutes** à l'aveugle, parce que rien ne disait si
+une demande était partie chez l'opérateur. Trois choses changent.
+
+**1. `Idempotency-Key` — réessayez sans risque.** Une clé par *intention* de
+paiement (pas par tentative), que vous gardez tant que l'écran est ouvert. La
+même clé rend **le même paiement**, et ne déclenche **aucune seconde demande**
+chez l'opérateur. Elle se lit aussi dans le corps (`idempotency_key`) si
+l'en-tête vous est plus difficile à poser.
+
+**2. `GET /payments` — retrouvez un paiement sans son `id`.**
+
+```
+GET /payments?purpose=wallet_topup&ref_id=<votre id>&status=pending&limit=5
+→ 200 { "items": [ { "id", "status", "amount", "operator_reached",
+                      "expires_at", "payment_url" } ],
+        "next_cursor": "…", "has_more": false }
+```
+
+Le plus récent d'abord, **vos paiements seulement**. ⚠️ `purpose` **est** le
+`ref_kind` que vous demandiez : `?purpose=order&ref_id=<order_id>` donne les
+paiements d'une commande, `?purpose=ride&ref_id=<ride_id>` ceux d'une course.
+Un `purpose`, `status` ou `ref_id` illisible est **refusé** (`422`, le champ
+nommé) — jamais ignoré, parce qu'un filtre ignoré vous rendrait *tous* vos
+paiements et vous feriez croire à un paiement en cours là où il n'y en a aucun.
+
+**3. `operator_reached` — la seule chose honnête.**
+
+| `status` | `operator_reached` | Ce que ça veut dire | Ce que l'écran fait |
+|---|---|---|---|
+| `pending` | `true` | la demande est **partie**, le client doit valider chez l'opérateur | « validez sur votre téléphone », ouvrez `payment_url` |
+| `pending` | `false` | ⚠️ **on a demandé et on ne sait pas** | « un paiement est peut-être en cours » → **Reprendre** (même `Idempotency-Key`), jamais « Payer » à neuf |
+| `succeeded` | — | encaissé et crédité | — |
+| `failed` | — | refusé par l'opérateur | proposez de recommencer, **nouvelle** clé |
+
+⚠️ **`operator_reached: false` ne veut PAS dire « rien n'est parti ».** Un délai
+dépassé, une coupure, un `5xx` : une demande de paiement peut dormir sur le
+téléphone du client. Proposer « Payer » comme si rien ne s'était passé peut
+déclencher une **seconde** demande.
+
+⚠️ **`expires_at` remplace vos dix minutes codées en dur.** Après cet instant,
+un paiement `pending` ne vaut plus la peine d'être attendu — rendez la main.
+**Rien ne le marque `failed` à cette date** : un rappel tardif de l'opérateur
+peut encore le faire aboutir, donc gardez `GET /payments/{id}` accessible depuis
+l'historique.
+
+⚠️ Et une initiation qui **échoue** (`5xx`) laisse désormais le paiement
+**retrouvable** — c'est l'inverse d'avant, où il n'existait aucune trace. Si
+votre appel n'aboutit pas, interrogez `GET /payments` avant de proposer quoi que
+ce soit.
 
 ---
 
