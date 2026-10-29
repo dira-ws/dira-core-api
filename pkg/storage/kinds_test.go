@@ -72,7 +72,7 @@ var natures = map[string]nature{
 	"avatar": photo, "banner": photo, "equipment": photo,
 	"class": picto, "marker": picto,
 	"feed":  video,
-	"sound": audio, "voice": audio,
+	"sound": audio, "voice": audio, "speech": audio,
 	"receipt": proof, "document": proof,
 }
 

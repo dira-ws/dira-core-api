@@ -99,6 +99,20 @@ var (
 	// encodons : c'est le téléphone. Android rend du 3GP ou du WebM/Opus,
 	// iOS du M4A. Refuser ce qu'un téléphone produit, c'est refuser le vocal
 	// à la moitié du marché.
+	// speechTypes : ce qu'un moteur de SYNTHÈSE a le droit de produire.
+	//
+	// ⚠️⚠️ PAS DE WAV, ET J'AI ESSAYÉ DE L'Y METTRE. Le raisonnement était
+	// « notre moteur en sort, et refuser obligerait à réencoder ce que nous
+	// venons de produire » — et il oubliait QUI TÉLÉCHARGE. Ce son part vers un
+	// téléphone sur un réseau d'ici : vingt secondes de WAV pèsent un
+	// demi-mégaoctet, la même phrase en opus en pèse trente kilooctets. C'est
+	// le moteur qui encode, parce que c'est le seul endroit où cela ne coûte
+	// rien. Un garde de ce paquet l'a dit avant moi (`kinds_test.go`).
+	speechTypes = map[string]string{
+		"audio/mpeg": ".mp3", "audio/mp4": ".m4a", "audio/m4a": ".m4a",
+		"audio/aac": ".aac", "audio/ogg": ".ogg", "audio/opus": ".opus",
+		"audio/webm": ".webm",
+	}
 	voiceTypes = map[string]string{
 		"audio/mp4": ".m4a", "audio/m4a": ".m4a", "audio/x-m4a": ".m4a",
 		"audio/aac": ".aac", "audio/mpeg": ".mp3", "audio/ogg": ".ogg",
@@ -127,6 +141,14 @@ const (
 	// refuse serait un fichier stocké dont personne ne saura jamais ce qu'il
 	// dit. Deux mégaoctets, c'est une minute large en opus ou en AAC mono.
 	MaxVoiceBytes = 2 << 20 // 2 Mio
+	// MaxSpeechBytes borne une phrase DITE PAR LE SERVEUR.
+	//
+	// ⚠️ LE MÊME PLAFOND QU'UN VOCAL, et il est très large pour l'usage : une
+	// phrase de confirmation compressée pèse quelques dizaines de kilooctets.
+	// Deux mégaoctets ne sont donc pas une cible mais une BORNE — ce qui
+	// empêche qu'un moteur mal réglé, ou un texte de dix mille mots, remplisse
+	// le seau une phrase à la fois.
+	MaxSpeechBytes = 2 << 20 // 2 Mio
 	// MaxSoundBytes : trente secondes d'AAC pèsent trois cents kilooctets.
 	//
 	// ⚠️ SERRÉ EXPRÈS, à deux mégaoctets : c'est dix fois ce qu'il faut, et
@@ -150,7 +172,28 @@ const (
 // seau et le cycle de vie des objets savent tous deux appliquer. Le dire
 // ailleurs — sur l'appelant, sur le module — aurait demandé que chacun y
 // pense.
-var privateKinds = map[string]bool{"voice": true}
+var privateKinds = map[string]bool{KindVoice: true, KindSpeech: true}
+
+// Les genres nommés. ⚠️ EN CONSTANTES PARCE QU'ILS VOYAGENT : un service qui
+// dépose un son écrit `storage.KindSpeech`, et une faute de frappe devient
+// alors une erreur de compilation plutôt qu'un objet rangé sous un préfixe que
+// la politique du seau ne couvre pas — c'est-à-dire un objet PUBLIC.
+const (
+	// KindVoice : le message vocal d'une personne.
+	KindVoice = "voice"
+	// KindSpeech : une phrase DITE PAR LE SERVEUR — la réponse de l'assistant
+	// lue à voix haute, un texte de l'interface.
+	//
+	// ⚠️⚠️ PRIVÉ COMME LA VOIX, et pour une raison qui se voit moins : ce que
+	// le serveur dit porte ce que la personne a demandé. « De Moursal à
+	// Chagoua, quatre mille cinq cent cinquante francs » est son adresse et le
+	// prix de sa course, dans un fichier audio. Public, il serait lisible par
+	// qui connaît l'URL.
+	//
+	// ⚠️ ET LA CLÉ PORTE LE COMPTE (`speech/<compte>/…`) : c'est ce qui permet
+	// de l'effacer avec lui, comme sa voix.
+	KindSpeech = "speech"
+)
 
 // Private dit si ce genre exige une URL signée.
 func Private(kind string) bool { return privateKinds[kind] }
@@ -190,6 +233,21 @@ var Kinds = map[string]Kind{
 	// d'une personne ne se rangent pas au même endroit, ne s'écoutent pas par
 	// les mêmes gens, et ne se gardent pas aussi longtemps.
 	"voice": {voiceTypes, MaxVoiceBytes, "m4a, aac, mp3, ogg, opus, webm, 3gp"},
+
+	// LA VOIX DU SERVEUR : une phrase synthétisée, dite à quelqu'un.
+	//
+	// ⚠️ UN GENRE À LUI, et non `voice` élargi. Les deux sont privés et les
+	// deux sont du son, mais ils ne se gardent pas pour les mêmes raisons : un
+	// vocal est une PIÈCE — on le réécoute pour trancher un litige —, une
+	// phrase dite est un CONFORT, qu'on peut toujours refaire. Mêlés, la purge
+	// de l'un aurait emporté l'autre, et le genre ne dirait plus lequel on
+	// regarde dans un seau.
+	//
+	// ⚠️ ET LE WAV N'Y EST PAS, bien que notre moteur en sorte : ce son part
+	// vers un téléphone sur un réseau d'ici, où vingt secondes non compressées
+	// pèsent un demi-mégaoctet contre trente kilooctets en opus. C'est le
+	// moteur qui encode — le seul endroit où cela ne coûte rien.
+	"speech": {speechTypes, MaxSpeechBytes, "mp3, m4a, aac, ogg, opus, webm"},
 
 	// LES PREUVES. ⚠️ LES DEUX SEULS GENRES QUI PRENNENT LE PDF, et c'est
 	// pour cela qu'ils sont séparés des photos :
