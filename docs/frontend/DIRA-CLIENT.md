@@ -1,6 +1,6 @@
 # App CLIENT UNIFIÉE — LIVRAISON **et** COURSES — contrat d'API
 
-> **Version 4.100.0** · 29 octobre 2026
+> **Version 4.101.0** · 29 octobre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Livraison : `…/api/v1/food` · Courses : `…/api/v1/vtc` · Combiné : `…/api/v1/analytics` · Suivi : `wss://tracking-staging.dira.llc`
 
 ---
@@ -1007,7 +1007,7 @@ POST /analytics/ai/voice
                  vertical = "vtc" | "food"       (facultatif)
   →
 { "voice_id": "68f0…",
-  "audio_url": "https://files.dira.llc/voice/…/a1b2.m4a",   // RÉÉCOUTABLE
+  "audio_url": "https://files.dira.llc/…/a1b2.m4a?X-Amz-Signature=…",  // ⚠️ SIGNÉE, 15 min
   "seconds": 7,
   "text": "emmène-moi à l'aéroport",
   "language": "fr",
@@ -1468,7 +1468,7 @@ GET /analytics/ai/thread
   "messages": [
     { "id": "68f0…", "role": "client", "text": "emmène-moi à l'aéroport",
       "voice_id": "68f0…",
-      "audio_url": "https://files.dira.llc/voice/…/a1b2.m4a",  // RÉÉCOUTABLE
+      "audio_url": "https://files.dira.llc/…/a1b2.m4a?X-Amz-Signature=…",  // ⚠️ SIGNÉE, 15 min
       "seconds": 7, "at": "2026-10-28T09:12:01Z" },
     { "id": "68f1…", "role": "assistant", "text": "Voici deux options.",
       "vertical": "vtc", "plan": { … },
@@ -1533,25 +1533,38 @@ serait restée incomplète sans que personne ne le sache.
 ⚠️ **`POST /food/orders` ne le prend pas encore.** Côté repas, gardez
 l'historique en lecture seule — c'est de toute façon la bonne règle.
 
-### 🆕 ⚠️ `audio_url` : COMMENT ON LE LIT (v4.99.0)
+### 🆕 ⚠️⚠️ `audio_url` EST DÉSORMAIS COURTE ET SIGNÉE (v4.101.0)
 
-- **Lisible SANS en-tête**, aujourd'hui : l'adresse ne porte aucune signature.
-  Un lecteur audio dans une bulle de conversation n'envoie pas nos en-têtes, et
-  exiger le jeton Dira aurait rendu les vocaux injouables sur les deux
-  plateformes. Donnez-la directement à votre lecteur.
+**C'est fait.** La v4.99.0 annonçait ce changement ; il est en vigueur.
 
-⚠️⚠️ **NE LA GARDEZ PAS, NE LA RECOPIEZ PAS — RELISEZ-LA DU FIL.** Elle est
-appelée à devenir **courte et signée** : une voix est une donnée personnelle, et
-son adresse finira par expirer. Une application qui met `audio_url` en cache, la
-range dans sa base ou la met dans un lien se cassera ce jour-là. **Relisez
-`GET /ai/thread` au moment d'ouvrir la conversation**, et jouez l'adresse qu'il
-vient de rendre.
+- **Lisible sans en-tête** : l'adresse porte sa propre signature. Un lecteur
+  audio dans une bulle n'envoie pas nos en-têtes, et exiger le jeton Dira aurait
+  rendu les vocaux injouables sur les deux plateformes. **Donnez-la directement
+  à votre lecteur.**
+- ⚠️⚠️ **ELLE EXPIRE AU BOUT D'UN QUART D'HEURE.** Passé ce délai, elle répond
+  `403` — et c'est voulu : une adresse de voix qui vivrait des jours serait une
+  adresse publique avec une date, et elle finirait dans un journal, une capture
+  d'écran, un historique de navigateur.
+
+⚠️⚠️ **NE LA GARDEZ PAS, NE LA RECOPIEZ PAS — RELISEZ-LA DU FIL.** Une
+application qui met `audio_url` en cache, la range dans sa base ou la met dans
+un lien **est cassée maintenant**. **Relisez `GET /ai/thread` au moment d'ouvrir
+la conversation**, et jouez l'adresse qu'il vient de rendre. La même règle vaut
+pour `POST /ai/voice` : l'adresse de sa réponse est bonne tout de suite, pas
+demain.
 
 ⚠️ **Et traitez-la comme la voix de quelqu'un** : pas dans vos journaux, pas
 dans un partage, pas hors de la conversation.
 
-> Le changement sera **sans rupture pour vous** si vous relisez l'adresse à
-> chaque ouverture — c'est la seule chose à faire dès maintenant.
+> ⚠️ **`audio_url` peut aussi être ABSENT** là où vous l'attendiez — voir plus
+> haut : cela veut dire que nous n'avons pas pu composer l'adresse. **N'échouez
+> pas** : affichez la bulle avec son texte seul. C'est la même conduite
+> qu'avant, et c'est désormais le cas qui arrive quand le dépôt d'objets ne
+> répond pas.
+>
+> ⚠️ **Le fichier s'efface tout seul** au bout de quatre-vingt-dix jours, et
+> avec la suppression du compte. Une bulle plus ancienne garde son texte et perd
+> son lecteur : c'est normal, ne le présentez pas comme une erreur.
 
 ### Les trois rôles
 
