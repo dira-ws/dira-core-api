@@ -158,6 +158,13 @@ func run(logger *slog.Logger) error {
 	media, err := storage.New(ctx, storage.Config{
 		Endpoint: cfg.MinioEndpoint, AccessKey: cfg.MinioAccessKey, SecretKey: cfg.MinioSecretKey,
 		UseSSL: cfg.MinioUseSSL, Bucket: cfg.MinioBucket, PublicBaseURL: cfg.MinioPublicURL,
+		// ⚠️⚠️ LES GENRES PRIVÉS S'EFFACENT D'EUX-MÊMES. Le socle n'en dépose
+		// aucun — la voix est déposée par l'analytique — mais c'est lui qui
+		// crée le seau et qui pose sa politique : s'il ne posait pas aussi le
+		// cycle de vie, un déploiement où il démarre en dernier l'effacerait.
+		// Les deux services doivent déclarer la MÊME rétention, et c'est pour
+		// cela qu'elle est une variable d'environnement partagée.
+		PrivateRetention: cfg.PrivateMediaRetention,
 	})
 	if err != nil {
 		logger.Error("core: object storage unavailable — every upload will answer 503",

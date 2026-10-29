@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log/slog"
 	"math"
 	"sort"
 	"strconv"
@@ -16,6 +17,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
+	"github.com/minio/minio-go/v7/pkg/lifecycle"
 )
 
 // CE QUE CHAQUE GENRE DE TÉLÉVERSEMENT ACCEPTE, ET JUSQU'À QUELLE TAILLE.
@@ -131,6 +133,26 @@ const (
 	// fond de feed se télécharge pendant qu'on fait défiler.
 	MaxSoundBytes = 2 << 20 // 2 Mio
 )
+
+// privateKinds : les genres que le dépôt NE SERT PAS en lecture publique.
+//
+// ⚠️⚠️ CE SEUL MOT DÉCIDE DE LA VIE PRIVÉE D'UNE PERSONNE. Le reste du
+// contenu de ce dépôt est public par nature — une photo de plat, un
+// pictogramme de classe, une bannière : ils sont faits pour être servis à tout
+// le monde, par un navigateur, sans jeton. La VOIX de quelqu'un, non. Elle
+// était pourtant servie exactement comme eux : URL non signée, politique de
+// lecture publique sur tout le seau, clé de la forme
+// `voice/<userId>/<uuid>.m4a` (analytics#33 §1).
+//
+// ⚠️ ET LE GENRE EST LE BON ENDROIT POUR CE CHOIX, parce que c'est lui qui
+// préfixe la clé : « privé » devient une règle de chemin, que la politique du
+// seau et le cycle de vie des objets savent tous deux appliquer. Le dire
+// ailleurs — sur l'appelant, sur le module — aurait demandé que chacun y
+// pense.
+var privateKinds = map[string]bool{"voice": true}
+
+// Private dit si ce genre exige une URL signée.
+func Private(kind string) bool { return privateKinds[kind] }
 
 // Kinds : le genre préfixe la clé de l'objet, et dit ce qu'il accepte.
 var Kinds = map[string]Kind{
@@ -262,6 +284,17 @@ type Config struct {
 	// PublicBaseURL is what browsers use to fetch objects
 	// (e.g. http://localhost:9000). Defaults to the endpoint scheme+host.
 	PublicBaseURL string
+	// PrivateRetention : au bout de combien de temps les objets des genres
+	// PRIVÉS s'effacent d'eux-mêmes. Zéro = aucun cycle de vie posé.
+	//
+	// ⚠️⚠️ C'EST LE DÉPÔT QUI PURGE, ET NON UNE TÂCHE DE FOND À NOUS. Le TTL
+	// Mongo de 90 jours effaçait la LIGNE `ai_voice_notes`, jamais l'OBJET : la
+	// voix restait dans le seau indéfiniment, et plus aucune ligne ne disait
+	// qu'elle existait (analytics#33 §1). Une purge écrite par nous aurait eu
+	// le même défaut qu'une sauvegarde qu'on ne restaure jamais — elle marche
+	// jusqu'au jour où le processus ne tourne plus, et personne ne le voit.
+	// Le cycle de vie du seau, lui, tourne sans nous.
+	PrivateRetention time.Duration
 }
 
 type Store struct {
@@ -292,9 +325,19 @@ func New(ctx context.Context, cfg Config) (*Store, error) {
 			return nil, fmt.Errorf("storage: make bucket: %w", err)
 		}
 	}
-	policy := fmt.Sprintf(`{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"AWS":["*"]},"Action":["s3:GetObject"],"Resource":["arn:aws:s3:::%s/*"]}]}`, cfg.Bucket)
-	if err := client.SetBucketPolicy(ctx, cfg.Bucket, policy); err != nil {
+	if err := client.SetBucketPolicy(ctx, cfg.Bucket, bucketPolicy(cfg.Bucket)); err != nil {
 		return nil, fmt.Errorf("storage: bucket policy: %w", err)
+	}
+
+	// LE CYCLE DE VIE DES GENRES PRIVÉS — au mieux : un dépôt qui ne sait pas
+	// le poser (une version ancienne, une permission manquante) ne doit pas
+	// empêcher le service de démarrer. On le dit, et la purge se fera à la
+	// main.
+	if cfg.PrivateRetention > 0 {
+		if err := setPrivateLifecycle(ctx, client, cfg.Bucket, cfg.PrivateRetention); err != nil {
+			slog.WarnContext(ctx, "storage: PRIVATE OBJECTS WILL NOT EXPIRE BY THEMSELVES",
+				"bucket", cfg.Bucket, "retention", cfg.PrivateRetention, "error", err)
+		}
 	}
 
 	public := strings.TrimSuffix(cfg.PublicBaseURL, "/")
@@ -381,4 +424,133 @@ func (s *Store) Remove(ctx context.Context, publicURL string) error {
 		return fmt.Errorf("storage: remove %s: %w", key, err)
 	}
 	return nil
+}
+
+// bucketPolicy rend la politique de lecture du seau.
+//
+// ⚠️⚠️ UN `Allow` LARGE ET UN `Deny` NOMMÉ, et l'ordre ne compte pas : en S3
+// comme en MinIO, un `Deny` explicite l'emporte TOUJOURS sur un `Allow`, quel
+// que soit l'ordre des clauses. C'est ce qui rend ce couple sûr — l'inverse
+// (lister les préfixes publics) aurait rendu public tout genre ajouté ensuite,
+// et c'est exactement le défaut qu'on corrige : la voix est devenue publique
+// parce que la politique disait « tout ».
+//
+// ⚠️ ET LE `Deny` PORTE SUR `s3:*`, pas seulement sur la lecture : un seau dont
+// les objets privés se LISTENT laisse deviner les clés des autres, et un
+// `voice/<userId>/` listable dirait au passage combien de vocaux a envoyés un
+// compte donné.
+func bucketPolicy(bucket string) string {
+	var deny []string
+	for kind := range privateKinds {
+		deny = append(deny, fmt.Sprintf(`"arn:aws:s3:::%s/%s/*"`, bucket, kind))
+	}
+	sort.Strings(deny)
+	statements := fmt.Sprintf(
+		`{"Effect":"Allow","Principal":{"AWS":["*"]},"Action":["s3:GetObject"],"Resource":["arn:aws:s3:::%s/*"]}`,
+		bucket)
+	if len(deny) > 0 {
+		statements += fmt.Sprintf(
+			`,{"Effect":"Deny","Principal":{"AWS":["*"]},"Action":["s3:*"],"Resource":[%s]}`,
+			strings.Join(deny, ","))
+	}
+	return `{"Version":"2012-10-17","Statement":[` + statements + `]}`
+}
+
+// SignedURL rend une URL à DURÉE LIMITÉE pour un objet de ce dépôt.
+//
+// ⚠️⚠️ C'EST LA SEULE FAÇON DE SERVIR UN GENRE PRIVÉ, et la durée est courte
+// exprès : une URL signée qui vivrait des jours serait une URL publique avec
+// une date d'expiration, et elle se retrouverait dans un journal, une capture
+// d'écran, un historique de navigateur. Les applications relisent le fil quand
+// la leur expire — c'est ce que fait déjà `GET /analytics/ai/thread`.
+//
+// ⚠️ ELLE REFUSE UNE URL QUI N'EST PAS DE CE SEAU : `Key` le vérifie. Signer
+// une adresse fournie par un appelant ferait de ce dépôt un signeur d'URL
+// arbitraires.
+func (s *Store) SignedURL(ctx context.Context, publicURL string, ttl time.Duration) (string, error) {
+	key, ok := s.Key(publicURL)
+	if !ok {
+		return "", fmt.Errorf("storage: %q n'appartient pas à ce dépôt", publicURL)
+	}
+	u, err := s.client.PresignedGetObject(ctx, s.bucket, key, ttl, nil)
+	if err != nil {
+		return "", fmt.Errorf("storage: signer %s: %w", key, err)
+	}
+	// ⚠️ L'HÔTE PUBLIC REMPLACE CELUI DU CLIENT. Le dépôt est joint par son nom
+	// de service interne (`minio:9000`) ; une URL signée sur cet hôte ne
+	// s'ouvre pas depuis un téléphone. La signature, elle, ne couvre pas
+	// l'hôte — seulement le chemin et les paramètres.
+	if s.public != "" {
+		return s.public + u.RequestURI(), nil
+	}
+	return u.String(), nil
+}
+
+// RemovePrefix efface TOUS les objets d'un préfixe.
+//
+// ⚠️⚠️ ELLE EXISTE POUR L'EFFACEMENT D'UN COMPTE. L'effacement ne retirait que
+// les objets ENCORE RÉFÉRENCÉS par une ligne de base : passé la rétention de la
+// ligne, la voix restait dans le seau — après la suppression du compte
+// (analytics#33 §1). Le préfixe, lui, est exact : la clé porte l'identifiant du
+// compte.
+//
+// ⚠️⚠️ ELLE EXIGE UN GENRE **ET** UNE ENTITÉ, c'est-à-dire deux segments
+// pleins. Ce n'est pas une précaution de style : un `userID` non renseigné
+// produirait `voice/`, et `voice/` est la voix de TOUT LE MONDE. Une chaîne
+// vide, elle, effacerait le seau entier — les photos de plats comprises.
+func (s *Store) RemovePrefix(ctx context.Context, prefix string) error {
+	prefix, ok := namedPrefix(prefix)
+	if !ok {
+		return fmt.Errorf("storage: préfixe trop large: %q", prefix)
+	}
+	objects := s.client.ListObjects(ctx, s.bucket, minio.ListObjectsOptions{Prefix: prefix, Recursive: true})
+	for err := range s.client.RemoveObjects(ctx, s.bucket, objects, minio.RemoveObjectsOptions{}) {
+		if err.Err != nil {
+			return fmt.Errorf("storage: effacer %s: %w", err.ObjectName, err.Err)
+		}
+	}
+	return nil
+}
+
+// setPrivateLifecycle fait EXPIRER LES OBJETS des genres privés.
+//
+// ⚠️ UNE RÈGLE PAR GENRE, nommée par son préfixe : c'est le dépôt qui compte
+// les jours, pas nous. Et une règle par genre plutôt qu'une règle globale,
+// parce que les photos de plats n'ont aucune raison de disparaître.
+func setPrivateLifecycle(ctx context.Context, client *minio.Client, bucket string, after time.Duration) error {
+	days := int(after.Hours() / 24)
+	if days < 1 {
+		days = 1
+	}
+	cfg := lifecycle.NewConfiguration()
+	kinds := make([]string, 0, len(privateKinds))
+	for kind := range privateKinds {
+		kinds = append(kinds, kind)
+	}
+	sort.Strings(kinds)
+	for _, kind := range kinds {
+		cfg.Rules = append(cfg.Rules, lifecycle.Rule{
+			ID:         "dira-expire-" + kind,
+			Status:     "Enabled",
+			RuleFilter: lifecycle.Filter{Prefix: kind + "/"},
+			Expiration: lifecycle.Expiration{Days: lifecycle.ExpirationDays(days)},
+		})
+	}
+	return client.SetBucketLifecycle(ctx, bucket, cfg)
+}
+
+// namedPrefix normalise un préfixe et dit s'il nomme bien UN GENRE ET UNE
+// ENTITÉ.
+//
+// ⚠️ PURE, ET C'EST POUR CELA QU'ELLE EXISTE : la borne se vérifie sans dépôt,
+// donc l'épreuve n'a pas à faire semblant d'avoir un seau — et `RemovePrefix`
+// refuse AVANT tout appel réseau, ce qui est la seule façon d'être sûr qu'un
+// préfixe dangereux ne part jamais.
+func namedPrefix(prefix string) (string, bool) {
+	prefix = strings.Trim(strings.TrimSpace(prefix), "/")
+	parts := strings.Split(prefix, "/")
+	if len(parts) < 2 || parts[0] == "" || parts[1] == "" {
+		return prefix, false
+	}
+	return prefix + "/", true
 }
