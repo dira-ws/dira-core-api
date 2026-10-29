@@ -68,7 +68,7 @@ func (s *Service) SaveDeclarationCategories(ctx context.Context, actorID string,
 	if err != nil {
 		return nil, apperr.Internal(err)
 	}
-	next := &DeclarationCatalog{Country: cc, Categories: clean, UpdatedBy: actorID, UpdatedAt: s.now()}
+	next := &DeclarationCatalog{Country: cc, Categories: clean, UpdatedBy: actorID, UpdatedAt: ptrTime(s.now())}
 	if err := s.decl().SaveCatalog(ctx, next); err != nil {
 		return nil, apperr.Internal(err)
 	}

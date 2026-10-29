@@ -98,7 +98,7 @@ func (s *Service) UpdateBilling(ctx context.Context, actorID string, in BillingI
 		}
 		cur.Deliveries = *in.Deliveries
 	}
-	cur.UpdatedBy, cur.UpdatedAt = actorID, s.now()
+	cur.UpdatedBy, cur.UpdatedAt = actorID, ptrTime(s.now())
 	if err := s.repo.SaveBilling(ctx, cur); err != nil {
 		return nil, apperr.Internal(err)
 	}

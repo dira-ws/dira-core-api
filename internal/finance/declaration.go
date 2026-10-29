@@ -193,7 +193,7 @@ type DeclarationCatalog struct {
 	Country    string                `bson:"_id" json:"country"`
 	Categories []DeclarationCategory `bson:"categories" json:"categories"`
 	UpdatedBy  string                `bson:"updated_by,omitempty" json:"updated_by,omitempty"`
-	UpdatedAt  time.Time             `bson:"updated_at" json:"updated_at"`
+	UpdatedAt  *time.Time            `bson:"updated_at,omitempty" json:"updated_at,omitempty"`
 }
 
 // Find rend une catégorie par son code.

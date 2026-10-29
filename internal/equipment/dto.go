@@ -72,15 +72,15 @@ type SettingsInput struct {
 }
 
 type SettingsResponse struct {
-	Country               string    `json:"country"`
-	AllowedModes          []string  `json:"allowed_modes"`
-	AgentCanRequest       bool      `json:"agent_can_request"`
-	RequireAcceptance     bool      `json:"require_acceptance"`
-	MaxEarningsPercent    int       `json:"max_earnings_percent"`
-	DefaultDepositPercent int       `json:"default_deposit_percent"`
-	StaffAlertOverdue     bool      `json:"staff_alert_overdue"`
-	Defaults              Plan      `json:"defaults"`
-	UpdatedAt             time.Time `json:"updated_at"`
+	Country               string     `json:"country"`
+	AllowedModes          []string   `json:"allowed_modes"`
+	AgentCanRequest       bool       `json:"agent_can_request"`
+	RequireAcceptance     bool       `json:"require_acceptance"`
+	MaxEarningsPercent    int        `json:"max_earnings_percent"`
+	DefaultDepositPercent int        `json:"default_deposit_percent"`
+	StaffAlertOverdue     bool       `json:"staff_alert_overdue"`
+	Defaults              Plan       `json:"defaults"`
+	UpdatedAt             *time.Time `json:"updated_at,omitempty"`
 	// Ce que le code connaît — pour que la console propose sans deviner.
 	Kinds     []string `json:"kinds"`
 	Modes     []string `json:"modes"`
@@ -88,12 +88,31 @@ type SettingsResponse struct {
 	Schedules []string `json:"schedules"`
 }
 
+// whenSet rend la date, ou NIL si elle n'a jamais été posée.
+//
+// ⚠️⚠️ LA DATE ZÉRO D'UN `time.Time` GO PART SUR LE FIL COMME UNE VRAIE DATE.
+// `0001-01-01T00:00:00Z` ne se distingue pas d'une décision d'exploitation
+// prise un 1er janvier : une application qui compare `updated_at` pour savoir
+// si son cache a vieilli se compare à l'an 1, donc ne rafraîchit jamais, et une
+// console l'affiche « modifié le 01/01/0001 ». La console de Dira porte
+// d'ailleurs encore le contournement écrit à la main le jour où quelqu'un l'a
+// découvert (`!updated_at.startsWith("0001")`).
+//
+// « Jamais réglé » et « réglé à telle date » sont deux faits différents, et
+// seul un champ ABSENT dit le premier.
+func whenSet(t time.Time) *time.Time {
+	if t.IsZero() {
+		return nil
+	}
+	return &t
+}
+
 func toSettings(s *Settings) SettingsResponse {
 	return SettingsResponse{
 		Country: s.Country, AllowedModes: s.AllowedModes, AgentCanRequest: s.AgentCanRequest,
 		RequireAcceptance: s.RequireAcceptance, MaxEarningsPercent: s.MaxEarningsPercent,
 		DefaultDepositPercent: s.DefaultDepositPercent, StaffAlertOverdue: s.StaffAlertOverdue,
-		Defaults: s.Defaults, UpdatedAt: s.UpdatedAt,
+		Defaults: s.Defaults, UpdatedAt: whenSet(s.UpdatedAt),
 		Kinds: Kinds, Modes: Modes, Periods: Periods,
 		Schedules: []string{ScheduleUpfront, ScheduleInstallments, SchedulePerPeriod, ScheduleNone},
 	}
