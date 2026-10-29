@@ -93,6 +93,29 @@ type errorDetail struct {
 	// d'un champ : `unknown_field` (une clé que le serveur ne connaît pas),
 	// `invalid_json` (corps illisible).
 	Reason string `json:"reason,omitempty"`
+
+	// Feature nomme la fonction retirée de cette édition ou de ce pays
+	// (`feature_unavailable_in_edition`).
+	//
+	// ⚠️⚠️ TROISIÈME CLÉ ACTIONNABLE, ET LA SEULE QU'ON AIT AJOUTÉE — parce
+	// que la règle de cette enveloppe est déjà posée, et qu'elle tient : « il
+	// n'y a pas de `meta` sur le fil ; quand un refus porte des CHIFFRES, ils
+	// sont dans la phrase, déjà traduite ». Un chiffre, une personne le lit.
+	//
+	// Celle-ci n'est pas un chiffre à lire : c'est une INSTRUCTION À
+	// L'APPLICATION — « cache cette entrée de menu ». Elle ne se recompose pas
+	// depuis la phrase (il faudrait l'analyser, en douze langues) ni depuis des
+	// réglages déjà lus (c'est justement ce qui vient de changer). C'est la
+	// même logique que `fields`, qui dit quelles CASES souligner : ce que
+	// l'application doit FAIRE voyage en clair, ce qu'une personne doit LIRE
+	// voyage dans la phrase.
+	//
+	// ⚠️ ET SANS ELLE, LE REFUS N'EN EST PAS UN. Mesuré en direct :
+	// `POST /rides/{id}/share` depuis Dira Lite rendait
+	// `feature_unavailable_in_edition` sans dire quoi cacher, si bien que
+	// l'application reproposait le bouton au démarrage suivant — et Lite LIT
+	// CE REFUS À VOIX HAUTE, à chaque fois qu'on appuie dessus. Voir #252.
+	Feature string `json:"feature,omitempty"`
 }
 
 // Error writes err using the standard envelope {"error":{"code","message"}},
@@ -119,6 +142,12 @@ func Error(w http.ResponseWriter, r *http.Request, err error) {
 	}
 	if reason, ok := appErr.Meta["reason"].(string); ok {
 		detail.Reason = reason
+	}
+	// ⚠️ UNE CLÉ, TYPÉE, DÉCLARÉE. Recopier `Meta` en bloc aurait publié ce que
+	// les modules y mettent pour leurs journaux et leurs causes internes, et
+	// aurait fait du contrat « tout ce qui traîne dans la carte ».
+	if feature, ok := appErr.Meta["feature"].(string); ok {
+		detail.Feature = feature
 	}
 	JSON(w, appErr.HTTPStatus, errorBody{Error: detail})
 }

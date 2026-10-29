@@ -496,7 +496,7 @@ Le socle refuse désormais, **`403 wrong_app`**, et le refus DIT OÙ ALLER :
 > partenaire : il s'ouvre depuis la console web de Dira. »
 
 ⚠️ **`reason`, et rien d'autre.** L'enveloppe d'erreur du socle ne rend que
-`code`, `message`, `fields` et `reason` — il n'y a pas de `meta` sur le fil.
+`code`, `message`, `fields`, `reason` et `feature` — il n'y a pas de `meta` sur le fil.
 C'est écrit ici parce qu'une première rédaction de cette section promettait
 un `meta.open_instead` qui n'existe pas, et l'erreur se serait découverte à
 l'intégration.
@@ -780,7 +780,7 @@ irréversible depuis l'application : sans cette preuve, un téléphone déverrou
 posé sur une table suffirait à faire disparaître le compte de quelqu'un.
 
 ⚠️ **VIDEZ LE PORTEFEUILLE D'ABORD.** Un solde, des jetons ou une **dette**
-font refuser `409 wallet_not_empty`, et `error.meta.reason` dit lequel
+font refuser `409 wallet_not_empty`, et `error.reason` dit lequel
 (`money` · `tokens` · `debt`). On ne détruit pas de l'argent en silence :
 emmenez la personne vers son solde, ou vers le support pour un remboursement.
 
@@ -798,7 +798,7 @@ action qu'aucun bouton ne défera.
 |---|---|---|
 | `401 invalid_credentials` | mot de passe faux | souligner le champ, ne pas quitter l'écran |
 | `401 otp_invalid` · `401 otp_expired` | code faux ou périmé | redemander un code |
-| `409 wallet_not_empty` | solde, jetons ou dette (`meta.reason`) | envoyer vers le solde, ou le support |
+| `409 wallet_not_empty` | solde, jetons ou dette (`error.reason`) | envoyer vers le solde, ou le support |
 | `409 deletion_already_requested` | demande déjà en cours | afficher `erase_at` et proposer le support pour annuler |
 | `403 erasure_not_self_serve` | compte d'agent, de marchand ou de direction | renvoyer vers le support (il porte des versements à solder) |
 | `403 account_closed` | à la connexion, au rafraîchissement ou à l'inscription | « ce compte a été supprimé » + « se réinscrire » ou support |
@@ -2877,7 +2877,7 @@ L'écran de portefeuille dérive ce chiffre du **panier moyen réel** du client.
 | `wallet_unavailable` | 409 | paiement au portefeuille indisponible |
 | `phone_taken` | 409 | le numéro a déjà un compte → **proposer la connexion** |
 | `account_closed` | **403** | ce compte a été **supprimé** — à la connexion comme à l'inscription : « se réinscrire », ou le support si c'est une erreur |
-| `wallet_not_empty` | 409 | suppression de compte refusée : solde, jetons ou dette (`meta.reason`) → vider, ou demander un remboursement |
+| `wallet_not_empty` | 409 | suppression de compte refusée : solde, jetons ou dette (`error.reason`) → vider, ou demander un remboursement |
 | `deletion_already_requested` | 409 | suppression déjà demandée — afficher `erase_at`, proposer le support pour annuler |
 | `erasure_not_self_serve` | 403 | ce type de compte se supprime par le **support** |
 | `account_suspended` | 403 | compte suspendu, mot de passe correct → le dire tel quel |

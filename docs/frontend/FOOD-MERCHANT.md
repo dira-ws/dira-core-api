@@ -1280,7 +1280,7 @@ Le socle refuse désormais, **`403 wrong_app`**, et le refus DIT OÙ ALLER :
 > partenaire : il s'ouvre depuis la console web de Dira. »
 
 ⚠️ **`reason`, et rien d'autre.** L'enveloppe d'erreur du socle ne rend que
-`code`, `message`, `fields` et `reason` — il n'y a pas de `meta` sur le fil.
+`code`, `message`, `fields`, `reason` et `feature` — il n'y a pas de `meta` sur le fil.
 C'est écrit ici parce qu'une première rédaction de cette section promettait
 un `meta.open_instead` qui n'existe pas, et l'erreur se serait découverte à
 l'intégration.
