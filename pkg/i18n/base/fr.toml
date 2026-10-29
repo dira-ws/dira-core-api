@@ -132,3 +132,6 @@ other = "Cette fonction n'est pas disponible dans votre application"
 
 [errors.voice_messages_unavailable]
 other = "Les messages vocaux ne sont pas disponibles ici"
+
+[errors.voice_too_long]
+other = "Ce message vocal est trop long"

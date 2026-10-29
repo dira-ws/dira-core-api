@@ -36,6 +36,25 @@ var (
 	// ⚠️ `503` ET NON `422` : la requête est parfaitement valide, c'est le
 	// serveur qui ne sait pas la servir ici. Un `422` ferait chercher à
 	// l'application ce qu'elle a mal envoyé.
+	// errVoiceTooLong : le vocal dure plus que la borne.
+	//
+	// ⚠️ SON CODE À LUI, ET PAS UN `validation_failed` DE PLUS. Mesuré en
+	// préproduction le 29 octobre 2026 : un vocal trop long, un format refusé
+	// et un `seconds` manquant rendaient TOUS LES TROIS
+	// `validation_failed` + `fields: ["seconds"|"audio"]`. L'application ne
+	// pouvait donc pas choisir entre « recommencez, c'était trop long »,
+	// « votre téléphone enregistre dans un format qu'on ne prend pas » et un
+	// défaut de son propre code — alors que ces trois phrases n'ont rien à
+	// voir, et que la première s'adresse à quelqu'un qui ne sait pas lire.
+	//
+	// ⚠️ ET LA BORNE N'EST PAS DANS LE REFUS : elle est déjà servie à chaque
+	// lecture de la conversation (`voice.max_seconds`). La redire ici
+	// inviterait à l'écrire en dur dans l'application, qui vieillirait le jour
+	// où un pays la change.
+	errVoiceTooLong = apperr.New("voice_too_long",
+		"the voice message is longer than allowed — see `voice.max_seconds`",
+		http.StatusUnprocessableEntity)
+
 	errVoiceUnavailable = apperr.New("voice_messages_unavailable",
 		"voice messages are not available on this deployment", http.StatusServiceUnavailable)
 	errBlockedByModeration = apperr.New("message_blocked",
@@ -389,8 +408,16 @@ func (s *Service) SendVoice(ctx context.Context, userID, role, refID string, v V
 	if strings.TrimSpace(v.AudioURL) == "" {
 		return nil, apperr.Validation("a stored audio url is required")
 	}
-	if v.Seconds <= 0 || v.Seconds > MaxVoiceSeconds {
-		return nil, apperr.Validation("`seconds` must be between 1 and 60").
+	if v.Seconds > MaxVoiceSeconds {
+		return nil, errVoiceTooLong.
+			WithMeta(map[string]any{"fields": []string{"seconds"}})
+	}
+	// ⚠️ PAS DE CODE POUR CELUI-CI, et c'est délibéré : un vocal de zéro
+	// seconde n'arrive pas d'un téléphone, il arrive d'un appelant qui a
+	// oublié de mesurer. C'est un défaut de programmation, pas une situation
+	// qu'un écran doit expliquer.
+	if v.Seconds <= 0 {
+		return nil, apperr.Validation("`seconds` must be the measured duration").
 			WithMeta(map[string]any{"fields": []string{"seconds"}})
 	}
 	if err := writable(conv); err != nil {
