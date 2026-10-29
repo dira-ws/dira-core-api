@@ -39,17 +39,48 @@ func New(baseURL string) *Client {
 // Enabled dit si un SIG est configuré.
 func (c *Client) Enabled() bool { return c != nil && c.baseURL != "" }
 
-// RouteDuration returns how long the road network says this tour takes.
+// Route est ce que le réseau routier dit d'une tournée : sa durée, et son
+// TRACÉ.
 //
-// Le tracé, lui, reste calculé localement : c'est lui qui sert la TARIFICATION,
-// et la faire dépendre d'un service externe ferait varier le prix d'une
-// commande selon la disponibilité d'un tiers. On ne demande ici que la durée.
+// ⚠️⚠️ LE TRACÉ NE TARIFIE RIEN, ET C'EST UNE DÉCISION ÉCRITE AILLEURS AUSSI.
+// La distance qui fixe le prix d'une course reste calculée localement, à vol
+// d'oiseau entre les arrêts : la faire dépendre d'un service externe ferait
+// varier le prix d'une commande selon la disponibilité d'un tiers. Ce tracé
+// sert à DESSINER, et seulement à dessiner.
+//
+// Il est donc AU MIEUX, comme la durée : un SIG muet rend une tournée sans
+// tracé, jamais une erreur qui empêcherait de créer la course.
+type Route struct {
+	DurationS int
+	// Geometry : les points du tracé, `[lng, lat]`, dans l'ordre de GeoJSON et
+	// de toute cette plateforme. Vide si le moteur ne l'a pas rendue — on ne
+	// l'invente pas, et surtout on ne retombe pas sur la ligne droite : une
+	// ligne droite présentée comme un itinéraire est exactement le défaut
+	// qu'on corrige (voir core#230).
+	Geometry [][2]float64
+}
+
+// Polyline encode le tracé pour le fil, ou rend "" s'il n'y en a pas.
+func (r Route) Polyline() string {
+	if len(r.Geometry) < 2 {
+		return ""
+	}
+	return EncodePolyline(r.Geometry)
+}
+
+// RouteDuration ne rend que la durée — l'appelant qui n'a pas besoin du tracé.
 func (c *Client) RouteDuration(ctx context.Context, city string, points [][2]float64) (int, error) {
+	r, err := c.Route(ctx, city, points)
+	return r.DurationS, err
+}
+
+// Route interroge le SIG.
+func (c *Client) Route(ctx context.Context, city string, points [][2]float64) (Route, error) {
 	if !c.Enabled() {
-		return 0, nil
+		return Route{}, nil
 	}
 	if len(points) < 2 {
-		return 0, nil
+		return Route{}, nil
 	}
 	body, err := json.Marshal(map[string]any{
 		"ville":       city,
@@ -57,33 +88,48 @@ func (c *Client) RouteDuration(ctx context.Context, city string, points [][2]flo
 		"mode":        "driving",
 	})
 	if err != nil {
-		return 0, err
+		return Route{}, err
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/api/calc/route", bytes.NewReader(body))
 	if err != nil {
-		return 0, err
+		return Route{}, err
 	}
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := c.http.Do(req)
 	if err != nil {
-		return 0, fmt.Errorf("diramaps: route: %w", err)
+		return Route{}, fmt.Errorf("diramaps: route: %w", err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode >= 300 {
-		return 0, fmt.Errorf("diramaps: route: status %d", resp.StatusCode)
+		return Route{}, fmt.Errorf("diramaps: route: status %d", resp.StatusCode)
 	}
 	var out struct {
 		Routes []struct {
 			DurationS float64 `json:"duration_s"`
+			// Geometry : un LineString GeoJSON (`overview=full` côté SIG).
+			//
+			// ⚠️ LE TYPE EST VÉRIFIÉ, PAS SUPPOSÉ. Le SIG rend aussi des
+			// réponses consolidées par Google, qui n'ont pas de géométrie du
+			// tout : décoder sans vérifier donnerait un tracé vide traité
+			// comme un tracé.
+			Geometry struct {
+				Type        string       `json:"type"`
+				Coordinates [][2]float64 `json:"coordinates"`
+			} `json:"geometry"`
 		} `json:"routes"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
-		return 0, fmt.Errorf("diramaps: route: %w", err)
+		return Route{}, fmt.Errorf("diramaps: route: %w", err)
 	}
 	if len(out.Routes) == 0 {
-		return 0, nil
+		return Route{}, nil
 	}
 	// La PREMIÈRE route : le service rend les alternatives par ordre de
 	// préférence, et c'est celle-là que la carte du livreur affichera.
-	return int(out.Routes[0].DurationS + 0.5), nil
+	first := out.Routes[0]
+	r := Route{DurationS: int(first.DurationS + 0.5)}
+	if first.Geometry.Type == "LineString" && len(first.Geometry.Coordinates) >= 2 {
+		r.Geometry = first.Geometry.Coordinates
+	}
+	return r, nil
 }
