@@ -1,6 +1,6 @@
 # Specs frontend — par rôle
 
-> **Version 4.96.0** · 29 octobre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics`
+> **Version 4.97.0** · 29 octobre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics`
 
 **Cinq** documents, un par application. Chacun est **autonome** : tout ce qu'un frontend doit savoir pour son rôle, sans avoir à ouvrir les vingt specs de modules.
 
@@ -355,6 +355,65 @@ Chaque document porte la même version en en-tête, et son propre journal des ch
 - [ ] ⚠️ **`TRACKING_JWT_SECRET` renseigné dans chaque environnement déployé.** Vide, l'authentification du service de suivi est **désactivée** : n'importe qui connaissant un `delivery_id` suit la course. Le secret doit valoir **exactement** le `JWT_SECRET` de `dira-food-api`.
 
 ## Journal
+
+### 4.97.0 — 29 octobre 2026
+
+🤝 **PASSER LA MAIN D'UNE COMMANDE : REJOINDRE CELUI QUI A LE REPAS, ET DIRE
+QU'ON L'A EN MAIN** — `FOOD-DELIVERY.md` § passer la main, plus les libellés des
+motifs dans `VTC-DRIVER.md` (core#228).
+
+```
+GET  /food/deliveries/{id}            → transfer.from_position { lng, lat, at }, transfer.handed_at
+POST /food/deliveries/{id}/transfer/handed   → 204
+GET  /food/deliveries/transfer-reasons → items[].label   (traduit)
+GET  /vtc/rides/transfer-reasons       → items[].label   (traduit)
+GET  /vtc/rides/cancel-reasons         → items[].label   (traduit)
+```
+
+⚠️⚠️ **LA PROMESSE « REJOIGNEZ LE LIVREUR QUI A LE REPAS » ÉTAIT VIDE.** La
+position de ce livreur n'était servie à personne. Et le canal
+`WS /track/subscribe/{delivery_id}` ne pouvait pas y mener : il ne relaie que les
+positions émises **sous la mission**, or le premier livreur l'a lâchée et la
+mission est repointée sur le véhicule du remplaçant — le canal pointait sur sa
+propre moto. Les applications retombaient sur le point de la **demande**,
+c'est-à-dire sur un rendez-vous périmé. La position arrive donc **sur la
+commande**.
+
+⚠️ **`at` n'est pas décoratif**, et une position sans lui n'est **jamais**
+servie : à trente secondes on y va, à six minutes l'autre n'est plus là.
+Affichez « position inconnue », n'affichez pas un point.
+
+⚠️ **`POST …/transfer/handed`** remplace le geste que les applications posaient
+en **local** — un geste local ne se voit de nulle part : la garde des étapes ne
+pouvait pas couvrir cette étape, et l'exploitation ne savait pas si le repas
+était encore dans le sac du premier. Idempotent, `204`.
+
+⚠️⚠️ **UN REMPLAÇANT POUVAIT REPRENDRE UNE COMMANDE LIVRÉE.** La complétion ne
+fermait pas la recherche (l'annulation non plus), et le filtre du passage de main
+ne regardait pas le statut. Corrigé des deux côtés : l'état est honnête **et** la
+reprise impossible.
+
+⚠️ **`delivery_transfer_kept` est poussé AU LIVREUR** quand personne n'a pu
+reprendre. Avant, seul le **client** l'apprenait : le livreur le découvrait en
+relisant sa commande, c'est-à-dire en se demandant d'abord pourquoi personne
+n'arrive — alors que c'est **lui** qui doit repartir. ⚠️ Et ce n'est pas le texte
+du client : lui lit « votre livreur continue », le livreur lit « la commande
+reste à vous ».
+
+⚠️ **`delivery_transfer_done` porte `data.amount_xof`** — le NOMBRE, pas la
+phrase. « 1 500 F » est traduit et formaté selon la langue : une application qui
+en extrairait les chiffres finirait par lire `1` ou `500`.
+
+⚠️ **`label` sur les trois listes de motifs**, traduit et à la **première
+personne** — c'est celui qui choisit qui le lit. La liste des codes venait déjà
+du serveur, mais les **phrases** étaient chez vous : un motif ajouté côté serveur
+s'affichait comme un code brut (« vehicle_breakdown ») jusqu'à la prochaine
+publication sur les magasins. ⚠️ Ne renvoyez jamais `label` au serveur : c'est
+`code` qui voyage. ⚠️ Et si une phrase manque, `label` **vaut le code**, jamais
+une chaîne vide.
+
+⚠️ **Confirmé** : `unsafe` **est** bien un motif `grave` côté livraison — l'app
+client le soupçonnait absent.
 
 ### 4.96.0 — 29 octobre 2026
 
