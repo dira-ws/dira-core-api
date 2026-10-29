@@ -1,6 +1,6 @@
 # Specs frontend — par rôle
 
-> **Version 4.99.3** · 29 octobre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics`
+> **Version 4.100.0** · 29 octobre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics`
 
 **Cinq** documents, un par application. Chacun est **autonome** : tout ce qu'un frontend doit savoir pour son rôle, sans avoir à ouvrir les vingt specs de modules.
 
@@ -355,6 +355,78 @@ Chaque document porte la même version en en-tête, et son propre journal des ch
 - [ ] ⚠️ **`TRACKING_JWT_SECRET` renseigné dans chaque environnement déployé.** Vide, l'authentification du service de suivi est **désactivée** : n'importe qui connaissant un `delivery_id` suit la course. Le secret doit valoir **exactement** le `JWT_SECRET` de `dira-food-api`.
 
 ## Journal
+
+### 4.100.0 — 29 octobre 2026
+
+🤝 **CONFIRMER UNE PROPOSITION PRÉCISE, ET « OUI » QUI MARCHE** —
+`DIRA-CLIENT.md` §8 bis bis et §8 bis ter, `FOOD-CLIENT.md` §4 (core#264).
+
+> **Une transcription n'est pas une autorisation.** Rien ne s'écrit sans une
+> confirmation explicite liée à une proposition **précise, courante et non
+> expirée**.
+
+```
+POST /analytics/ai/chat     → { …, "action": { "confirmation_token", "summary", "say", "expires_at" } }
+POST /analytics/ai/voice    → idem
+POST /analytics/ai/confirm  { "confirmation_token", "how": "tap|voice|text" }
+                            → { "state": "ordered", "ordered": { kind, id }, "reply" }
+```
+
+⚠️⚠️ **UN « OUI » NE CONFIRMAIT RIEN.** Écrit ou dicté, il repartait dans
+l'aiguillage et s'entendait répondre « VTC ou repas ? » — la personne venait
+d'accepter un prix. **Pour quelqu'un qui ne lit pas, c'était la fonctionnalité
+entière qui ne marchait pas.** Un accord reconnu (« oui », « d'accord », « je
+confirme », `yes`, `ok`) confirme maintenant la proposition courante du fil.
+⚠️ **N'interprétez jamais un « oui » vous-même** : envoyez le message, le
+serveur décide.
+
+⚠️⚠️ **LISEZ `action.say`, JAMAIS `reply`, SI VOUS DITES UN PRIX À VOIX HAUTE.**
+`reply` est écrit par un modèle **qui n'a jamais vu le plan** : il peut énoncer
+un prix qui n'y est pas, et la personne dirait « oui » à ce prix-là.
+`action.summary.price_xof` est **le prix qui sera débité**.
+
+⚠️⚠️ **UNE COMMANDE DE REPAS N'ANNONCE AUCUN PRIX**, et c'est voulu : son total
+vaut `sous-total + frais de livraison − remises` et n'existe qu'à la création.
+Dire le sous-total annoncerait **moins** que ce qu'on débite. N'additionnez pas
+`items[].price × qty` comme un total.
+
+⚠️ **Deux confirmations du même jeton font au plus une opération**, et la
+seconde reçoit **le même résultat** — pas une erreur. `409 pending_expired` ne
+se réessaie pas : nouveau devis, nouvelle confirmation. `409 no_pending_action`
+veut dire qu'il n'y a **rien** à confirmer.
+
+⚠️ **`action` est absente sur `needs_support`** : un opérateur va commander à la
+main, et un bouton en plus ferait **deux** courses.
+
+⚠️ **Et si vous ignorez `action`, rien ne change** — vous appelez la verticale
+vous-même, comme aujourd'hui.
+
+🔑 **`Idempotency-Key` PARTOUT — UN RENVOI REND LE MÊME TOUR** (core#264 §6).
+
+```
+POST /analytics/ai/chat     Idempotency-Key: tour-12     🆕
+POST /analytics/ai/voice    Idempotency-Key: tour-13     🆕
+POST /food/orders           Idempotency-Key: panier-3    🆕
+POST /vtc/rides             Idempotency-Key: course-7    (v4.99.3)
+POST /payments/initiate     Idempotency-Key: …           (v4.91.0 — la recharge)
+```
+
+⚠️⚠️ **LE SYMPTÔME N'ÉTAIT PAS UNE ERREUR MAIS UN DOUBLE.** Vous l'envoyiez déjà
+sur l'assistant ; c'était **ignoré**. Un réseau qui coupe pendant un tour : un
+appel de modèle payé deux fois sur votre quota, deux lignes dans la file du
+support, deux paires de bulles dans le fil — l'assistant a l'air bègue —, **deux
+propositions à confirmer** pour une seule demande, et sur `POST /food/orders`
+**deux repas livrés, payés deux fois**.
+
+⚠️ **Une clé NOUVELLE dès que l'intention change.** Une clé réutilisée sur un
+panier modifié rendrait l'**ancienne** commande.
+
+⚠️ `409 turn_in_progress` n'est pas un échec : un premier envoi du même tour est
+en train d'aboutir. **Réessayez dans un instant**, ne recomposez pas le message.
+Un tour **refusé** oublie sa clé — réessayez avec la même.
+
+⚠️ **Elle va dans l'EN-TÊTE, pas dans le corps** (un `idempotency_key` en JSON
+reçoit `422`), et **sans clé, rien ne change**.
 
 ### 4.99.3 — 29 octobre 2026
 
