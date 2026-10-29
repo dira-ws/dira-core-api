@@ -1,6 +1,7 @@
 package promocode
 
 import (
+	"github.com/kgtech-org/dira-core-api/pkg/appconfig"
 	"net/http"
 	"time"
 
@@ -20,13 +21,21 @@ type Handler struct{ svc *Service }
 func NewHandler(svc *Service) *Handler { return &Handler{svc: svc} }
 
 // Mount registers what a CONNECTED person and the console may do.
-func (h *Handler) Mount(r chi.Router, authMW func(http.Handler) http.Handler) {
+func (h *Handler) Mount(r chi.Router, authMW func(http.Handler) http.Handler, gate middleware.FeatureGate) {
 	r.Group(func(g chi.Router) {
 		g.Use(authMW)
 		// ⚠️ LE CODE DE PARRAINAGE DE QUELQU'UN, à lui seul. Pas de route qui
 		// rendrait le code d'un autre : ce serait un annuaire de codes, et le
 		// premier usage en serait de les épuiser.
-		g.Get("/me/referral", h.myReferral)
+		// ⚠️ LE CHAMP « CODE PROMO » DISPARAÎT DE L'ÉDITION QUI NE L'A PLUS,
+		// et son code de parrainage avec : un code qu'on ne peut plus saisir
+		// nulle part n'a pas à être affiché.
+		//
+		// ⚠️ MAIS PAS LES ROUTES D'ADMINISTRATION juste en dessous : une
+		// exploitation gère les codes depuis la console, quelle que soit
+		// l'édition des applications.
+		g.With(middleware.RequireFeature(gate, appconfig.FeaturePromoCodes)).
+			Get("/me/referral", h.myReferral)
 
 		admin := middleware.RequireRole(auth.RoleAdmin)
 		g.With(admin).Get("/admin/promo-codes", h.list)

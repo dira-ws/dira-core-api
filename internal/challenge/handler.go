@@ -1,6 +1,7 @@
 package challenge
 
 import (
+	"github.com/kgtech-org/dira-core-api/pkg/appconfig"
 	"net/http"
 	"strconv"
 	"time"
@@ -19,7 +20,7 @@ type Handler struct{ svc *Service }
 func NewHandler(svc *Service) *Handler { return &Handler{svc: svc} }
 
 // Mount pose les routes.
-func (h *Handler) Mount(r chi.Router, authMW func(http.Handler) http.Handler) {
+func (h *Handler) Mount(r chi.Router, authMW func(http.Handler) http.Handler, gate middleware.FeatureGate) {
 	r.Group(func(g chi.Router) {
 		g.Use(authMW)
 		// ⚠️ UNE SEULE ROUTE POUR LES TROIS PUBLICS, et le PUBLIC VIENT DU
@@ -27,7 +28,11 @@ func (h *Handler) Mount(r chi.Router, authMW func(http.Handler) http.Handler) {
 		// trois écrans à maintenir pour la même chose — et surtout, un
 		// paramètre de public aurait laissé un client lire les objectifs des
 		// chauffeurs, puis en réclamer le bonus.
-		g.Get("/me/challenges", h.mine)
+		// ⚠️ L'ÉCRAN DES OBJECTIFS DISPARAÎT DE L'ÉDITION QUI NE L'A PLUS, et
+		// la route le refuse — une version ancienne de l'application, ou un
+		// appel direct, ne doit pas réclamer un bonus qu'on a retiré.
+		g.With(middleware.RequireFeature(gate, appconfig.FeatureChallenges)).
+			Get("/me/challenges", h.mine)
 	})
 	r.Group(func(g chi.Router) {
 		g.Use(authMW, middleware.RequireRole(auth.RoleAdmin), middleware.RequireScope(auth.ScopeCore))

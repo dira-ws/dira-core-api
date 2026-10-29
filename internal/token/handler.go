@@ -2,6 +2,7 @@ package token
 
 import (
 	"context"
+	"github.com/kgtech-org/dira-core-api/pkg/appconfig"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -49,12 +50,22 @@ func (h *Handler) SetBackOffice(r BackOfficeReader, names NameResolver) {
 // jetons sur un PLAT ou un POINT DE VENTE demande le catalogue de la
 // livraison, que le socle ne connaît pas. Les deux gestes vivaient dans le même
 // module tant qu'un seul service existait ; le partage passe entre les deux.
-func (h *Handler) Mount(r chi.Router, authMW func(http.Handler) http.Handler) {
+// Mount registers the routes. `gate` refuse le portefeuille aux éditions qui
+// ne l'ont plus — nil = rien n'est refusé.
+func (h *Handler) Mount(r chi.Router, authMW func(http.Handler) http.Handler, gate middleware.FeatureGate) {
 	r.Group(func(g chi.Router) {
 		g.Use(authMW)
 		// Le client y lit son « Dira Cash » : les mêmes routes, un contenu
 		// différent — de l'argent au lieu de jetons.
 		g.Use(middleware.RequireRole(auth.RoleDriver, auth.RoleMerchant, auth.RoleClient))
+		// ⚠️⚠️ ET SUR CE GROUPE SEULEMENT, JAMAIS SUR L'ADMINISTRATION. Un
+		// exploitant qui recharge un portefeuille depuis la console n'est pas
+		// une application réduite : lui refuser la route parce que Dira Lite
+		// n'a pas de portefeuille couperait l'outil qui sert à le dépanner.
+		//
+		// ⚠️ Le registre dit « le solde et la recharge disparaissent ; restent
+		// les espèces et le mobile money » — c'est donc bien CES routes.
+		g.Use(middleware.RequireFeature(gate, appconfig.FeatureWallet))
 		g.Get("/wallet", h.getWallet)
 		g.Get("/wallet/transactions", h.listTransactions)
 		g.Post("/wallet/purchase", h.purchase)
