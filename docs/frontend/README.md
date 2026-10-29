@@ -1,6 +1,6 @@
 # Specs frontend — par rôle
 
-> **Version 4.87.0** · 28 octobre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics`
+> **Version 4.88.0** · 29 octobre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics`
 
 **Cinq** documents, un par application. Chacun est **autonome** : tout ce qu'un frontend doit savoir pour son rôle, sans avoir à ouvrir les vingt specs de modules.
 
@@ -355,6 +355,47 @@ Chaque document porte la même version en en-tête, et son propre journal des ch
 - [ ] ⚠️ **`TRACKING_JWT_SECRET` renseigné dans chaque environnement déployé.** Vide, l'authentification du service de suivi est **désactivée** : n'importe qui connaissant un `delivery_id` suit la course. Le secret doit valoir **exactement** le `JWT_SECRET` de `dira-food-api`.
 
 ## Journal
+
+### 4.88.0 — 29 octobre 2026
+
+🎯 **L'ASSISTANT GARDE LE FIL D'UNE DEMANDE** — `DIRA-CLIENT.md` §8 ter.
+
+Six objectifs, **quatre étapes au plus**, **une seule question par tour**.
+Chaque réponse de `/analytics/ai/chat`, `/ai/voice` et `/ai/thread` porte
+l'état :
+
+```jsonc
+"goal": { "key": "ride", "step": 3, "steps": 4,
+          "filled": { "pickup": {...}, "dropoff": {...} },
+          "asking": "vehicle_class", "missing": ["vehicle_class","payment"],
+          "options": [ { "value":"moto", "label":"Moto", "price_xof":700 } ] }
+```
+
+⚠️ **`goal` absent = aucune demande en cours.** Une application qui l'ignore se
+comporte exactement comme avant — servez-le sans attendre vos deux
+applications.
+
+⚠️ **`step` compte ce qui est SU, pas le rang de la question** : trois choses
+connues donnent « 4 sur 4 » même si c'est la première étape qu'on demande. Dire
+« 1 sur 4 » à quelqu'un qui a presque fini fait abandonner.
+
+⚠️ **`options` n'arrive que pendant qu'on demande**, et **jamais sur
+`/thread`** : ces choix portent des PRIX, et un fil se relit des heures plus
+tard.
+
+⚠️ **Le contexte vit sur le SERVEUR** : ne le renvoyez pas. Une application
+relancée **reprend** la demande. Abandon après **30 min** d'inactivité.
+
+Deux champs nouveaux en entrée, et aucun n'est obligatoire :
+`choice: {slot, value}` pour un appui sur un bouton (une certitude qu'on ne
+re-devine pas), `reset_goal: true` pour « Nouvelle demande » — la seule sortie
+qui n'a pas besoin d'être **comprise**.
+
+🚧 **Pas encore là, et c'est dit pour qu'on ne l'envoie pas** : `register=simple`
+(il ferait `422 unknown field` tant que les métiers ne le lisent pas),
+`reply_audio_url` et `POST /analytics/ai/speech` (aucune synthèse vocale n'est
+installée, et pour `shu`, `sba`, `ff`, `ewe`, `wo` aucune voix grand public
+n'existe à ce jour).
 
 ### 4.87.0 — 28 octobre 2026
 
