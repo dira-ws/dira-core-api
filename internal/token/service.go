@@ -94,7 +94,23 @@ var errNoStoreDirectory = apperr.New("store_directory_unavailable",
 
 // Service implements the token business logic and the cross-module provider
 // contract (CreateWallet, Consume, Credit).
+// TopupBounds rend les bornes de recharge du pays de la requête.
+//
+// ⚠️ DÉCLARÉE ICI, CÔTÉ CONSOMMATEUR, et remplie au câblage : le portefeuille
+// n'a pas à connaître le module des pays, et le module des pays n'a pas à
+// savoir qu'un portefeuille existe.
+//
+// Facultative : sans elle, `GET /wallet` ne porte pas de `topup` — un service
+// de développement sans pays réglés garde une réponse valide, et l'application
+// retombe sur ses propres montants comme avant.
+type TopupBounds interface {
+	TopupOf(ctx context.Context, code string) TopupResponse
+}
+
 type Service struct {
+	// topup rend les bornes de recharge du pays. Facultatif.
+	topup TopupBounds
+
 	repo     Repo
 	audit    *audit.Recorder
 	payments PurchaseInitiator
@@ -268,6 +284,9 @@ func (s *Service) Credit(ctx context.Context, ownerID string, amount int, reason
 
 // GetWallet returns the caller's wallet: drivers read their own wallet,
 // merchants read a store wallet they own (storeID required).
+// SetTopupBounds branche les bornes de recharge (câblage).
+func (s *Service) SetTopupBounds(b TopupBounds) { s.topup = b }
+
 func (s *Service) GetWallet(ctx context.Context, userID, role, storeID string) (WalletResponse, error) {
 	ownerID, err := s.resolveOwner(ctx, userID, role, storeID)
 	if err != nil {
@@ -277,7 +296,17 @@ func (s *Service) GetWallet(ctx context.Context, userID, role, storeID string) (
 	if err != nil {
 		return WalletResponse{}, err
 	}
-	return newWalletResponse(wallet, s.tokenPriceXOF), nil
+	out := newWalletResponse(wallet, s.tokenPriceXOF)
+	// ⚠️ LES BORNES NE PARTENT QUE SUR UN PORTEFEUILLE QUI SE RECHARGE EN
+	// ARGENT — celui d'un client. Celui d'un marchand s'alimente par ses
+	// ventes, celui d'un livreur par ses commissions : leur servir des
+	// montants de recharge ferait apparaître un écran « Recharger » sur un
+	// portefeuille qu'aucune route ne recharge.
+	if s.topup != nil && wallet.Type == WalletTypeClient {
+		bornes := s.topup.TopupOf(ctx, country.FromContext(ctx))
+		out.Topup = &bornes
+	}
+	return out, nil
 }
 
 // WalletOf returns a wallet designated by its OWNER, whatever its type.

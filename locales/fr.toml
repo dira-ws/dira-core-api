@@ -863,3 +863,25 @@ other = "Ce périmètre n'est pas une verticale de la plateforme"
 # l'application, qui la cachera au prochain démarrage.
 [errors.feature_unavailable_in_edition]
 other = "Cette fonction n'est pas disponible dans votre application"
+
+# LES REFUS D'UNE RECHARGE HORS BORNES (#250).
+#
+# ⚠️ LES CHIFFRES SONT DANS LA PHRASE, et c'est là qu'ils voyagent sur cette
+# plateforme : l'enveloppe ne sert que `code`, `message`, `fields` et `reason`.
+# Sans eux, l'application dirait « montant invalide » à quelqu'un qui n'a aucun
+# moyen de savoir quel montant essayer.
+#
+# ⚠️ `{{.currency}}` ET NON « F CFA » : le même refus se prononce en francs
+# guinéens, en cedis et en nairas.
+
+[errors.topup_below_minimum]
+other = "La recharge minimum est de {{.min}} {{.currency}}"
+
+[errors.topup_above_maximum]
+other = "La recharge maximum est de {{.max}} {{.currency}}"
+
+[errors.topup_max_under_min]
+other = "Le maximum de recharge est sous le minimum : aucun montant ne pourrait passer"
+
+[errors.topup_preset_out_of_bounds]
+other = "Un montant proposé sort des bornes : le bouton serait refusé"

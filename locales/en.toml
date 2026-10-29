@@ -755,3 +755,16 @@ other = "This scope is not a vertical of the platform"
 
 [errors.feature_unavailable_in_edition]
 other = "This feature is not available in your app"
+
+
+[errors.topup_below_minimum]
+other = "The minimum top-up is {{.min}} {{.currency}}"
+
+[errors.topup_above_maximum]
+other = "The maximum top-up is {{.max}} {{.currency}}"
+
+[errors.topup_max_under_min]
+other = "The maximum top-up is below the minimum: no amount could ever pass"
+
+[errors.topup_preset_out_of_bounds]
+other = "A suggested amount falls outside the bounds: the button would be refused"

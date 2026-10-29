@@ -69,6 +69,13 @@ type Installation struct {
 	// défaut maison. C'est le seul défaut tenable pour un réglage qui sort de
 	// l'argent de la poche de la plateforme.
 	Referral Referral `bson:"referral,omitempty"`
+	// Topup : DANS QUELLES BORNES on recharge le portefeuille d'un passager
+	// ici. Voir `topup.go`.
+	//
+	// ⚠️ ABSENT = LES BORNES DE LA MONNAIE, et surtout pas « pas de
+	// recharge ». C'est l'inverse du retrait : un pays jamais réglé doit
+	// pouvoir encaisser, sans quoi personne n'y paie de course.
+	Topup Topup `bson:"topup,omitempty"`
 }
 
 // Les deux fonds de carte possibles.

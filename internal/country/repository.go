@@ -116,6 +116,25 @@ func (r *Repository) SetSecurity(ctx context.Context, code string, sec Security)
 	return nil
 }
 
+// SetTopup enregistre les bornes de recharge d'un pays. Voir `topup.go`.
+//
+// ⚠️ `upsert`, comme les autres : un pays pas encore ouvert se règle quand
+// même. Sans lui, un réglage posé avant l'ouverture disparaissait sans erreur.
+//
+// ⚠️ ET LE SOUS-DOCUMENT EST REMPLACÉ EN ENTIER — c'est la convention de cette
+// collection, et c'est aussi le piège d'Immo : l'appelant (`UpdateTopup`) relit
+// l'existant, y fusionne ce que la console envoie, et réécrit le tout. Écrire
+// ici champ par champ aurait fait deux façons de régler un pays.
+func (r *Repository) SetTopup(ctx context.Context, code string, t Topup) error {
+	_, err := r.countries.UpdateOne(ctx, bson.M{"_id": code},
+		bson.M{"$set": bson.M{"topup": t, "updated_at": time.Now().UTC()}},
+		options.Update().SetUpsert(true))
+	if err != nil {
+		return fmt.Errorf("country: set topup: %w", err)
+	}
+	return nil
+}
+
 // SetPrivacy enregistre la politique de confidentialité d'un pays — qui voit
 // quoi de qui, métier par métier. Voir `privacy.go`.
 //
