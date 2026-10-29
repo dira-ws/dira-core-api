@@ -1,6 +1,6 @@
 # App CHAUFFEUR — COURSES (VTC) — contrat d'API
 
-> **Version 4.92.0** · 29 octobre 2026
+> **Version 4.93.0** · 29 octobre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Courses : `https://api-staging.dira.llc/api/v1/vtc` · Suivi : `wss://tracking-staging.dira.llc` · SIG : `https://maps.dira.llc/api`
 
 ---
@@ -1453,7 +1453,72 @@ accepted → picking_up → arrived → in_transit → completed
 ```
 POST /rides/{id}/transfer         { "reason": "vehicle_breakdown", "note": "courroie cassée" }
 POST /rides/{id}/transfer/cancel
+POST /rides/{id}/transfer/joined  → 204        ← 🆕 v4.93.0
 ```
+
+#### 🆕 ⚠️⚠️ REJOINDRE LA VOITURE : `transfer.from_position` (v4.93.0)
+
+Vous reprenez une course **commencée**. Le passager est peut-être déjà à bord,
+dans une voiture qui **roule encore**. Jusqu'ici ce document vous disait de vous
+mener sur « la position vivante du trajet » — et elle n'était servie à personne.
+
+⚠️ **Le canal `WS /track/subscribe/{ride_id}` ne vous y mènera PAS**, et ce
+n'est pas un réglage : il ne relaie que les positions émises **sous la course**.
+L'ancien chauffeur l'a lâchée à `ride_transfer_done`, et **vous** y émettez
+désormais la vôtre. Le canal pointe donc sur votre propre voiture. C'est une
+propriété du suivi, pas un défaut à corriger.
+
+La position vous arrive donc **sur la course** :
+
+```jsonc
+"transfer": {
+  "state": "done",
+  "role": "to",
+  "from_position": { "lng": 1.2345, "lat": 6.1234, "at": "2026-10-29T10:12:03Z" }
+}
+```
+
+- **Relisez `GET /rides/{id}`** pour la rafraîchir — c'est l'écran que vous avez
+  déjà ouvert, et le serveur interroge le suivi à chaque lecture.
+- ⚠️ **`at` n'est pas décoratif.** Affichez l'âge du point (« vu il y a 8 s »)
+  et cessez de guider au-delà d'une minute : une voiture en mouvement n'est plus
+  où elle était. Un point **sans** `at` n'est jamais servi — si
+  `from_position` est absent, dites « position inconnue », ne devinez pas.
+- ⚠️ **Elle n'est servie qu'à VOUS**, le preneur, et **que** tant que vous
+  n'avez pas rejoint. Le passager ne la reçoit pas : sa carte suit sa course.
+
+#### 🆕 ⚠️ DITES QUAND VOUS AVEZ REJOINT — `POST /rides/{id}/transfer/joined`
+
+```
+POST /rides/{id}/transfer/joined  → 204
+```
+
+Le passager est monté chez vous. **Le serveur ne peut pas le deviner** : deux
+voitures à dix mètres peuvent être garées devant le même immeuble sans que
+personne ne soit descendu. Vous le posiez en local ; posez-le ici aussi.
+
+- **Idempotent** : deux appuis, ou un réseau qui bégaie, ne changent rien — et
+  l'instant gardé reste celui de la **première** fois, pas du dernier clic.
+- **Rien ne bouge** : la course ne change pas d'état, rien n'est facturé,
+  personne n'est prévenu. C'est un fait, pas une étape.
+- Après lui, `transfer.joined_at` est posé et **`from_position` disparaît** —
+  il n'y a plus rien à rejoindre.
+- `409 no_transfer_to_join` : cette course n'a pas de reprise aboutie. Le bouton
+  n'avait pas sa place sur cet écran — cachez-le.
+
+#### 🆕 VOTRE PART, ET CELLE QUE VOUS AVEZ PASSÉE (v4.93.0)
+
+| Vous êtes | `transfer.role` | `driver_xof` |
+|---|---|---|
+| le **preneur** | `to` | **votre** part : le reste du prix, les parts figées déduites — plus `transfer.previous_share_xof` pour l'expliquer à l'écran |
+| le **cédant** | `from` | **votre** part figée, celle que vous avez touchée |
+
+⚠️ **La course que vous avez passée RESTE dans votre historique** (`GET /rides`)
+et **s'ouvre** (`GET /rides/{id}`). Avant, elle disparaissait dès la reprise :
+votre part arrivait au grand livre sans course à laquelle la rattacher.
+
+⚠️ Et `ride_transfer_done` porte maintenant **`data.amount_xof`** : arrêtez de
+découper le montant dans la phrase traduite — elle changera.
 
 #### ⚠️⚠️ DEMANDER UN REMPLAÇANT NE VOUS ENLÈVE PAS LA COURSE
 
