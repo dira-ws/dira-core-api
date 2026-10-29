@@ -1,6 +1,6 @@
 # App CLIENT — LIVRAISON — contrat d'API
 
-> **Version 4.99.3** · 29 octobre 2026
+> **Version 4.100.0** · 29 octobre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Livraison : `https://api-staging.dira.llc/api/v1/food` · Suivi : `wss://tracking-staging.dira.llc`
 
 
@@ -961,6 +961,44 @@ POST /orders
 - `variant_id` est **obligatoire** quand le plat a des variantes, **refusé** sinon.
 - `option_ids` mélange tous les groupes ; le serveur retrouve le groupe de chacune et vérifie les bornes.
 - **Les prix sont résolus côté serveur.** Ceux que vous affichez sont indicatifs jusqu'à la réponse.
+
+### 🆕 ⚠️⚠️ `Idempotency-Key` — UN RENVOI REND LA MÊME COMMANDE (v4.100.0)
+
+```
+POST /orders
+Idempotency-Key: panier-3
+```
+
+**Correctif, et c'est votre protection.** `POST /orders` n'avait **aucune**
+idempotence. Un réseau qui coupe entre la création et la réponse : vous n'avez
+rien reçu, vous renvoyez le même panier, et **rien ne s'y opposait**. Le client
+recevait **deux fois son repas, payé deux fois**.
+
+Avec la même clé, le renvoi répond `201` avec **la même commande** : le même
+identifiant, le même total, rien de créé en plus.
+
+- **Tirez la clé à l'ouverture de l'écran de paiement**, gardez-la tant que le
+  panier ne change pas.
+- ⚠️ **Changez-en dès que le client modifie quelque chose** — une ligne, une
+  adresse, un code promo. Une clé réutilisée sur un panier différent rendrait
+  l'**ancienne** commande, et le client paierait pour ce qu'il n'a plus demandé.
+- Elle vous appartient : un UUID, un compteur. Bornée à 200 caractères (au-delà,
+  tronquée, pas refusée).
+
+⚠️ **LE RENVOI N'EST JAMAIS UN REFUS.** Vous recevez `201` et la commande
+existante — un `409` vous ferait croire à un échec, et vous recomposeriez le
+panier.
+
+⚠️ **Deux envois simultanés** (un double appui, un réseau qui bégaie) sont
+séparés par un index unique : le second **relit** la commande du premier. Vous
+n'avez rien à faire.
+
+⚠️ **Sans clé, chaque envoi est une commande.** Envoyez-la.
+
+> ⚠️ **ELLE VA DANS L'EN-TÊTE, PAS DANS LE CORPS.** Un `idempotency_key` dans
+> le JSON reçoit `422` : une seule porte pour une clé qui décide si l'on crée ou
+> si l'on rejoue. C'est la même convention que `POST /vtc/rides` et que la
+> recharge du portefeuille.
 
 ### 🆕 ⚠️ UNE BOUTIQUE CHOISIE NE LIVRE PAS N'IMPORTE OÙ (v4.83.0)
 

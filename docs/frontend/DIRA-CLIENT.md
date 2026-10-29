@@ -1,6 +1,6 @@
 # App CLIENT UNIFIÉE — LIVRAISON **et** COURSES — contrat d'API
 
-> **Version 4.99.3** · 29 octobre 2026
+> **Version 4.100.0** · 29 octobre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Livraison : `…/api/v1/food` · Courses : `…/api/v1/vtc` · Combiné : `…/api/v1/analytics` · Suivi : `wss://tracking-staging.dira.llc`
 
 ---
@@ -1168,6 +1168,176 @@ c'est l'estimation, et elle est fausse par construction.
 veut dire que l'archivage n'a pas répondu : la transcription, le plan et l'état
 sont justes, mais la bulle n'aura pas de lecteur. **N'échouez pas** pour cela —
 affichez la bulle avec son texte seul.
+
+---
+
+## 8 bis bis. 🆕 ⚠️⚠️ CONFIRMER UNE PROPOSITION PRÉCISE (v4.100.0)
+
+> **La règle : une transcription n'est pas une autorisation.** Rien ne s'écrit —
+> course, commande — sans une confirmation explicite liée à une proposition
+> **précise, courante et non expirée**.
+
+### Ce qui change pour vous
+
+Avant, entre le `plan` et la commande, il n'y avait **rien** : vous receviez un
+plan et appeliez vous-même `POST /vtc/rides {quote_id}` ou
+`POST /food/orders`. Et un « oui » — écrit ou dicté — **ne confirmait rien** :
+il repartait dans l'aiguillage et s'entendait répondre « VTC ou repas ? ».
+
+Désormais `POST /analytics/ai/chat` et `POST /analytics/ai/voice` portent une
+**`action`**, et une seule route l'exécute.
+
+```jsonc
+"action": {
+  "type": "ride_confirmation_required",        // ou food_confirmation_required
+  "confirmation_token": "N3pQ…",                // OPAQUE, à USAGE UNIQUE
+  "expires_at": "2026-10-29T17:42:10Z",         // l'échéance du devis
+  "say": "De Moursal à Chagoua, moto, 700, en espèces. Confirmez-vous ?",
+  "summary": { "pickup": "Moursal", "dropoff": "Chagoua",
+               "class": "moto", "price_xof": 700, "payment": "cash" }
+}
+```
+
+```
+POST /analytics/ai/confirm
+{ "confirmation_token": "N3pQ…", "how": "tap" }     // tap | voice | text
+  →
+{ "state": "ordered", "vertical": "vtc",
+  "ordered": { "kind": "ride", "id": "68f0aa…" },
+  "reply": "C'est réservé. Nous cherchons un chauffeur." }
+```
+
+### ⚠️⚠️ LISEZ `action.say`, JAMAIS `reply`, SI VOUS DITES UN PRIX À VOIX HAUTE
+
+`reply` est écrit par un **modèle qui n'a jamais vu le plan**. Il peut énoncer
+un prix qui n'y est pas. Une personne qui l'entend lire dirait « oui » à un prix
+qui n'existe pas, et découvrirait le vrai à l'arrivée.
+
+`action.say` et `action.summary` sont composés d'un **gabarit déterministe sur
+les champs du devis**, dans la langue de la personne. Ce sont eux qui disent la
+vérité du prix — et `summary.price_xof` est **le prix qui sera débité**.
+
+### ⚠️⚠️ UNE COMMANDE DE REPAS N'ANNONCE AUCUN PRIX, ET C'EST VOULU
+
+Sur `type: "food_confirmation_required"`, **`summary.price_xof` est absent** et
+`say` ne cite aucun montant.
+
+Le total d'une commande vaut `sous-total + frais de livraison − remises`, et les
+frais ne sont calculés **qu'à la création**. Annoncer le sous-total du plan
+dirait un prix **inférieur** à celui qu'on débite — la pire des deux directions,
+et exactement ce que cette confirmation existe pour empêcher.
+
+⚠️ **N'additionnez donc pas `items[].price × qty` pour l'afficher comme un
+total.** Vous afficheriez un montant que personne ne paie. La commande née de
+l'assistant est **en espèces** : la personne paie à la porte et peut refuser.
+
+### ⚠️⚠️ « OUI » MARCHE AUSSI, SANS JETON — ET C'EST LE CHEMIN DES GENS QUI NE LISENT PAS
+
+Un message écrit (`/ai/chat`) ou dicté (`/ai/voice`) qui est un **accord** —
+« oui », « d'accord », « je confirme », « ça marche », `yes`, `ok` — confirme la
+**proposition courante de ce fil**. La réponse porte alors `state: "ordered"` et
+`ordered`, exactement comme `/ai/confirm`.
+
+⚠️⚠️ **N'INTERPRÉTEZ JAMAIS UN « OUI » VOUS-MÊME.** Envoyez le message tel quel,
+le serveur décide. Trois raisons :
+
+1. le lexique est **strict et exact** : « oui mais plutôt une voiture », « non,
+   pas oui », « oui ou non ? » contiennent un accord et n'en sont **pas** un ;
+2. un accord **sans proposition courante** ne crée **rien** — il repart dans la
+   conversation, où il peut répondre à une question d'étape (§ 8 ter) ;
+3. et c'est le serveur qui garde la **preuve** de ce qui a été accepté.
+
+⚠️ **Préférez `/ai/confirm` quand la personne peut appuyer.** Un jeton nomme ce
+qu'elle a vu ; un mot transcrit peut se tromper.
+
+### Les trois réponses de la confirmation
+
+| | ce qui s'est passé | ce que vous montrez |
+|---|---|---|
+| `200` + `state: "ordered"` | la course ou la commande existe | « c'est parti » → `ordered.kind` / `ordered.id` ouvrent le suivi |
+| `409 no_pending_action` | il n'y a **rien** à confirmer | **ne réessayez pas** : redemandez un devis |
+| `409 pending_expired` | la proposition a vécu | « le prix a changé » → **nouveau devis, nouvelle confirmation** |
+
+⚠️⚠️ **DEUX CONFIRMATIONS DU MÊME JETON FONT AU PLUS UNE OPÉRATION**, et la
+seconde reçoit **le même résultat**, pas une erreur. C'est voulu : un refus sur
+un renvoi après coupure vous ferait croire à un échec, et la personne appuierait
+une seconde fois.
+
+⚠️ **Un refus de la verticale rend le jeton** — il peut être passager (un
+réseau, un solde rechargé dans la minute). Vous pouvez réessayer la **même**
+confirmation. `pending_expired`, en revanche, ne se réessaie pas : le prix a pu
+changer.
+
+⚠️ **`expires_at` est une indication, pas l'autorité.** C'est la verticale qui
+refuse un devis périmé au moment de commander. Cette date existe pour que vous
+cessiez de proposer un bouton qui ne marchera plus.
+
+### ⚠️ UN VOCAL PASSÉ AU SUPPORT NE PORTE PAS DE BOUTON
+
+`action` est **absente** sur `state: "needs_support"` et sur
+`state: "ordered"`, et sur toute réponse sans `plan`.
+
+Sur `needs_support`, un opérateur va écouter et commander **à la main** : vous
+offrir en même temps un bouton laisserait les deux arriver, et il y aurait
+**deux** courses. Montrez « nous vous rappelons ».
+
+### ⚠️ ET SI VOUS IGNOREZ `action`, RIEN NE CHANGE
+
+Vous continuez d'appeler la verticale vous-même avec le `quote_id` du plan,
+comme aujourd'hui. `action` est un **chemin de plus**, pas un remplacement — et
+c'est pour cela qu'il est livrable sans nouvelle version d'application.
+
+---
+
+## 8 bis ter. 🆕 ⚠️⚠️ `Idempotency-Key` — UN RENVOI REND LE MÊME TOUR (v4.100.0)
+
+```
+POST /analytics/ai/chat     Idempotency-Key: tour-12
+POST /analytics/ai/voice    Idempotency-Key: tour-13
+POST /food/orders           Idempotency-Key: panier-3
+POST /vtc/rides             Idempotency-Key: course-7      (déjà là, v4.99.3)
+```
+
+Vous l'envoyiez déjà sur l'assistant. **C'était ignoré.** Ce ne l'est plus.
+
+⚠️⚠️ **CE QUE CELA COÛTAIT, ET LE SYMPTÔME N'EST PAS UNE ERREUR MAIS UN
+DOUBLE.** Un réseau qui coupe pendant un tour : vous n'avez rien reçu, vous
+renvoyez le même message, et le serveur refaisait tout.
+
+- un deuxième appel de modèle, **sur votre quota du jour** ;
+- une deuxième ligne dans la file du support ;
+- deux paires de bulles dans le fil — l'assistant a l'air **bègue** ;
+- **deux propositions à confirmer** pour une seule demande ;
+- et sur `POST /food/orders`, **deux repas livrés, payés deux fois**.
+
+Avec la même clé, le renvoi rend la **même** réponse, à l'octet : le même
+`voice_id`, le même `confirmation_token`, la même commande.
+
+### Comment choisir la clé
+
+- **Une clé par tour** (`tour-12`) ou par panier, et la **même** sur tous les
+  renvois de cet appel.
+- **Une clé NOUVELLE dès que l'intention change** — un nouveau message, un
+  panier modifié. Une clé réutilisée sur autre chose rendrait l'ancienne réponse.
+- Elle vous appartient : un compteur, un UUID, l'identifiant de votre tour. Elle
+  est bornée à 200 caractères (au-delà, tronquée, pas refusée).
+
+### Le refus qui lui est propre
+
+| refus | ce qui s'est passé | ce que vous faites |
+|---|---|---|
+| `409 turn_in_progress` | un **premier** envoi du même tour est en train d'aboutir | **réessayez dans un instant** — la réponse y sera |
+
+⚠️ **Ce n'est pas un échec.** C'est le cas de deux envois **simultanés** : un
+seul travaille, et le second trouvera sa réponse au prochain essai. Ne
+recomposez pas le message.
+
+⚠️ **Un tour REFUSÉ oublie sa clé** (quota atteint, modèle muet, solde
+insuffisant) : vous pouvez réessayer avec la **même** clé. Le refus peut être
+passager, et vous réessayez précisément parce que vous n'avez rien reçu.
+
+⚠️ **Sans clé, rien ne change** — chaque envoi est un tour. C'est votre
+protection, pas la nôtre : envoyez-la.
 
 ---
 
