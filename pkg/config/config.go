@@ -68,6 +68,15 @@ type Base struct {
 	MinioUseSSL    bool
 	MinioBucket    string
 	MinioPublicURL string
+	// PrivateMediaRetention : au bout de combien de temps les objets des
+	// genres PRIVÉS (`storage.Private`) s'effacent d'eux-mêmes.
+	//
+	// ⚠️⚠️ PARTAGÉE PAR TOUS LES SERVICES, et c'est la raison de sa place ici :
+	// le cycle de vie se pose sur le SEAU, et le dernier service qui démarre
+	// écrase la règle du précédent. Deux valeurs différentes feraient une
+	// rétention qui dépend de l'ordre des redémarrages — c'est-à-dire du
+	// hasard, sur l'effacement de la voix de quelqu'un.
+	PrivateMediaRetention time.Duration
 }
 
 // IsProd dit si le service tourne en production.
@@ -103,6 +112,12 @@ func LoadBase(defaultDB, defaultBucket string) (Base, error) {
 		MinioPublicURL: Env("MINIO_PUBLIC_URL", "http://localhost:9000"),
 	}
 	var err error
+	// ⚠️ QUATRE-VINGT-DIX JOURS par défaut, la même durée que le TTL de la
+	// ligne d'un vocal : les deux doivent dire la même chose, sinon l'un
+	// efface une voix que l'autre croit encore là, ou l'inverse.
+	if b.PrivateMediaRetention, err = Duration("PRIVATE_MEDIA_RETENTION", 90*24*time.Hour); err != nil {
+		return b, err
+	}
 	if b.JWTAccessTTL, err = Duration("JWT_ACCESS_TTL", 15*time.Minute); err != nil {
 		return b, err
 	}
