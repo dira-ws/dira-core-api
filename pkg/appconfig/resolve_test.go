@@ -265,16 +265,31 @@ func TestResolveServesEveryKeyIncludingTheOnesLeftOn(t *testing.T) {
 	}
 }
 
-// Un registre nil se résout quand même — toutes fonctions ouvertes.
-func TestResolveOnANilRegistryOpensEverything(t *testing.T) {
+// Un registre nil se résout quand même — toutes fonctions ouvertes, SAUF le
+// direct.
+//
+// ⚠️⚠️ L'EXCEPTION EST NOMMÉE ICI, ET ELLE DOIT L'ÊTRE. Cette épreuve a refusé
+// l'assistant en direct au moment où je l'ai ajouté au catalogue, et elle avait
+// raison de le faire : le défaut de ce paquet est « disponible partout », et
+// l'enfreindre sans le dire aurait laissé croire que les autres fonctions
+// peuvent s'allumer aussi. Le direct est facturé à la seconde et ses langues
+// restent à mesurer : il s'allume par la présence d'un bloc `live`, pays par
+// pays (voir `live.go`). Toute AUTRE fonction qui ferait échouer cette
+// épreuve est un défaut, pas une exception de plus.
+func TestResolveOnANilRegistryOpensEverythingButTheLiveAssistant(t *testing.T) {
 	var r *Registry
 	got := r.Resolve("td", "LITE")
 	assert.Equal(t, "lite", got.Edition)
 	assert.Equal(t, "TD", got.Country, "le pays est normalisé en majuscules")
 	require.Len(t, got.Features, len(Features))
 	for key, on := range got.Features {
+		if key == FeatureAssistantLive {
+			assert.False(t, on, "le direct s'allume, il ne se coupe pas : sans bloc `live`, il est éteint")
+			continue
+		}
 		assert.True(t, on, "%s", key)
 	}
+	assert.Nil(t, got.Live, "aucun bloc `live` sans réglage de pays")
 	assert.Empty(t, got.Lists)
 }
 

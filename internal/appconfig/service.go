@@ -2,6 +2,7 @@ package appconfig
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"sync"
 	"time"
@@ -145,6 +146,11 @@ func (s *Service) Save(ctx context.Context, reg appconfig.Registry, actor string
 		}
 		clean.ListRules[key] = r
 	}
+	live, err := cleanLive(reg.Live)
+	if err != nil {
+		return err
+	}
+	clean.Live = live
 	if err := s.repo.Save(ctx, clean, actor); err != nil {
 		return err
 	}
@@ -163,6 +169,80 @@ func (s *Service) Save(ctx context.Context, reg appconfig.Registry, actor string
 // sur le chemin d'un appel, une faute de frappe ne doit rien casser ; dans un
 // réglage, elle produit une règle qui ne s'applique à rien et que personne ne
 // pourra expliquer.
+// cleanLive normalise les réglages de l'assistant EN DIRECT, pays par pays.
+//
+// ⚠️⚠️ UN PAYS NOMMÉ ICI ALLUME UN MICRO FACTURÉ À LA SECONDE. C'est le seul
+// réglage de ce registre qui AJOUTE quelque chose au lieu de le retirer, et
+// c'est pour cela qu'il se valide plus durement que les autres : un pays sans
+// langue, une borne à zéro ou une durée de huit heures sont toutes des
+// écritures qu'un opérateur peut faire de bonne foi, et dont la facture
+// arrive un mois plus tard.
+//
+// ⚠️ ET LA LANGUE N'EST PAS VÉRIFIÉE CONTRE UN CATALOGUE, parce que le socle
+// n'en a pas : c'est l'analytique qui détient les langues et c'est le
+// FOURNISSEUR qui décide s'il sait les parler. #267 §6 le dit : la prise en
+// charge vocale de l'arabe tchadien et du wolof SE MESURE avant de s'ouvrir.
+// On contrôle donc la forme, et le relais refuse à l'ouverture une langue qui
+// n'est pas dans cette liste.
+func cleanLive(in map[string]appconfig.LiveRule) (map[string]appconfig.LiveRule, error) {
+	if len(in) == 0 {
+		return nil, nil
+	}
+	out := make(map[string]appconfig.LiveRule, len(in))
+	for code, rule := range in {
+		code = strings.ToUpper(strings.TrimSpace(code))
+		if len(code) != 2 {
+			return nil, apperr.Validation("a country is two letters: " + code).
+				WithMeta(map[string]any{"fields": []string{"live"}})
+		}
+		clean := appconfig.LiveRule{}
+		for _, l := range rule.Languages {
+			l = strings.ToLower(strings.TrimSpace(l))
+			if l == "" {
+				continue
+			}
+			if len(l) < 2 || len(l) > 8 {
+				return nil, apperr.Validation("a language code is two to eight letters: " + l).
+					WithMeta(map[string]any{"fields": []string{"live"}, "reason": code})
+			}
+			clean.Languages = append(clean.Languages, l)
+		}
+		if len(clean.Languages) == 0 {
+			// ⚠️ UN PAYS SANS LANGUE EST UN RÉGLAGE MORT, et il se refuse par
+			// son nom — comme une règle qui ne retire rien (#245). Rangé, il
+			// aurait laissé l'écran de la console montrer le direct « ouvert
+			// au Tchad » alors que `LiveFor` le rend éteint.
+			return nil, apperr.Validation("the live assistant needs at least one language — it is measured before it is opened").
+				WithMeta(map[string]any{"fields": []string{"live"}, "reason": code})
+		}
+		if err := inRange("max_session_seconds", rule.MaxSessionSeconds,
+			appconfig.LiveMaxSessionSecondsFloor, appconfig.LiveMaxSessionSecondsCeiling, code); err != nil {
+			return nil, err
+		}
+		if err := inRange("idle_timeout_seconds", rule.IdleTimeoutSeconds,
+			appconfig.LiveIdleSecondsFloor, appconfig.LiveIdleSecondsCeiling, code); err != nil {
+			return nil, err
+		}
+		clean.MaxSessionSeconds, clean.IdleTimeoutSeconds = rule.MaxSessionSeconds, rule.IdleTimeoutSeconds
+		out[code] = clean
+	}
+	return out, nil
+}
+
+// inRange : zéro passe (c'est « prends le défaut »), hors bornes refuse.
+//
+// ⚠️ ZÉRO N'EST PAS HORS BORNES, et il fallait le décider : la console envoie
+// un champ vide pour « je ne règle pas ça », et `LiveFor` y met le défaut.
+// Refuser zéro aurait obligé chaque écran à recopier nos défauts — et à les
+// recopier faux le jour où ils changent.
+func inRange(field string, v, floor, ceiling int, code string) error {
+	if v == 0 || (v >= floor && v <= ceiling) {
+		return nil
+	}
+	return apperr.Validation(fmt.Sprintf("%s must be between %d and %d seconds", field, floor, ceiling)).
+		WithMeta(map[string]any{"fields": []string{"live"}, "reason": code})
+}
+
 func cleanRule(rule appconfig.Rule, isList bool) (appconfig.Rule, error) {
 	out := appconfig.Rule{}
 	for _, e := range rule.Editions {

@@ -174,3 +174,15 @@ func (c *Client) Require(ctx context.Context, feature string) error {
 	}
 	return Refuse(feature)
 }
+
+// Live rend les réglages de l'assistant EN DIRECT pour le pays et l'édition de
+// CET appel — et dit s'il est ouvert ici.
+//
+// ⚠️⚠️ LE DÉFAUT EST NON, à l'inverse de `Allows`. Registre nil, socle
+// injoignable, pays sans réglage : le direct est ÉTEINT. C'est la seule
+// fonction de ce pont dont l'indisponibilité du socle ferme la porte au lieu
+// de l'ouvrir — un micro facturé à la seconde ne doit pas s'ouvrir parce qu'un
+// appel HTTP a échoué.
+func (c *Client) Live(ctx context.Context) (LiveBlock, bool) {
+	return c.Registry(ctx).LiveFor(country.FromContext(ctx), edition.FromContext(ctx))
+}

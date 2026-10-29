@@ -84,6 +84,10 @@ func (rule Rule) Restricts(isList bool) bool {
 type Registry struct {
 	// Features : clé du catalogue → sa règle. Absente = disponible partout.
 	Features map[string]Rule `bson:"features,omitempty" json:"features,omitempty"`
+	// Live : les réglages de l'assistant en direct, PAR PAYS (clé = code ISO
+	// en majuscules). Pays absent = le direct est éteint là-bas — voir
+	// `live.go`.
+	Live map[string]LiveRule `bson:"live,omitempty" json:"live,omitempty"`
 	// ListRules : clé de liste → sa règle (c'est `Allow` qui y compte).
 	ListRules map[string]Rule `bson:"lists,omitempty" json:"lists,omitempty"`
 }
@@ -200,6 +204,12 @@ type Resolved struct {
 	// Lists : les listes blanches, quand il y en a. Une liste absente veut
 	// dire « tout ce que le métier sert ».
 	Lists map[string][]string `json:"lists,omitempty"`
+	// Live : les réglages de l'assistant EN DIRECT, quand il est ouvert ici.
+	//
+	// ⚠️⚠️ ABSENT VEUT DIRE « ÉTEINT », et c'est le seul champ de cette
+	// réponse dont l'absence retire quelque chose. Voir `live.go` : le direct
+	// s'allume, il ne se coupe pas.
+	Live *LiveBlock `json:"live,omitempty"`
 }
 
 // Resolve rend ce que cette édition voit dans ce pays.
@@ -211,6 +221,17 @@ func (r *Registry) Resolve(countryCode, ed string) Resolved {
 	}
 	for _, f := range Features {
 		out.Features[f.Key] = r.Allows(f.Key, countryCode, ed)
+	}
+	// ⚠️⚠️ LE DRAPEAU DU DIRECT EST L'EXISTENCE DE SON BLOC, et il s'écrit
+	// APRÈS la boucle pour écraser le défaut « disponible partout ». Les deux
+	// sortent de `LiveFor` : une application ne peut donc PAS lire un drapeau
+	// à `true` sans bloc, ni un bloc sans drapeau. Laisser la boucle décider
+	// aurait annoncé le direct dans quatorze pays où aucun réglage n'existe —
+	// et l'application aurait ouvert un micro vers un relais qui refuse.
+	block, live := r.LiveFor(countryCode, ed)
+	out.Features[FeatureAssistantLive] = live
+	if live {
+		out.Live = &block
 	}
 	if r == nil {
 		return out
