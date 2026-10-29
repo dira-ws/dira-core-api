@@ -1,6 +1,6 @@
 # App CLIENT — COURSES (VTC) — contrat d'API
 
-> **Version 4.94.0** · 29 octobre 2026
+> **Version 4.95.0** · 29 octobre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Courses : `https://api-staging.dira.llc/api/v1/vtc` · Suivi : `wss://tracking-staging.dira.llc`
 
 ---
@@ -1226,9 +1226,17 @@ POST /rides
 même départ et à la même arrivée, chacune avec son chauffeur.
 
 ```
-GET /settings/rider
+GET /settings/rider[?near=lng,lat]
 → { "max_concurrent_rides": 3, "max_cars_per_request": 1 }
 ```
+
+⚠️ **`?near=` ICI AUSSI (v4.95.0)**, comme sur `/settings/modes`,
+`/settings/share` et `/classes`. Les bornes qui s'appliquent sont celles du pays
+où l'on **commande**, pas celles du pays du compte : sans ce paramètre, un
+passager togolais à Dakar lit les bornes du Togo — et se voit refuser une
+deuxième voiture que le Sénégal autorisait, ou proposer un sélecteur que le
+Sénégal n'ouvre pas. Passez le **point de départ** que vous avez déjà sous la
+main pour le devis.
 
 ⚠️⚠️ **LISEZ CE RÉGLAGE AVANT DE DESSINER QUOI QUE CE SOIT.**
 `max_cars_per_request` vaut **1 par défaut** : la fonctionnalité est **éteinte**
@@ -3081,14 +3089,49 @@ WS wss://tracking-staging.dira.llc/track/subscribe/{ride_id}
 { "type": "hello",    "mission_id": "…", "vehicle_id": "…", "vehicle_type": "voiture",
   "plate": "…", "lng": 1.2255, "lat": 6.1319, "heading": 122.5,
   "heading_source": "gps", "speed": 8.3, "ts": 1757… }          ⚠️ v4.28.0
-{ "type": "position", "vehicle_id": "…", "vehicle_type": "voiture", "plate": "…",
-  "lng": 1.2255, "lat": 6.1319, "heading": 122.5, "speed": 8.3, "ts": 1757… }
-{ "type": "status",   "status": "picking_up", "ts": 1757… }
+{ "type": "position", "mission_id": "…", "vehicle_id": "…", "vehicle_type": "voiture",
+  "plate": "…", "lng": 1.2255, "lat": 6.1319, "heading": 122.5, "speed": 8.3, "ts": 1757… }
+{ "type": "status",   "mission_id": "…", "status": "picking_up", "ts": 1757… }
 ```
 
 L'identifiant de course sert d'identifiant de mission (`mission_id` =
 `ride_id`). Le jeton d'accès passe dans l'URL (`?token=`) — un WebSocket de
 navigateur ne porte pas d'en-tête.
+
+### 🆕 ⚠️ LES TROIS TRAMES PORTENT LEUR `mission_id` (v4.95.0)
+
+`hello`, `position` **et** `status` : toutes les trois, toujours, même sur la
+route à une seule mission. Les exemples de ce document ne le montraient pas sur
+`position` et `status`, et il fallait le croire sur parole — il est servi depuis
+toujours, et le serveur ne peut plus l'oublier (le canal nomme la trame).
+
+⚠️ **Aiguillez dessus plutôt que sur l'ordre d'arrivée**, surtout sur la socket
+à plusieurs courses ci-dessous : une trame sans nom se jette, une trame mal
+nommée se dessine sur la mauvaise voiture.
+
+### 🆕 ⚠️⚠️ UNE POIGNÉE DE MAIN REFUSÉE DIT LAQUELLE DES DEUX (v4.95.0)
+
+Jusqu'ici le suivi refusait **`401`** pour deux choses qui n'ont rien à voir :
+un jeton expiré — qu'il faut rafraîchir, après quoi ça marche — et une course
+qui n'est pas la vôtre, qu'aucun rafraîchissement ne rendra suivable. La boucle
+« `401` → rafraîchir → redemander → `401` » tournait indéfiniment sur une carte
+vide.
+
+| statut | corps | ce qu'il faut faire |
+|---|---|---|
+| `401` | `{"error":"unauthorized"}` | **rafraîchir** (`POST /auth/refresh`) puis rouvrir |
+| `403` | `{"error":"mission_forbidden","mission_id":"…"}` | **cesser d'essayer** sur cette course ; elle ne vous appartient pas |
+| `400` | `{"error":"missions_required"}` | la liste `?missions=` manque |
+| `400` | `{"error":"too_many_missions"}` | plus de 20 missions demandées |
+
+⚠️ **C'est le STATUT qui porte la décision, pas le corps.** Une poignée de main
+échouée ne rend pas toujours son corps au client : OkHttp et Starscream donnent
+le statut à coup sûr, le corps au mieux. Branchez votre logique sur `401` contre
+`403` ; le code du corps sert à écrire une trace lisible.
+
+⚠️ **À ne pas confondre avec le code de fermeture `4401 token_expired`** : celui-là
+arrive quand le jeton expire **pendant** une connexion déjà ouverte. Ici la
+socket n'a jamais existé — il n'y a rien à fermer.
 
 ### 🆕 🛰️ PLUSIEURS COURSES SUR UNE SEULE SOCKET (v4.83.0)
 
@@ -3110,9 +3153,12 @@ suivre, c'est trois fois tout cela — pour des trames qui portent **déjà** le
 - **Chaque trame porte son `mission_id`** : aiguillez dessus.
 - ⚠️ **Vingt missions au plus.** Au-delà, la socket est refusée (`400`).
 - ⚠️ **Une mission que vous n'avez pas le droit de suivre refuse TOUTE la
-  socket** (`401`), elle n'est pas écartée en silence : un abonnement partiel
-  qui a l'air complet dessinerait deux voitures sur trois sans que vous
-  puissiez le savoir.
+  socket** — `403 {"error":"mission_forbidden","mission_id":"…"}` **depuis la
+  v4.95.0**, et non plus `401`. Elle n'est pas écartée en silence : un
+  abonnement partiel qui a l'air complet dessinerait deux voitures sur trois
+  sans que vous puissiez le savoir. Le corps **nomme la mission en cause** :
+  retirez-la de la liste et rouvrez avec les autres, plutôt que de les
+  abandonner toutes.
 - ⚠️ **Ne demandez pas deux fois la même mission** : la liste est
   dédoublonnée côté serveur, mais comptez-y — deux abonnements au même canal
   doubleraient chaque position.
@@ -3287,8 +3333,11 @@ le support tranche les écarts.
 - **Échéance du jeton** : le suivi ferme le socket avec le code **4401
   `token_expired`** — rafraîchir (`POST /auth/refresh`) **puis** reconnecter,
   jamais reconnecter avec le même jeton.
-- Poignée de main : **401** = rafraîchir et revenir ; **403** = ce rôle ne
-  peut pas suivre cette course, ne pas réessayer.
+- Poignée de main : **401 `unauthorized`** = rafraîchir et revenir ;
+  **403 `mission_forbidden`** = cette course n'est pas la vôtre, ne pas
+  réessayer. ⚠️ **Ce document promettait déjà ces deux codes ; le suivi
+  renvoyait `401` dans les deux cas jusqu'à la v4.95.0.** Si votre
+  application distinguait déjà les deux, elle fonctionne enfin comme prévu.
 
 ⚠️ **La base d'URL du suivi est distincte de celle de l'API** : deux variables
 d'environnement.

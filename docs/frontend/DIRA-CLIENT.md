@@ -1,6 +1,6 @@
 # App CLIENT UNIFIÉE — LIVRAISON **et** COURSES — contrat d'API
 
-> **Version 4.94.0** · 29 octobre 2026
+> **Version 4.95.0** · 29 octobre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Livraison : `…/api/v1/food` · Courses : `…/api/v1/vtc` · Combiné : `…/api/v1/analytics` · Suivi : `wss://tracking-staging.dira.llc`
 
 ---
@@ -1540,8 +1540,29 @@ et vous recevez les prix du pays où la course se fera. Deux pays dans un seul
 | Canal | Base | Ce qui arrive | Portée |
 |---|---|---|---|
 | **Socket des commandes** | `wss://api…/api/v1/food/ws/orders?token=` | `order_created`, `order_status { from, status }`, `order_message` | application ouverte, **toutes** vos commandes |
-| **Socket du suivi** | `wss://tracking…/track/subscribe/{id}?token=` | `position`, et `status` à chaque passage | application ouverte, **une** opération à la fois — `{id}` est l'identifiant de la **course** ou de la **livraison** |
+| **Socket du suivi** | `wss://tracking…/track/subscribe/{id}?token=` | `position`, et `status` à chaque passage — **les deux portent leur `mission_id`** (v4.95.0) | application ouverte, **une** opération à la fois — `{id}` est l'identifiant de la **course** ou de la **livraison** |
 | **Push** | socle, `POST /me/devices` | un gabarit **et** des données (`type`, l'identifiant, `status`) | application fermée ou en arrière-plan |
+
+### 🆕 ⚠️⚠️ UN REFUS DU SOCKET DU SUIVI DIT LAQUELLE DES DEUX (v4.95.0)
+
+Jusqu'ici le suivi refusait **`401`** pour deux choses qui n'ont rien à voir :
+un jeton expiré — qu'il faut rafraîchir, après quoi ça marche — et une opération
+qui n'est pas la vôtre, qu'aucun rafraîchissement ne rendra suivable. La boucle
+« `401` → rafraîchir → redemander → `401` » tournait indéfiniment.
+
+| statut | corps | ce qu'il faut faire |
+|---|---|---|
+| `401` | `{"error":"unauthorized"}` | **rafraîchir** (`POST /auth/refresh`) puis rouvrir |
+| `403` | `{"error":"mission_forbidden","mission_id":"…"}` | **cesser d'essayer** : cette course ou cette commande n'est pas la vôtre |
+
+⚠️ **C'est le STATUT qui porte la décision, pas le corps** : une poignée de main
+échouée ne rend pas toujours son corps au client. Et ces refus tombent **avant**
+que la socket n'existe — à ne pas confondre avec le code de fermeture
+`4401 token_expired`, qui arrive sur une connexion déjà ouverte.
+
+⚠️ **Et les trames `position` et `status` portent leur `mission_id`.** Toujours,
+même sur la route à une seule opération : aiguillez dessus plutôt que sur
+l'ordre d'arrivée.
 
 ⚠️ **DEUX SOCKETS, DEUX SERVICES, DEUX CYCLES DE VIE. NE LES FACTORISEZ PAS**
 sous prétexte que ce sont deux WebSockets. Celui des commandes est global et

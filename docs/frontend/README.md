@@ -1,6 +1,6 @@
 # Specs frontend — par rôle
 
-> **Version 4.94.0** · 29 octobre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics`
+> **Version 4.95.0** · 29 octobre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics`
 
 **Cinq** documents, un par application. Chacun est **autonome** : tout ce qu'un frontend doit savoir pour son rôle, sans avoir à ouvrir les vingt specs de modules.
 
@@ -162,7 +162,7 @@ Trois canaux, et chaque application en tient deux :
 
 | Canal | Qui | Ce qui arrive | Portée |
 |---|---|---|---|
-| **Socket du suivi** `wss://tracking…/track/subscribe/{mission_id}` | client (commande **et** course), exploitation | `{ "type": "position", … }` et **`{ "type": "status", "status": "…" }`** à chaque changement d'état de l'opération | application ouverte, une opération à la fois — `mission_id` = `delivery_id` ou `ride_id` |
+| **Socket du suivi** `wss://tracking…/track/subscribe/{mission_id}` | client (commande **et** course), exploitation | `{ "type": "position", "mission_id", … }` et **`{ "type": "status", "mission_id", "status": "…" }`** à chaque changement d'état de l'opération — les deux portent leur `mission_id` (v4.95.0) ; refus de poignée de main : **`401 unauthorized`** = rafraîchir · **`403 mission_forbidden`** = cesser d'essayer | application ouverte, une opération à la fois — `mission_id` = `delivery_id` ou `ride_id` |
 | **Socket des commandes** `wss://api…/api/v1/food/ws/orders?token=` | client, marchand, livreur, exploitation | `order_created`, `order_status { from, status }`, `order_message` | application ouverte, **toutes** les commandes qui vous concernent — le livreur y reçoit désormais l'état des commandes qu'il **porte** |
 | **Push FCM** (socle, `POST /me/devices`) | tout le monde | un gabarit **et des données** : `type` (`order_status`, `ride_status`, `delivery_status`, `driver_call`, …), l'identifiant, le `status` | application fermée ou en arrière-plan |
 
@@ -355,6 +355,61 @@ Chaque document porte la même version en en-tête, et son propre journal des ch
 - [ ] ⚠️ **`TRACKING_JWT_SECRET` renseigné dans chaque environnement déployé.** Vide, l'authentification du service de suivi est **désactivée** : n'importe qui connaissant un `delivery_id` suit la course. Le secret doit valoir **exactement** le `JWT_SECRET` de `dira-food-api`.
 
 ## Journal
+
+### 4.95.0 — 29 octobre 2026
+
+🛰️ **LE SOCKET DU SUIVI DIT ENFIN POURQUOI IL REFUSE, ET SES TRAMES PORTENT
+LEUR NOM** — `VTC-CLIENT.md` §6, `FOOD-CLIENT.md` §5, `DIRA-CLIENT.md` §11
+(core#229 §2 et §3). Plus `?near=` sur les bornes du passager (§1) et un contrat
+OpenAPI qui décrit ce qu'il sert (§4).
+
+```
+WS /track/subscribe/{mission_id}        401 unauthorized      → rafraîchir
+WS /track/subscribe?missions=a,b,c      403 mission_forbidden  → cesser
+                                        400 missions_required | too_many_missions
+GET /vtc/settings/rider[?near=lng,lat]
+```
+
+⚠️⚠️ **`401` VOULAIT DIRE DEUX CHOSES OPPOSÉES.** « Votre jeton a expiré » — à
+rafraîchir, après quoi ça marche — et « cette course n'est pas la vôtre »,
+qu'aucun rafraîchissement ne rendra suivable. Les applications faisaient donc
+tourner « `401` → rafraîchir → redemander → `401` » sur une carte vide. Une
+mission interdite rend désormais **`403 mission_forbidden`**, et le corps
+**nomme la mission en cause** : sur une socket qui en demandait trois, retirez
+celle-là et rouvrez avec les autres plutôt que de les abandonner toutes.
+
+⚠️ **C'est le STATUT qui porte la décision, pas le corps.** Une poignée de main
+échouée ne rend pas toujours son corps au client : OkHttp et Starscream donnent
+le statut à coup sûr, le corps au mieux. Et ces refus tombent **avant** que la
+socket n'existe — à ne pas confondre avec le code de fermeture `4401
+token_expired`, qui arrive sur une connexion déjà ouverte.
+
+⚠️ **`VTC-CLIENT.md` promettait déjà ces deux codes** (« 401 = rafraîchir et
+revenir ; 403 = ce rôle ne peut pas suivre cette course »). Le suivi renvoyait
+`401` dans les deux cas. Si votre application distinguait déjà les deux, elle
+fonctionne enfin comme prévu.
+
+⚠️ **`position` et `status` portent leur `mission_id`** — toujours, même sur la
+route à une seule mission. Elles le portaient déjà ; ce sont les **exemples de
+ces documents** qui ne le montraient pas, et il fallait le croire sur parole.
+Le serveur ne peut plus l'oublier : le canal de diffusion nomme la trame, donc
+une trame anonyme — qu'une application jette — ou au nom d'une **autre** course
+— qu'elle dessine sur la mauvaise voiture — ne peut plus partir.
+
+⚠️ **`GET /vtc/settings/rider` accepte `?near=lng,lat`**, comme
+`/settings/modes`, `/settings/share` et `/classes`. Sans lui, un passager
+togolais à Dakar lit les bornes du Togo : une deuxième voiture refusée que le
+Sénégal autorisait, ou un sélecteur proposé que le Sénégal n'ouvre pas.
+
+⚠️ **Le contrat OpenAPI du VTC décrivait 55 champs de course là où le service en
+sert 94.** `booking_id`, `booking_index`, `booking_size`, `pool_id`, `transfer`,
+`dispatch_call`, toute la location, toute la promotion, tout le barème
+d'annulation, et `country` — donc la **monnaie** des montants — n'y étaient pas
+déclarés. Cinquante-huit champs ajoutés sur trois schémas, et une épreuve qui
+refuse désormais tout écart entre le contrat et ce que le service envoie.
+Au passage : `GET /vtc/rides` (l'historique) avait atterri **dans**
+`/rides/active` à la suite d'une fusion ratée, et n'existait donc pas au
+contrat.
 
 ### 4.94.0 — 29 octobre 2026
 
@@ -928,7 +983,7 @@ conversation vide.
 TRAJETS PARTAGÉS QU'ON ÉPINGLE** — `VTC-CLIENT.md`.
 
 ```
-GET  /vtc/settings/rider     → { max_concurrent_rides: 3, max_cars_per_request: 1 }
+GET  /vtc/settings/rider[?near=lng,lat]  → { max_concurrent_rides, max_cars_per_request }
 POST /vtc/rides              { quote_id, payment_method, cars: 3 }
 GET  /vtc/rides/active       → mes courses en cours, recherche comprise
 WS   /track/subscribe?missions=a,b,c

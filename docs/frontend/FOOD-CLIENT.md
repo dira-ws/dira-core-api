@@ -1,6 +1,6 @@
 # App CLIENT — LIVRAISON — contrat d'API
 
-> **Version 4.94.0** · 29 octobre 2026
+> **Version 4.95.0** · 29 octobre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Livraison : `https://api-staging.dira.llc/api/v1/food` · Suivi : `wss://tracking-staging.dira.llc`
 
 
@@ -1397,11 +1397,37 @@ wss://tracking-staging.dira.llc/track/subscribe/{mission_id}?token=<access_token
 { "type": "hello",    "mission_id": "6ab…", "vehicle_id": "…", "vehicle_type": "moto",
   "plate": "TG-3421-AB", "lng": 1.2255, "lat": 6.1319, "heading": 122.5,
   "heading_source": "gps", "speed": 8.3, "ts": 1757… }          ⚠️ v4.28.0
-{ "type": "position", "vehicle_id": "…", "vehicle_type": "moto", "plate": "TG-3421-AB",
-  "lng": 1.2255, "lat": 6.1319, "heading": 122.5, "heading_source": "gps",
-  "speed": 8.3, "ts": 1757… }
-{ "type": "status",   "status": "in_transit", "ts": 1757… }
+{ "type": "position", "mission_id": "6ab…", "vehicle_id": "…", "vehicle_type": "moto",
+  "plate": "TG-3421-AB", "lng": 1.2255, "lat": 6.1319, "heading": 122.5,
+  "heading_source": "gps", "speed": 8.3, "ts": 1757… }
+{ "type": "status",   "mission_id": "6ab…", "status": "in_transit", "ts": 1757… }
 ```
+
+### 🆕 ⚠️ LES TROIS TRAMES PORTENT LEUR `mission_id` (v4.95.0)
+
+`hello`, `position` **et** `status` : toutes les trois, toujours. Les exemples
+de ce document ne le montraient pas sur `position` et `status`, et il fallait le
+croire sur parole — il est servi depuis toujours, et le serveur ne peut plus
+l'oublier (le canal nomme la trame). Aiguillez dessus plutôt que sur l'ordre
+d'arrivée.
+
+### 🆕 ⚠️⚠️ UNE POIGNÉE DE MAIN REFUSÉE DIT LAQUELLE DES DEUX (v4.95.0)
+
+Jusqu'ici le suivi refusait **`401`** pour deux choses qui n'ont rien à voir :
+un jeton expiré — qu'il faut rafraîchir, après quoi ça marche — et une
+livraison qui n'est pas la vôtre, qu'aucun rafraîchissement ne rendra suivable.
+
+| statut | corps | ce qu'il faut faire |
+|---|---|---|
+| `401` | `{"error":"unauthorized"}` | **rafraîchir** (`POST /auth/refresh`) puis rouvrir |
+| `403` | `{"error":"mission_forbidden","mission_id":"…"}` | **cesser d'essayer** : cette livraison n'est pas la vôtre |
+
+⚠️ **C'est le STATUT qui porte la décision, pas le corps.** Une poignée de main
+échouée ne rend pas toujours son corps au client : OkHttp et Starscream donnent
+le statut à coup sûr, le corps au mieux.
+
+⚠️ **À ne pas confondre avec un code de fermeture** : ces refus arrivent avant
+que la socket n'existe — il n'y a rien à fermer.
 
 ### 🛰️ L'ACCUEIL PORTE LA DERNIÈRE POSITION CONNUE (v4.28.0)
 
@@ -1549,7 +1575,9 @@ Ce que le client doit lire à chaque étape :
 
 - **Reconnexion avec back-off** (1 s, 2 s, 4 s… plafonné à 30 s), et **pas
   de boucle serrée** : un socket refusé en `401` ne s'arrangera pas en
-  réessayant vite — rafraîchissez le jeton d'abord.
+  réessayant vite — rafraîchissez le jeton d'abord. ⚠️ Et un socket refusé en
+  **`403 mission_forbidden`** ne s'arrangera **jamais** : ne rafraîchissez pas,
+  ne réessayez pas, retombez sur le sondage REST et dites-le à l'écran.
 - **En arrière-plan, fermez le socket** ; au retour au premier plan,
   **relisez `GET /orders/{id}` PUIS rouvrez**. Un socket maintenu en
   arrière-plan vide la batterie pour des positions que personne ne regarde.
