@@ -408,6 +408,13 @@ veut dire « tout ce que le métier sert » — **jamais** « rien ».
 
 Vous n'avez **rien à croiser** : nos routes appliquent le filtre elles-mêmes.
 
+⚠️ **Toutes les fonctions du catalogue n'ont pas de route à refuser.** Celles
+des courses en ont (le tableau ci-dessous et les cinq refus plus bas) ; d'autres
+sont de purs **écrans d'application** — la tombola, les vocaux — et pour
+celles-là `/app/config` n'est pas un confort, c'est la **seule** chose qui les
+coupe. Une application qui ne la lit pas affichera un écran que l'exploitation
+croit avoir retiré, sans que rien n'échoue nulle part.
+
 | Route | Ce qu'elle fait dans Lite |
 |---|---|
 | `GET /classes` | ne rend que les **classes** permises, et dans chaque classe, que les **modes** permis |
