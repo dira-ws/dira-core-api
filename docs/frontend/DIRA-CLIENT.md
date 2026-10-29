@@ -1,6 +1,6 @@
 # App CLIENT UNIFIÉE — LIVRAISON **et** COURSES — contrat d'API
 
-> **Version 4.101.0** · 29 octobre 2026
+> **Version 4.102.0** · 29 octobre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Livraison : `…/api/v1/food` · Courses : `…/api/v1/vtc` · Combiné : `…/api/v1/analytics` · Suivi : `wss://tracking-staging.dira.llc`
 
 ---
@@ -1034,6 +1034,22 @@ du métier comme un message écrit, et le tour entier est **écrit dans le fil**
 > contre celle de l'autre ; avec lui, le support **réécoute** et tranche en
 > dix secondes.
 
+#### 🆕 ⚠️ UN ENREGISTREMENT MUET EST `failed`, PAS UN TICKET (v4.102.0)
+
+**Correctif.** Un enregistrement sans parole se transcrit en chaîne vide, et
+cette chaîne partait à l'assistant du métier, qui la refusait. La ligne
+finissait `needs_support` — c'est-à-dire **« nous vous rappelons »** — sur un
+vocal où personne n'a parlé.
+
+Deux fois perdant : la personne attendait un appel qui n'avait aucun sens, et
+l'opérateur écoutait un silence.
+
+C'est désormais `failed`, avec la même conduite à tenir que pour une
+transcription ratée : **« nous n'avons pas entendu, réessayez »**, et proposez
+la réécoute — l'audio est conservé, et la personne s'apercevra peut-être
+qu'elle avait coupé son micro. **Rien à changer chez vous** si vous traitez
+déjà `failed`.
+
 #### ⚠️⚠️ 🆕 UN ÉCHEC D'ÉCOUTE ARRIVE EN `200`, PAS EN `502` (v4.89.0)
 
 Quand la transcription échoue, vous recevez un **`200`** portant
@@ -1059,7 +1075,7 @@ pannes, ce qui noyait les vraies.
 | `understood` | transcrit, un `plan` proposé, **la main vous reste** | le plan à **confirmer** — c'est le comportement de toujours |
 | `ordered` | **la commande est PARTIE** | « c'est parti », et `ordered.kind` / `ordered.id` ouvrent le suivi |
 | `needs_support` | l'IA n'a pas été assez sûre pour décider | « **nous vous rappelons** » — un humain va écouter |
-| `failed` | la transcription a échoué | « nous n'avons pas entendu, réessayez » — l'audio est **conservé** |
+| `failed` | la transcription a échoué, **ou personne n'a parlé** (v4.102.0) | « nous n'avons pas entendu, réessayez » — l'audio est **conservé** |
 
 ```jsonc
 // state: "ordered"
@@ -1168,6 +1184,80 @@ c'est l'estimation, et elle est fausse par construction.
 veut dire que l'archivage n'a pas répondu : la transcription, le plan et l'état
 sont justes, mais la bulle n'aura pas de lecteur. **N'échouez pas** pour cela —
 affichez la bulle avec son texte seul.
+
+---
+
+## 8 bis. 🆕 ⚠️⚠️ CHAQUE TOUR GARDE SA MODALITÉ (v4.102.0)
+
+> **La règle : texte → texte, vocal → réponse vocale.** Décidée à **ce** tour-là,
+> jamais d'après l'historique. Un message tapé juste après un vocal répond en
+> texte, et n'appelle **aucune** synthèse.
+
+Les deux routes de l'assistant — et **chaque bulle `assistant` du fil** —
+portent désormais :
+
+```jsonc
+{
+  "turn_id": "tour-12",
+  "input_modality": "audio",     // "text" sur /ai/chat
+  "output_modality": "audio",    // ⚠️ TOUJOURS égale à input_modality
+  "reply": "Une moto à 700 F, ça vous va ?",
+  "audio": {
+    "kind": "native_tts_instruction",   // ou "cloud"
+    "text": "De Moursal à Chagoua, moto, 700, en espèces. Confirmez-vous ?",
+    "language": "fr",
+    "voice_hint": null,
+    // `cloud` seulement :
+    "url": "…", "mime": "audio/opus", "seconds": 4, "expires_at": "…"
+  },
+  "audio_error": null             // "tts_unavailable" si aucune voix n'a pu être produite
+}
+```
+
+### ⚠️⚠️ LISEZ `audio.text`, JAMAIS `reply`, POUR DIRE UN PRIX
+
+`reply` est écrit par un modèle **qui n'a pas vu le plan** : il peut énoncer un
+montant qui n'y est pas. Quand le tour porte une `action`, `audio.text` est son
+**résumé** — composé des champs du devis (§ 8 bis bis).
+
+C'est la même règle que pour `action.say`, et elle existe pour la même raison :
+une personne qui **entend** un prix inventé dirait « oui » à ce prix-là.
+
+### Les deux façons de faire parler
+
+| `audio.kind` | Ce que vous faites |
+|---|---|
+| `native_tts_instruction` | **faites parler le TÉLÉPHONE** avec `text` et `language`. Aucun octet n'est rendu : c'est gratuit, instantané, et cela marche hors ligne |
+| `cloud` | **jouez `url`**. Elle est signée et **courte** — une phrase dite porte l'adresse et le prix de quelqu'un, elle n'a pas d'URL publique permanente |
+
+⚠️ **`native_tts_instruction` est le défaut aujourd'hui, partout.** Les
+appareils portent des voix pour `fr`, `en` et `ar` (ce dernier en repli pour
+`shu`). Pour les langues qu'aucun téléphone ne porte, vous recevrez
+`audio_error` tant qu'aucune voix n'existe — voir plus bas.
+
+⚠️ **`url` expirée ?** Relisez `GET /analytics/ai/thread` : il en rend une
+neuve, **sans** resynthétiser. Réécouter ne coûte donc rien, et l'historique
+reste jouable.
+
+### ⚠️⚠️ `audio_error` EST UNE RÉPONSE, PAS UNE PANNE
+
+| code | ce que ça veut dire | ce que vous faites |
+|---|---|---|
+| `tts_unavailable` | aucune voix n'a pu être produite | **lisez `reply` avec la voix de l'appareil**, ou affichez-le |
+| `tts_language_unsupported` | personne ne parle cette langue | idem, et n'annoncez pas d'audio |
+
+⚠️ **N'affichez jamais un lecteur sur un tour sans `audio`.** « Réponse vocale »
+annoncée sans son est la pire des deux moitiés : la personne appuie, rien ne
+sort, et elle croit son téléphone cassé.
+
+### `turn_id` : un seul nom pour une seule chose
+
+C'est **le même identifiant** que votre `Idempotency-Key` et que `voice_id` sur
+un vocal. Envoyez-le sur `/ai/chat` (`turn_id`), il revient dans la réponse.
+Facultatif : absent, la réponse n'en porte pas et rien ne casse.
+
+> ⚠️ **Un tour écrit ne se lit jamais tout seul.** C'est une règle de produit,
+> pas une limite technique : quelqu'un qui tape a choisi de ne pas parler.
 
 ---
 
