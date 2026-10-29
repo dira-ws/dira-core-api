@@ -794,7 +794,7 @@ func run(logger *slog.Logger) error {
 		promoSvc.SetCredits(promoCredits{tokens: tokenSvc})
 		promoSvc.SetReferral(promoReferral{countries: countrySvc})
 		promoH := promocode.NewHandler(promoSvc)
-		promoH.Mount(r, authMW)
+		promoH.Mount(r, authMW, appConfigSvc)
 		promoH.MountService(r, middleware.Service(cfg.ServiceToken))
 		// LE LEXIQUE DE MODÉRATION — les mots que la plateforme ne relaie pas.
 		//
@@ -870,7 +870,7 @@ func run(logger *slog.Logger) error {
 			Mount(r, authMW, middleware.Service(cfg.ServiceToken))
 		// LES OBJECTIFS : `/me/challenges` pour qui joue, `/admin/challenges`
 		// pour l'exploitation qui les écrit et les lance.
-		challenge.NewHandler(challengeSvc).Mount(r, authMW)
+		challenge.NewHandler(challengeSvc).Mount(r, authMW, appConfigSvc)
 		financeH := finance.NewHandler(financeSvc)
 		financeH.Mount(r, authMW)
 		financeH.MountInternal(r, middleware.Service(cfg.ServiceToken))
@@ -890,7 +890,7 @@ func run(logger *slog.Logger) error {
 		// Les listes de la console (tous les portefeuilles, tous les
 		// mouvements du pays), avec le nom des titulaires qui sont des comptes.
 		tokenHandler.SetBackOffice(tokenRepo, userSvc)
-		tokenHandler.Mount(r, authMW)
+		tokenHandler.Mount(r, authMW, appConfigSvc)
 		tokenHandler.MountCatalogueSpending(r, authMW)
 		// ⚠️ La confirmation manuelle d'un encaissement n'est ouverte qu'HORS
 		// production : simuler l'arrivée d'un paiement est un pouvoir qui n'a

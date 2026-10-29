@@ -276,8 +276,28 @@ telles quelles montrerait des modes que ce pays ne sert pas.
 ### ⚠️ Les routes existantes appliquent le MÊME filtre
 
 Une application qui ne lit pas `/app/config` ne voit pas pour autant une
-fonction exclue : les routes concernées la refusent. Cette route ne remplace
-donc aucune vérification — elle vous évite de **proposer** ce qui sera refusé.
+fonction exclue : **les routes concernées la refusent**. Cette lecture ne
+remplace donc aucune vérification — elle vous évite de **proposer** ce qui sera
+refusé.
+
+⚠️ **Mais toutes les fonctions du catalogue n'ont pas de route à refuser**, et
+il faut savoir laquelle est laquelle :
+
+| Fonction | Ce qui l'applique |
+|---|---|
+| `wallet` | `GET /wallet`, `/wallet/transactions`, `POST /wallet/purchase` refusent |
+| `challenges` | `GET /me/challenges` refuse |
+| `promo_codes` | `GET /me/referral` refuse |
+| `rental`, `pool`, `multi_car` | `POST /rides` refuse ; `GET /classes` et `GET /settings/modes` filtrent |
+| `trip_share` | `POST /rides/{id}/share` refuse |
+| `subscriptions` | `POST /subscriptions` refuse |
+| `feed`, `banners` | 🚧 **pas encore appliqué côté serveur** — fiez-vous à `/app/config` |
+| `raffle`, `voice_messages`, `assistant*` | **écrans d'application** : aucune route à refuser, `/app/config` est la seule source |
+
+⚠️⚠️ **Pour les deux dernières lignes, `/app/config` n'est pas un confort,
+c'est la SEULE chose qui coupe la fonction.** Une application qui ne la lit pas
+affichera un écran que l'exploitation croit avoir retiré — et personne ne s'en
+apercevra, puisque rien n'échoue.
 
 ### Le refus, quand vous le provoquez quand même
 
