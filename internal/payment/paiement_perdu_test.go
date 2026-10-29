@@ -17,6 +17,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"reflect"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -515,4 +516,77 @@ func TestAttachProviderRefBuildsItsFilterWithTheTestedHelper(t *testing.T) {
 		"le filtre doit venir du monteur éprouvé : écrit sur place, il n'est plus vérifiable")
 	assert.NotContains(t, corps, `bson.M{"_id": id}`,
 		"un filtre qui ne nomme que `_id` laisse écraser une référence déjà obtenue")
+}
+
+// --- LES BORNES DE RECHARGE SONT APPLIQUÉES, PAS SEULEMENT ANNONCÉES (#250) ---
+//
+// ⚠️⚠️ C'EST EXACTEMENT LE DÉFAUT DE #251 QU'ON ÉVITE ICI. `GET /wallet`
+// annonce désormais un minimum et un maximum de recharge par pays. Une borne
+// qu'aucune route ne refuse n'est pas une borne, c'est une suggestion : l'app
+// cacherait le bouton, et un appel direct passerait outre.
+
+// bornes est la politique d'un pays, telle que le câblage la fournit.
+type bornes struct{ min, max int }
+
+func (b bornes) TopupLimitsOf(context.Context, string) (int, int, string) {
+	return b.min, b.max, "XOF"
+}
+
+func TestATopUpOutsideTheCountrysBoundsIsRefusedByTheRoute(t *testing.T) {
+	svc, repo, _, _ := newTestService(t)
+	svc.SetTopupLimits(bornes{min: 500, max: 2_000_000})
+	r := routeur(t, svc, payeur, "client")
+
+	for _, c := range []struct {
+		montant int
+		code    string
+	}{
+		{100, "topup_below_minimum"},
+		{499, "topup_below_minimum"},
+		{2_000_001, "topup_above_maximum"},
+	} {
+		code, body := appel(t, r, http.MethodPost, "/payments/initiate",
+			`{"purpose":"wallet_topup","amount":`+strconv.Itoa(c.montant)+`,"ref_id":"`+payeur+`"}`, nil)
+		require.Equal(t, http.StatusUnprocessableEntity, code, "montant %d", c.montant)
+		erreur := body["error"].(map[string]any)
+		assert.Equal(t, c.code, erreur["code"],
+			"⚠️ un refus que l'application doit LIRE a besoin de SON code, "+
+				"pas d'un `validation_failed` générique")
+		champs := erreur["fields"].([]any)
+		assert.Equal(t, "amount", champs[0])
+	}
+	assert.Empty(t, repo.byID,
+		"⚠️ un montant hors bornes ne doit laisser AUCUNE ligne derrière lui — "+
+			"et surtout pas une ligne que la clé d'idempotence rendrait pour toujours")
+
+	// Dans les bornes, ça passe.
+	code, _ := appel(t, r, http.MethodPost, "/payments/initiate",
+		`{"purpose":"wallet_topup","amount":5000,"ref_id":"`+payeur+`"}`, nil)
+	assert.Equal(t, http.StatusCreated, code)
+}
+
+// ⚠️ LES BORNES DE RECHARGE NE BORNENT QUE LES RECHARGES. Le prix d'une course,
+// d'un panier ou d'un abonnement est décidé par la verticale qui l'a calculé :
+// les borner ici aurait fait refuser une commande de restaurant au motif
+// qu'elle dépasse le plafond de recharge du pays.
+func TestTheTopUpBoundsNeverTouchTheOtherPurposes(t *testing.T) {
+	svc, _, _, _ := newTestService(t)
+	svc.SetTopupLimits(bornes{min: 500, max: 10_000})
+	r := routeur(t, svc, payeur, "client")
+
+	for _, purpose := range []string{PurposeOrder, PurposeRide, PurposeRideSubscription} {
+		code, body := appel(t, r, http.MethodPost, "/payments/initiate",
+			`{"purpose":"`+purpose+`","amount":250000,"ref_id":"`+primitive.NewObjectID().Hex()+`"}`, nil)
+		assert.Equal(t, http.StatusCreated, code,
+			"`%s` à 250 000 doit passer : %v", purpose, body["error"])
+	}
+}
+
+// Sans bornes câblées, rien ne change : seul `amount > 0` s'applique, comme
+// avant. Un service de développement sans pays réglés garde ses paiements.
+func TestWithoutWiredBoundsNothingIsRefused(t *testing.T) {
+	svc, _, _, _ := newTestService(t)
+	code, _ := appel(t, routeur(t, svc, payeur, "client"), http.MethodPost, "/payments/initiate",
+		`{"purpose":"wallet_topup","amount":1,"ref_id":"`+payeur+`"}`, nil)
+	assert.Equal(t, http.StatusCreated, code)
 }

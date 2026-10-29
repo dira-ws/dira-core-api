@@ -39,6 +39,26 @@ type auditRecorder interface {
 	Record(ctx context.Context, action, resourceType, resourceID string, before, after any)
 }
 
+// TopupLimits rend les bornes de recharge du pays de la requête.
+//
+// ⚠️⚠️ ELLE EXISTE PARCE QU'UNE BORNE SERVIE QU'AUCUNE ROUTE N'APPLIQUE EST LE
+// DÉFAUT DE #251, À L'IDENTIQUE. `GET /wallet` annonce désormais un minimum et
+// un maximum ; sans ce contrôle, l'application cacherait le bouton pour un
+// montant que le serveur accepterait quand même, et un appel direct passerait
+// outre. Une borne qui ne refuse rien n'est pas une borne, c'est une
+// suggestion.
+//
+// Facultative : sans elle, seul `amount > 0` s'applique, comme avant.
+type TopupLimits interface {
+	// ⚠️ UN NOM À ELLE, et non `TopupOf` : le portefeuille a besoin des
+	// montants proposés et des décimales pour AFFICHER, le paiement n'a besoin
+	// que des deux bornes pour REFUSER. Deux signatures sous le même nom
+	// obligeraient à deux adaptateurs — et deux adaptateurs lisant la même
+	// politique finissent par la lire différemment, ce qui est exactement
+	// l'écart qu'on cherche à empêcher.
+	TopupLimitsOf(ctx context.Context, code string) (min, max int, currency string)
+}
+
 // Service implements the payment business logic.
 // PaymentPreferences rend l'opérateur mobile money habituel d'un client.
 // Défini ICI, côté consommateur ; le câblage injecte le service des comptes.
@@ -81,6 +101,53 @@ type Service struct {
 	// preferences rend l'opérateur habituel d'un client. Facultatif : sans
 	// lui, le défaut s'applique comme avant.
 	preferences PaymentPreferences
+	// topup borne une recharge de portefeuille. Facultatif.
+	topup TopupLimits
+}
+
+// SetTopupLimits branche les bornes de recharge (câblage).
+func (s *Service) SetTopupLimits(l TopupLimits) { s.topup = l }
+
+// LES DEUX REFUS D'UNE RECHARGE HORS BORNES.
+//
+// ⚠️ NOMMÉS, ET NON UN `validation_failed` GÉNÉRIQUE. C'est la septième fois
+// sur cette plateforme qu'un refus perd son détail en route : l'application
+// doit pouvoir dire « le minimum est de 500 F » plutôt que « montant
+// invalide », et pour cela il lui faut le CODE du refus. Les chiffres voyagent
+// dans la phrase traduite (`{{.min}}`, `{{.max}}`, `{{.currency}}`), là où les
+// chiffres d'un refus voyagent sur cette plateforme.
+var (
+	errTopupTooSmall = apperr.New("topup_below_minimum",
+		"the amount is below this country's minimum top-up", http.StatusUnprocessableEntity)
+	errTopupTooLarge = apperr.New("topup_above_maximum",
+		"the amount is above this country's maximum top-up", http.StatusUnprocessableEntity)
+)
+
+// checkTopup borne une recharge de portefeuille.
+//
+// ⚠️ LES AUTRES `purpose` NE SONT PAS CONCERNÉS, et c'est une décision : le
+// prix d'une course, d'un panier ou d'un abonnement est décidé par la verticale
+// qui l'a calculé, et le plafond d'une recharge n'a rien à y dire. Le borner
+// ici aurait fait refuser une commande de restaurant au motif qu'elle dépasse
+// le plafond de recharge du pays.
+func (s *Service) checkTopup(ctx context.Context, purpose string, amount int) error {
+	if s.topup == nil || purpose != PurposeWalletTopup {
+		return nil
+	}
+	min, max, currency := s.topup.TopupLimitsOf(ctx, country.FromContext(ctx))
+	détail := map[string]any{
+		"fields":   []string{"amount"},
+		"min":      min,
+		"max":      max,
+		"currency": currency,
+	}
+	if min > 0 && amount < min {
+		return errTopupTooSmall.WithMeta(détail)
+	}
+	if max > 0 && amount > max {
+		return errTopupTooLarge.WithMeta(détail)
+	}
+	return nil
 }
 
 // NewService builds the service with a provider registry keyed by provider
@@ -133,6 +200,13 @@ func (s *Service) Initiate(ctx context.Context, userID string, req InitiatePayme
 			MetaWalletOwnerID: refID.Hex(),
 			MetaTokens:        req.Tokens,
 		}
+	}
+
+	// ⚠️ AVANT DE RÉSERVER QUOI QUE CE SOIT : un montant hors bornes ne doit
+	// laisser aucune ligne derrière lui — et surtout pas une ligne que la clé
+	// d'idempotence rendrait ensuite pour toujours.
+	if err := s.checkTopup(ctx, req.Purpose, req.Amount); err != nil {
+		return nil, err
 	}
 
 	key := strings.TrimSpace(req.IdempotencyKey)

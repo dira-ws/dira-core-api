@@ -270,6 +270,15 @@ func run(logger *slog.Logger) error {
 	// évite de redemander à chaque paiement lequel il utilise.
 	paymentSvc.SetPreferences(userSvc)
 
+	// LES BORNES DE RECHARGE DU PAYS, BRANCHÉES AUX DEUX BOUTS.
+	//
+	// ⚠️ LES DEUX, ET C'EST TOUT L'ENJEU. `GET /wallet` les ANNONCE, et
+	// `POST /payments/initiate` les APPLIQUE : n'en brancher qu'un seul
+	// reproduirait #251 — un serveur qui affiche une règle qu'il n'applique
+	// pas, ou qui refuse un montant qu'il vient de proposer.
+	tokenSvc.SetTopupBounds(topupBounds{countries: countrySvc})
+	paymentSvc.SetTopupLimits(topupBounds{countries: countrySvc})
+
 	// Les deux dénouements que le socle sait mener lui-même.
 	//
 	// ⚠️ Le crédit n'a lieu qu'à la CONFIRMATION du prestataire. Créditer sur
@@ -1458,6 +1467,31 @@ type payoutAccounts struct{ users *user.Service }
 
 func (a payoutAccounts) PhoneOf(ctx context.Context, userID string) (string, error) {
 	return a.users.PhoneOf(ctx, userID)
+}
+
+// topupBounds traduit les bornes de recharge d'un pays pour LES DEUX modules
+// qui en ont besoin : le portefeuille, qui les annonce, et le paiement, qui les
+// applique.
+//
+// ⚠️ UN SEUL ADAPTATEUR POUR LES DEUX, parce que deux adaptateurs lisant la
+// même politique finissent par la lire différemment — et l'écart entre ce
+// qu'un écran propose et ce qu'une route accepte est invisible jusqu'au jour où
+// un client appuie sur un bouton condamné.
+type topupBounds struct{ countries *country.Service }
+
+func (t topupBounds) TopupOf(ctx context.Context, code string) token.TopupResponse {
+	b := t.countries.TopupOf(ctx, code)
+	return token.TopupResponse{
+		Min: b.Min, Max: b.Max, Presets: b.Presets,
+		Currency: b.Currency, Decimals: b.Decimals,
+	}
+}
+
+// TopupLimitsOf rend les deux bornes au module de paiement, qui n'a besoin que
+// d'elles pour refuser.
+func (t topupBounds) TopupLimitsOf(ctx context.Context, code string) (int, int, string) {
+	b := t.countries.TopupOf(ctx, code)
+	return b.Min, b.Max, b.Currency
 }
 
 // payoutPolicy traduit les règles d'un pays pour le module de retrait.

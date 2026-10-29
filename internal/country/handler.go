@@ -48,6 +48,8 @@ func (h *Handler) Mount(r chi.Router, authMW func(http.Handler) http.Handler) {
 		// qui règle un verrou d'application et qui ouvre les versements.
 		g.With(admin).Get("/admin/countries/{code}/payout", h.payout)
 		g.With(admin).Put("/admin/countries/{code}/payout", h.updatePayout)
+		g.With(admin).Get("/admin/countries/{code}/topup", h.topup)
+		g.With(admin).Put("/admin/countries/{code}/topup", h.updateTopup)
 		g.With(admin).Get("/admin/countries/{code}/sos", h.sos)
 		g.With(admin).Put("/admin/countries/{code}/sos", h.updateSOS)
 		// ⚠️ « J'AI COMPOSÉ CES NUMÉROS » — un geste À PART de l'enregistrement.
@@ -256,6 +258,31 @@ func (h *Handler) resolve(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	out, err := h.svc.Resolve(r.Context(), userID, ClientIP(r), req)
+	if err != nil {
+		httpx.Error(w, r, err)
+		return
+	}
+	httpx.JSON(w, http.StatusOK, out)
+}
+
+// GET /admin/countries/{code}/topup — les bornes de recharge du pays.
+func (h *Handler) topup(w http.ResponseWriter, r *http.Request) {
+	out, err := h.svc.TopupPolicy(r.Context(), chi.URLParam(r, "code"))
+	if err != nil {
+		httpx.Error(w, r, err)
+		return
+	}
+	httpx.JSON(w, http.StatusOK, out)
+}
+
+// PUT /admin/countries/{code}/topup
+func (h *Handler) updateTopup(w http.ResponseWriter, r *http.Request) {
+	var req TopupUpdateRequest
+	if err := httpx.Decode(r, &req); err != nil {
+		httpx.Error(w, r, err)
+		return
+	}
+	out, err := h.svc.UpdateTopup(r.Context(), chi.URLParam(r, "code"), req)
 	if err != nil {
 		httpx.Error(w, r, err)
 		return

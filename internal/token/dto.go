@@ -29,8 +29,34 @@ type WalletResponse struct {
 	// deux. Calculé par le serveur plutôt que laissé à l'application : c'est
 	// le nombre sur lequel se prend la décision d'acheter, et deux clients
 	// qui l'additionnent différemment afficheraient deux soldes.
-	SpendableXOF int       `json:"spendable_xof"`
-	UpdatedAt    time.Time `json:"updated_at"`
+	SpendableXOF int `json:"spendable_xof"`
+	// Topup : DANS QUELLES BORNES on recharge ce portefeuille, et les montants
+	// proposés d'un geste.
+	//
+	// ⚠️⚠️ SERVIE, PARCE QUE L'APPLICATION LES CODAIT EN DUR. Dira Lite
+	// proposait 1 000 / 2 000 / 5 000 / 10 000 F et un montant libre de sept
+	// chiffres — des nombres choisis pour le Togo, recopiés dans trois
+	// applications, et dérisoires en Guinée où l'unité est quinze fois plus
+	// petite. Le contrat ne fixait que `amount > 0`.
+	//
+	// ⚠️ LES MONTANTS SONT DANS LA MONNAIE DU PAYS, pas en francs CFA : la
+	// réponse porte `currency` et `decimals` pour que l'écran n'ait rien à
+	// deviner. Voir `internal/country/topup.go`.
+	//
+	// Absente quand ce portefeuille ne se recharge pas en argent (celui d'un
+	// marchand s'alimente par ses ventes).
+	Topup     *TopupResponse `json:"topup,omitempty"`
+	UpdatedAt time.Time      `json:"updated_at"`
+}
+
+// TopupResponse recopie la politique du pays — déclarée ici pour que le
+// portefeuille ne dépende pas du paquet des pays, et remplie au câblage.
+type TopupResponse struct {
+	Min      int    `json:"min"`
+	Max      int    `json:"max"`
+	Presets  []int  `json:"presets"`
+	Currency string `json:"currency"`
+	Decimals int    `json:"decimals"`
 }
 
 func newWalletResponse(w *Wallet, tokenPriceXOF int) WalletResponse {
