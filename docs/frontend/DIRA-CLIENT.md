@@ -1,6 +1,6 @@
 # App CLIENT UNIFIÉE — LIVRAISON **et** COURSES — contrat d'API
 
-> **Version 4.99.0** · 29 octobre 2026
+> **Version 4.99.2** · 29 octobre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Livraison : `…/api/v1/food` · Courses : `…/api/v1/vtc` · Combiné : `…/api/v1/analytics` · Suivi : `wss://tracking-staging.dira.llc`
 
 ---
@@ -1341,10 +1341,27 @@ suivent ne se mélangent pas.
 ⚠️ **La bulle `client` n'a ni `state` ni `ref_*`** : elle porte ce qui a été
 **dit**, pas ce qui en est advenu.
 
-> **Un plan confirmé à la main ne laisse pas encore de trace.** Si la personne
-> appuie sur « Confirmer » et que vous passez par `POST /vtc/rides`, le fil ne
-> le sait pas : la confirmation ne passe pas par l'assistant. Gardez
-> l'historique en lecture seule — c'est de toute façon la bonne règle.
+### 🆕 ⚠️ RELIEZ VOTRE CONFIRMATION AU TOUR : `voice_id` (v4.99.2)
+
+Quand la personne appuie sur « Confirmer », passez le `voice_id` de la bulle à
+la route du métier :
+
+```
+POST /vtc/rides { "quote_id": "…", "payment_method": "cash", "voice_id": "68f0…" }
+```
+
+⚠️ **Facultatif, et il ne décide de rien** : mêmes règles, même devis, même
+prix. Il sert à **relier** la course au tour, et c'est ce qui fait apparaître
+`state: "ordered"` et `ref_kind`/`ref_id` sur la bulle quand le fil est relu.
+Sans lui, ce plan réapparaît comme une proposition toute neuve — et vous
+reproposez une confirmation à des prix périmés.
+
+⚠️ **Un seul champ, dans un corps que vous envoyez déjà.** Pas d'appel
+supplémentaire : un second appel aurait pu échouer entre les deux, et la bulle
+serait restée incomplète sans que personne ne le sache.
+
+⚠️ **`POST /food/orders` ne le prend pas encore.** Côté repas, gardez
+l'historique en lecture seule — c'est de toute façon la bonne règle.
 
 ### 🆕 ⚠️ `audio_url` : COMMENT ON LE LIT (v4.99.0)
 
