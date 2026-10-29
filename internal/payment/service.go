@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"strings"
+	"time"
 
 	"go.mongodb.org/mongo-driver/bson/primitive"
 
@@ -27,6 +29,9 @@ type repository interface {
 	FindByID(ctx context.Context, id primitive.ObjectID) (*Payment, error)
 	FindByProviderRef(ctx context.Context, ref string) (*Payment, error)
 	SetStatusIfPending(ctx context.Context, id primitive.ObjectID, status string) (bool, error)
+	AttachProviderRef(ctx context.Context, id primitive.ObjectID, ref, paymentURL string) (bool, error)
+	FindByIdempotencyKey(ctx context.Context, userID primitive.ObjectID, key string) (*Payment, error)
+	ListOwn(ctx context.Context, q PaymentQuery) ([]Payment, error)
 }
 
 // auditRecorder is satisfied by *audit.Recorder (injected at wiring time).
@@ -130,8 +135,21 @@ func (s *Service) Initiate(ctx context.Context, userID string, req InitiatePayme
 		}
 	}
 
+	key := strings.TrimSpace(req.IdempotencyKey)
+
+	// ⚠️ MÊME CLÉ = MÊME PAIEMENT, et on ne redemande rien à l'opérateur pour
+	// un paiement qui a déjà la sienne. C'est tout l'objet de la clé : une
+	// application qui réessaie après une réponse perdue ne doit pas déclencher
+	// une SECONDE demande de paiement sur le téléphone du client.
+	if existing, err := s.repo.FindByIdempotencyKey(ctx, uid, key); err != nil {
+		return nil, err
+	} else if existing != nil {
+		return s.resume(ctx, existing, provider, userID)
+	}
+
+	id := primitive.NewObjectID()
 	p := &Payment{
-		ID:       primitive.NewObjectID(),
+		ID:       id,
 		UserID:   uid,
 		Purpose:  req.Purpose,
 		RefID:    refID,
@@ -141,28 +159,146 @@ func (s *Service) Initiate(ctx context.Context, userID string, req InitiatePayme
 		Status:   StatusPending,
 		Country:  country.FromContext(ctx),
 		Meta:     meta,
+		// ⚠️⚠️ LA RÉFÉRENCE D'ATTENTE, PARCE QUE LA LIGNE EST ÉCRITE AVANT
+		// D'APPELER L'OPÉRATEUR — voir `reservedRefPrefix`.
+		ProviderRef:    reservedRef(id),
+		IdempotencyKey: key,
+		ExpiresAt:      time.Now().UTC().Add(PendingWindow),
 	}
 
-	result, err := provider.Initiate(ctx, InitiateRequest{
-		PaymentID: p.ID.Hex(),
-		UserID:    userID,
-		Purpose:   req.Purpose,
-		Amount:    req.Amount,
-		Currency:  p.Currency,
-		Meta:      meta,
-	})
-	if err != nil {
-		return nil, apperr.Internal(err)
-	}
-	p.ProviderRef = result.ProviderRef
-
+	// ⚠️⚠️ ON RÉSERVE LA LIGNE AVANT DE CONTACTER L'OPÉRATEUR, ET C'EST
+	// L'INVERSION QUI COMPTE DANS TOUT CE FICHIER.
+	//
+	// Avant, l'ordre était : appeler l'opérateur, PUIS écrire. Un `5xx`, un
+	// délai dépassé, une réponse illisible — et la demande de paiement
+	// pouvait très bien être partie sur le téléphone du client, sans qu'aucune
+	// ligne n'existe chez nous. L'application, qui avait perdu l'`id` avec la
+	// réponse, n'avait alors AUCUN moyen de savoir qu'un paiement était en
+	// cours : « Réessayer » déclenchait une deuxième demande, et les apps Dira
+	// Lite se protégeaient en retenant le bouton dix minutes à l'aveugle.
+	//
+	// Et la correction demandée — une route pour RETROUVER un paiement perdu —
+	// n'aurait rien trouvé dans ce cas précis, le seul pour lequel elle
+	// existe. L'ordre devait changer d'abord.
 	if err := s.repo.Create(ctx, p); err != nil {
+		// Course sur la clé d'idempotence : deux initiations simultanées de la
+		// même intention. L'index a tranché, et le perdant relit le gagnant
+		// plutôt que de rendre une erreur à un client qui n'a rien fait de mal.
+		if existing, lookupErr := s.repo.FindByIdempotencyKey(ctx, uid, key); lookupErr == nil && existing != nil {
+			return s.resume(ctx, existing, provider, userID)
+		}
 		return nil, err
 	}
+
+	return s.ask(ctx, p, provider, userID)
+}
+
+// ask demande le paiement à l'opérateur pour une ligne DÉJÀ réservée.
+func (s *Service) ask(ctx context.Context, p *Payment, provider PaymentProvider, userID string) (*InitiatePaymentResponse, error) {
+	result, err := provider.Initiate(ctx, InitiateRequest{
+		// ⚠️ L'IDENTIFIANT EST CELUI DE LA LIGNE, ET IL SURVIT AUX REPRISES.
+		// C'est ce qui donne à l'opérateur une chance de dédoublonner : avant,
+		// chaque tentative portait un identifiant NEUF, et deux tentatives
+		// étaient pour lui deux paiements sans rapport.
+		PaymentID: p.ID.Hex(),
+		UserID:    userID,
+		Purpose:   p.Purpose,
+		Amount:    p.Amount,
+		Currency:  p.Currency,
+		Meta:      p.Meta,
+	})
+	if err != nil {
+		// ⚠️ LA LIGNE RESTE, `pending` ET `reached:false` : « on a demandé et
+		// on ne sait pas ». C'est précisément ce que l'application doit
+		// pouvoir retrouver, et c'était ce qui disparaissait avant.
+		slog.WarnContext(ctx, "payment: the operator did not answer the initiation; the payment stays pending and unreached",
+			"payment_id", p.ID.Hex(), "provider", p.Provider, "error", err)
+		return nil, apperr.Internal(err)
+	}
+
+	attached, err := s.repo.AttachProviderRef(ctx, p.ID, result.ProviderRef, result.InstructionsURL)
+	if err != nil {
+		// ⚠️ TROU RÉSIDUEL, ASSUMÉ ET NOMMÉ : l'opérateur a répondu, et sa
+		// référence n'est pas écrite — son rappel ne retrouvera donc pas ce
+		// paiement. La ligne existe pourtant, `pending`, et l'exploitation
+		// peut la rapprocher : c'est strictement mieux qu'avant, où il n'y
+		// avait aucune ligne du tout. Le fermer vraiment demande que le rappel
+		// puisse aussi désigner notre identifiant de paiement, ce que le
+		// contrat des prestataires réels n'est pas encore en état de promettre.
+		slog.ErrorContext(ctx, "payment: the operator answered but its reference could not be stored; its webhook will not match",
+			"payment_id", p.ID.Hex(), "provider", p.Provider, "provider_ref", result.ProviderRef, "error", err)
+		return nil, err
+	}
+	if !attached {
+		// Quelqu'un a attaché avant nous (une reprise concurrente) : on relit
+		// plutôt que d'écraser.
+		fresh, readErr := s.repo.FindByID(ctx, p.ID)
+		if readErr != nil {
+			return nil, readErr
+		}
+		p = fresh
+	} else {
+		p.ProviderRef, p.PaymentURL, p.Reached = result.ProviderRef, result.InstructionsURL, true
+	}
+
 	return &InitiatePaymentResponse{
 		Payment:    toPaymentResponse(p),
-		PaymentURL: result.InstructionsURL,
+		PaymentURL: p.PaymentURL,
 	}, nil
+}
+
+// resume rend un paiement déjà lancé sous la même clé d'idempotence.
+//
+// ⚠️ IL NE REDEMANDE À L'OPÉRATEUR QUE CE QU'IL NE LUI A JAMAIS DEMANDÉ. Un
+// paiement qui porte déjà sa référence est rendu tel quel — redemander
+// déclencherait la deuxième demande que la clé existe pour éviter. Un paiement
+// jamais abouti chez l'opérateur, lui, est repris : sans cela, une initiation
+// tombée en panne laisserait un paiement mort que la clé rendrait éternellement.
+func (s *Service) resume(ctx context.Context, p *Payment, provider PaymentProvider, userID string) (*InitiatePaymentResponse, error) {
+	if p.Reached || p.Status != StatusPending {
+		resp := toPaymentResponse(p)
+		return &InitiatePaymentResponse{Payment: resp, PaymentURL: resp.PaymentURL}, nil
+	}
+	return s.ask(ctx, p, provider, userID)
+}
+
+// defaultListLimit et maxListLimit bornent `GET /payments`.
+const (
+	defaultListLimit = 20
+	maxListLimit     = 100
+)
+
+// ListOwn rend les paiements du demandeur, le plus récent d'abord.
+//
+// ⚠️ TOUJOURS LES SIENS, SANS EXCEPTION NI RÔLE PRIVILÉGIÉ. La console a sa
+// propre route (`/admin/payments`), bornée au pays ; celle-ci est bornée au
+// COMPTE, et le `user_id` ne vient que du jeton. Un paramètre `user_id` aurait
+// fait de cette route un annuaire des paiements de la plateforme.
+func (s *Service) ListOwn(ctx context.Context, userID string, q PaymentQuery) (*PaymentListResponse, error) {
+	uid, err := primitive.ObjectIDFromHex(userID)
+	if err != nil {
+		return nil, apperr.Validation("invalid user id").WithCause(err)
+	}
+	q.UserID = uid
+	if q.Limit <= 0 || q.Limit > maxListLimit {
+		q.Limit = defaultListLimit
+	}
+	rows, err := s.repo.ListOwn(ctx, q)
+	if err != nil {
+		return nil, err
+	}
+	out := &PaymentListResponse{Items: make([]PaymentResponse, 0, len(rows))}
+	if len(rows) > q.Limit {
+		rows = rows[:q.Limit]
+		out.HasMore = true
+	}
+	for i := range rows {
+		out.Items = append(out.Items, toPaymentResponse(&rows[i]))
+	}
+	if out.HasMore && len(out.Items) > 0 {
+		out.NextCursor = out.Items[len(out.Items)-1].ID
+	}
+	return out, nil
 }
 
 // InitiatePurchase is the provider contract used by the token module's

@@ -254,6 +254,18 @@ func isParam(fn *ast.FuncDecl, arg ast.Expr) bool {
 }
 
 // followsHelper suit d'un cran un filtre construit par une fonction voisine.
+// followsHelper suit un MONTEUR DE FILTRE du même paquet et pose, à
+// l'intérieur, les deux mêmes questions qu'ici : porte-t-il le pays, ou un
+// identifiant ?
+//
+// ⚠️ IL NE REGARDAIT QUE `country.Restrict`, et cette asymétrie signalait des
+// lectures bornées. Un dépôt qui extrait son filtre dans une fonction pure —
+// ce que les dépôts de cette plateforme font exprès, pour l'éprouver sans base
+// — voyait sa borne par identifiant devenir invisible : `r.col.Find(ctx,
+// ownerFilter(q))` ne porte aucun littéral, et `hasIDBound` n'inspectait que
+// l'expression de l'appel. Restait alors à inscrire la lecture dans `Global`
+// comme « mondiale », c'est-à-dire à écrire dans le registre le contraire de
+// ce que le code fait — et `Stale` l'y aurait gardée pour toujours.
 func followsHelper(local map[string]*ast.FuncDecl, e ast.Expr) bool {
 	found := false
 	ast.Inspect(e, func(n ast.Node) bool {
@@ -268,7 +280,7 @@ func followsHelper(local map[string]*ast.FuncDecl, e ast.Expr) bool {
 		case *ast.SelectorExpr:
 			name = f.Sel.Name
 		}
-		if h, ok := local[name]; ok && contains(h.Body, isRestrict) {
+		if h, ok := local[name]; ok && (contains(h.Body, isRestrict) || hasIDBound(h.Body)) {
 			found = true
 		}
 		return !found
