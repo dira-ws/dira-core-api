@@ -433,7 +433,7 @@ jamais à gérer « zéro véhicule » à cause d'un réglage.
 // 403
 { "error": { "code": "feature_unavailable_in_edition",
              "message": "Cette fonction n'est pas disponible dans votre application",
-             "meta": { "feature": "rental" } } }
+             "feature": "rental" } }
 ```
 
 Trois routes des courses peuvent le rendre :
@@ -447,7 +447,7 @@ Trois routes des courses peuvent le rendre :
 | `POST /subscriptions` | `subscriptions` |
 
 ⚠️ **Ce n'est PAS un problème de droits** — ne proposez pas de se reconnecter.
-`meta.feature` nomme la fonction : **cachez-la** au prochain démarrage plutôt
+`error.feature` nomme la fonction : **cachez-la** au prochain démarrage plutôt
 que de reproposer un bouton qui échoue.
 
 ⚠️ **La phrase est courte exprès** : Lite la lit à voix haute. Elle ne parle ni
@@ -4490,7 +4490,7 @@ Le socle refuse désormais, **`403 wrong_app`**, et le refus DIT OÙ ALLER :
 > partenaire : il s'ouvre depuis la console web de Dira. »
 
 ⚠️ **`reason`, et rien d'autre.** L'enveloppe d'erreur du socle ne rend que
-`code`, `message`, `fields` et `reason` — il n'y a pas de `meta` sur le fil.
+`code`, `message`, `fields`, `reason` et `feature` — il n'y a pas de `meta` sur le fil.
 C'est écrit ici parce qu'une première rédaction de cette section promettait
 un `meta.open_instead` qui n'existe pas, et l'erreur se serait découverte à
 l'intégration.
@@ -4652,7 +4652,7 @@ irréversible depuis l'application : sans cette preuve, un téléphone déverrou
 posé sur une table suffirait à faire disparaître le compte de quelqu'un.
 
 ⚠️ **VIDEZ LE PORTEFEUILLE D'ABORD.** Un solde, des jetons ou une **dette**
-font refuser `409 wallet_not_empty`, et `error.meta.reason` dit lequel
+font refuser `409 wallet_not_empty`, et `error.reason` dit lequel
 (`money` · `tokens` · `debt`). On ne détruit pas de l'argent en silence :
 emmenez la personne vers son solde, ou vers le support pour un remboursement.
 
@@ -4670,7 +4670,7 @@ action qu'aucun bouton ne défera.
 |---|---|---|
 | `401 invalid_credentials` | mot de passe faux | souligner le champ, ne pas quitter l'écran |
 | `401 otp_invalid` · `401 otp_expired` | code faux ou périmé | redemander un code |
-| `409 wallet_not_empty` | solde, jetons ou dette (`meta.reason`) | envoyer vers le solde, ou le support |
+| `409 wallet_not_empty` | solde, jetons ou dette (`error.reason`) | envoyer vers le solde, ou le support |
 | `409 deletion_already_requested` | demande déjà en cours | afficher `erase_at` et proposer le support pour annuler |
 | `403 erasure_not_self_serve` | compte d'agent, de marchand ou de direction | renvoyer vers le support (il porte des versements à solder) |
 | `403 account_closed` | à la connexion, au rafraîchissement ou à l'inscription | « ce compte a été supprimé » + « se réinscrire » ou support |

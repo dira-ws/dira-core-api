@@ -382,7 +382,7 @@ si une liste blanche mal saisie ne croisait aucune de nos classes, nous servons
 le catalogue entier plutôt qu'une application sans aucune voiture à commander.
 
 Cinq routes peuvent refuser `403 feature_unavailable_in_edition`, avec
-`meta.feature` :
+`error.feature` :
 
 | Route | Fonction |
 |---|---|
@@ -460,7 +460,7 @@ existe.
 
 ⚠️ **LES ROUTES EXISTANTES APPLIQUENT LE MÊME FILTRE** : une application qui ne
 lit pas `/app/config` ne voit pas pour autant une fonction exclue. Le refus est
-nommé — `403 feature_unavailable_in_edition`, avec `meta.feature` — et **ce
+nommé — `403 feature_unavailable_in_edition`, avec `error.feature` — et **ce
 n'est pas un problème de droits** : ne proposez pas de se reconnecter, cachez
 la fonction.
 
@@ -2886,7 +2886,7 @@ code (demandé par `POST /auth/otp`, **consommé** ici). Irréversible depuis
 l'application : sans preuve, un téléphone déverrouillé posé sur une table
 suffirait.
 
-⚠️ **PORTEFEUILLE VIDE EXIGÉ** : `409 wallet_not_empty`, et `meta.reason` dit
+⚠️ **PORTEFEUILLE VIDE EXIGÉ** : `409 wallet_not_empty`, et `error.reason` dit
 `money` · `tokens` · `debt`. On ne détruit pas de l'argent en silence — et une
 suppression n'efface pas une dette.
 

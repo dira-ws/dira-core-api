@@ -84,11 +84,22 @@ formulaire. `reason` précise quand ce n'est pas la valeur d'un champ :
 `unknown_field` (une clé que la route ne connaît pas — **refusée, pas
 ignorée** : c'est un bug de l'application) ou `invalid_json`.
 
-⚠️ **L'ENVELOPPE NE REND QUE `code`, `message`, `fields` ET `reason` — il n'y a
-pas de `meta` sur le fil.** Quand un refus porte des chiffres (« ce trajet fait
-2 100 m, la course partagée commence à 3 000 m »), ils sont **dans la phrase**,
-déjà traduite. Affichez-la telle quelle, ou recomposez-la depuis les réglages
-que vous avez déjà lus.
+⚠️⚠️ **IL N'Y A PAS DE `meta` SUR LE FIL.** L'enveloppe rend `code`,
+`message`, et trois champs **à plat** : `fields`, `reason`, `feature`.
+
+La règle qui décide de ce qui voyage en clair : **ce qu'une personne LIT reste
+dans la phrase ; ce que l'application doit FAIRE voyage à plat.**
+
+- Un refus qui porte des **chiffres** (« ce trajet fait 2 100 m, la course
+  partagée commence à 3 000 m ») les a **dans la phrase**, déjà traduite.
+  Affichez-la telle quelle, ou recomposez-la depuis les réglages déjà lus.
+- `fields` dit **quelles cases** souligner. `feature` dit **quel menu** cacher.
+  Ni l'un ni l'autre ne se devine d'une phrase — il faudrait l'analyser, en
+  douze langues.
+
+⚠️ Si un passage d'un contrat vous promet un champ sous `meta.…`, **c'est une
+erreur de rédaction** : le champ n'existe pas, et il n'a jamais existé. Un
+audit est en cours (core#252) ; d'ici là, fiez-vous à cette liste.
 
 ---
 
@@ -274,11 +285,11 @@ donc aucune vérification — elle vous évite de **proposer** ce qui sera refus
 // 403
 { "error": { "code": "feature_unavailable_in_edition",
              "message": "Cette fonction n'est pas disponible dans votre application",
-             "meta": { "feature": "scheduled_rides" } } }
+             "feature": "scheduled_rides" } }
 ```
 
 ⚠️ **Ce n'est PAS un problème de droits** — ne proposez pas de se reconnecter.
-`meta.feature` nomme la fonction : **cachez-la** au prochain démarrage plutôt
+`error.feature` nomme la fonction : **cachez-la** au prochain démarrage plutôt
 que de reproposer un bouton qui échoue.
 
 ⚠️ **La phrase est courte exprès** : Lite la lit à voix haute. Elle ne parle ni
@@ -648,7 +659,7 @@ irréversible depuis l'application : sans cette preuve, un téléphone déverrou
 posé sur une table suffirait à faire disparaître le compte de quelqu'un.
 
 ⚠️ **VIDEZ LE PORTEFEUILLE D'ABORD.** Un solde, des jetons ou une **dette**
-font refuser `409 wallet_not_empty`, et `error.meta.reason` dit lequel
+font refuser `409 wallet_not_empty`, et `error.reason` dit lequel
 (`money` · `tokens` · `debt`). On ne détruit pas de l'argent en silence :
 emmenez la personne vers son solde, ou vers le support pour un remboursement.
 
@@ -666,7 +677,7 @@ action qu'aucun bouton ne défera.
 |---|---|---|
 | `401 invalid_credentials` | mot de passe faux | souligner le champ, ne pas quitter l'écran |
 | `401 otp_invalid` · `401 otp_expired` | code faux ou périmé | redemander un code |
-| `409 wallet_not_empty` | solde, jetons ou dette (`meta.reason`) | envoyer vers le solde, ou le support |
+| `409 wallet_not_empty` | solde, jetons ou dette (`error.reason`) | envoyer vers le solde, ou le support |
 | `409 deletion_already_requested` | demande déjà en cours | afficher `erase_at` et proposer le support pour annuler |
 | `403 erasure_not_self_serve` | compte d'agent, de marchand ou de direction | renvoyer vers le support (il porte des versements à solder) |
 | `403 account_closed` | à la connexion, au rafraîchissement ou à l'inscription | « ce compte a été supprimé » + « se réinscrire » ou support |
@@ -1517,7 +1528,7 @@ du métier.
 - [ ] **`GET /app/config`** lu à l'ouverture (§4 ter), gardé en mémoire, et les menus cachés dessus.
 - [ ] Une clé **absente** de `features` est traitée comme **disponible**, jamais comme coupée.
 - [ ] Les listes de `lists` sont **croisées** avec les listes réelles du métier, jamais affichées telles quelles.
-- [ ] `403 feature_unavailable_in_edition` ne propose **pas** de se reconnecter ; `meta.feature` dit quoi cacher.
+- [ ] `403 feature_unavailable_in_edition` ne propose **pas** de se reconnecter ; `error.feature` dit quoi cacher.
 - [ ] **Le vocal** (§8) : les **quatre** `state` traités — `understood`, `ordered`, `needs_support`, `failed` —, et jamais « c'est commandé » déduit de la présence d'un `plan`.
 - [ ] `ordered.kind` ouvre le bon suivi (`ride` → la course, `order` → la commande).
 - [ ] 2 Mio au plus, en opus/AAC/M4A/3GP — **pas de WAV** ; `audio_url` absent n'est pas une erreur.
@@ -1820,7 +1831,7 @@ part à **`erase_at`**, trente jours plus tard. ⚠️ **Les courses et les comm
 passées restent** — ce sont des écritures comptables — mais elles ne désignent
 plus personne : le nom devient « Compte supprimé » partout, d'un coup. ⚠️ Il
 faut **prouver qui on est** (`password` ou `code`), le portefeuille doit être
-**vide** (`409 wallet_not_empty`, `meta.reason`), et le numéro n'est **libéré**
+**vide** (`409 wallet_not_empty`, `error.reason`), et le numéro n'est **libéré**
 qu'à `erase_at` — se réinscrire avant répond `403 account_closed`, pas
 `phone_taken`. Pendant le délai, le support peut **annuler**.
 

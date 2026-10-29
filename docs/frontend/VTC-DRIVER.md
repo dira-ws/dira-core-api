@@ -4314,7 +4314,7 @@ Le socle refuse désormais, **`403 wrong_app`**, et le refus DIT OÙ ALLER :
 > partenaire : il s'ouvre depuis la console web de Dira. »
 
 ⚠️ **`reason`, et rien d'autre.** L'enveloppe d'erreur du socle ne rend que
-`code`, `message`, `fields` et `reason` — il n'y a pas de `meta` sur le fil.
+`code`, `message`, `fields`, `reason` et `feature` — il n'y a pas de `meta` sur le fil.
 C'est écrit ici parce qu'une première rédaction de cette section promettait
 un `meta.open_instead` qui n'existe pas, et l'erreur se serait découverte à
 l'intégration.
@@ -4373,7 +4373,7 @@ fonctionne ne mène nulle part, et c'est un appel au support dont la réponse
 tient en une phrase que l'écran aurait pu dire tout seul.
 
 ⚠️ **`reason`, et rien d'autre** — l'enveloppe d'erreur du socle ne rend que
-`code`, `message`, `fields` et `reason` ; il n'y a pas de `meta` sur le fil.
+`code`, `message`, `fields`, `reason` et `feature` ; il n'y a pas de `meta` sur le fil.
 Et `reason` a **cinq** valeurs possibles depuis cette version : `client`,
 `driver`, `courier`, `merchant`, `console`. Un `switch` qui n'en connaît que
 quatre retombera sur son cas par défaut — c'est-à-dire, presque toujours, sur
@@ -4531,7 +4531,7 @@ Trois portes se ferment, et chacune a son refus **nommé** :
 | Le socket du suivi `wss://…/track/agent` | fermeture **4409 `session_superseded`** ; une reconnexion est refusée en **401**, avec `session_superseded` dans le corps |
 
 ⚠️ **`reason`, ET RIEN D'AUTRE.** L'enveloppe d'erreur du socle ne rend que
-`code`, `message`, `fields` et `reason` — il n'y a pas de `meta` sur le fil.
+`code`, `message`, `fields`, `reason` et `feature` — il n'y a pas de `meta` sur le fil.
 C'est `reason` qui porte le nom de l'appareil. Il peut être **absent** si
 l'autre application n'a pas envoyé de `device_name` : prévoyez la phrase sans
 nom (« sur un autre appareil »).
