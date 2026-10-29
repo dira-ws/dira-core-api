@@ -76,6 +76,7 @@ var Features = []Feature{
 	{FeatureBanners, "Bannières et publicités", "Les emplacements publicitaires ne sont plus servis — les formats chargés d'images.", OwnerCore},
 	{FeatureFeed, "Fil des plats (carrousel)", "Le carrousel de plats et de vidéos disparaît de l'accueil.", OwnerFood},
 	{FeatureAssistant, "Assistant", "La boîte de dialogue de l'assistant disparaît.", OwnerAnalytics},
+	{FeatureAssistantLive, "Assistant en direct", "Le micro en continu disparaît : la personne garde l'assistant tour par tour (un vocal, une réponse).", OwnerAnalytics},
 	{FeatureAssistantAutoOrder, "Commande automatique de l'assistant", "Un message vocal ne déclenche plus de commande tout seul : le client confirme toujours.", OwnerAnalytics},
 	{FeatureVoiceMessages, "Messages vocaux", "Le bouton micro disparaît : le client écrit.", OwnerAnalytics},
 	{FeatureWallet, "Portefeuille", "Le solde et la recharge disparaissent ; restent les espèces et le mobile money.", OwnerCore},
@@ -83,18 +84,22 @@ var Features = []Feature{
 
 // Les clés du catalogue.
 const (
-	FeatureScheduledRides     = "scheduled_rides"
-	FeatureRental             = "rental"
-	FeaturePool               = "pool"
-	FeatureMultiCar           = "multi_car"
-	FeatureTripShare          = "trip_share"
-	FeatureSubscriptions      = "subscriptions"
-	FeaturePromoCodes         = "promo_codes"
-	FeatureChallenges         = "challenges"
-	FeatureRaffle             = "raffle"
-	FeatureBanners            = "banners"
-	FeatureFeed               = "feed"
-	FeatureAssistant          = "assistant"
+	FeatureScheduledRides = "scheduled_rides"
+	FeatureRental         = "rental"
+	FeaturePool           = "pool"
+	FeatureMultiCar       = "multi_car"
+	FeatureTripShare      = "trip_share"
+	FeatureSubscriptions  = "subscriptions"
+	FeaturePromoCodes     = "promo_codes"
+	FeatureChallenges     = "challenges"
+	FeatureRaffle         = "raffle"
+	FeatureBanners        = "banners"
+	FeatureFeed           = "feed"
+	FeatureAssistant      = "assistant"
+	// ⚠️ CELUI-LÀ S'ALLUME PAR LA PRÉSENCE D'UN BLOC `live`, pays par pays —
+	// voir `live.go`. La règle de catalogue ne fait que le RETIRER ensuite
+	// d'une édition.
+	FeatureAssistantLive      = "assistant_live"
 	FeatureAssistantAutoOrder = "assistant_auto_order"
 	FeatureVoiceMessages      = "voice_messages"
 	FeatureWallet             = "wallet"

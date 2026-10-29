@@ -73,8 +73,14 @@ func (r *Repository) Load(ctx context.Context) (*appconfig.Registry, error) {
 func (r *Repository) Save(ctx context.Context, reg appconfig.Registry, actor string) error {
 	_, err := r.col.UpdateOne(ctx, bson.M{"_id": docID}, bson.M{
 		"$set": bson.M{
-			"features":   reg.Features,
-			"lists":      reg.ListRules,
+			"features": reg.Features,
+			"lists":    reg.ListRules,
+			// ⚠️ CE `$set` NOMME SES CHAMPS UN PAR UN : un champ ajouté à la
+			// `Registry` et oublié ici ne s'écrit JAMAIS, et rien n'échoue —
+			// l'écran de la console affiche le réglage qu'il vient d'envoyer,
+			// jusqu'au prochain rechargement. Une épreuve de parité tient
+			// cette liste à jour.
+			"live":       reg.Live,
 			"updated_at": time.Now().UTC(),
 			"updated_by": actor,
 		},
