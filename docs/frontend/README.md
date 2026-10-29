@@ -1,6 +1,6 @@
 # Specs frontend — par rôle
 
-> **Version 4.99.2** · 29 octobre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics`
+> **Version 4.99.3** · 29 octobre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics`
 
 **Cinq** documents, un par application. Chacun est **autonome** : tout ce qu'un frontend doit savoir pour son rôle, sans avoir à ouvrir les vingt specs de modules.
 
@@ -355,6 +355,33 @@ Chaque document porte la même version en en-tête, et son propre journal des ch
 - [ ] ⚠️ **`TRACKING_JWT_SECRET` renseigné dans chaque environnement déployé.** Vide, l'authentification du service de suivi est **désactivée** : n'importe qui connaissant un `delivery_id` suit la course. Le secret doit valoir **exactement** le `JWT_SECRET` de `dira-food-api`.
 
 ## Journal
+
+### 4.99.3 — 29 octobre 2026
+
+🎫 **UN DEVIS SE DÉPENSE UNE FOIS, ET UN RENVOI REND LA MÊME COURSE** —
+`VTC-CLIENT.md` §4 (core#264).
+
+```
+POST /vtc/rides        Idempotency-Key: <l'identifiant de CET appel>
+  → 409 quote_spent    si le devis a déjà servi (et que la clé ne correspond pas)
+```
+
+⚠️⚠️ **LE MÊME `quote_id` POUVAIT CRÉER PLUSIEURS COURSES.** Rien ne consommait
+le devis : trois courses au même prix pour un devis demandé une fois, bornées
+seulement par le nombre de courses simultanées du pays.
+
+⚠️ **`quote_spent` n'est pas `quote_expired`** : expiré, c'est le temps qui a
+passé — dépensé, c'est que **la course existe déjà**. Montrez-la, ne reproposez
+pas le bouton : sinon la personne appuie une seconde fois en croyant que rien ne
+s'est passé.
+
+⚠️⚠️ **Envoyez `Idempotency-Key` et vous ne verrez pas ce refus sur un renvoi.**
+Même clé = **même commande** (mêmes identifiants, même ordre de voitures, rien
+de créé en plus). Clé différente ou absente = seconde intention, refusée. Et
+**sans clé, pas de rejeu** : le silence ne vaut pas accord.
+
+⚠️ Une commande de **plusieurs voitures** dépense le devis **une seule fois**, et
+une commande **défaite** le libère — elle n'a rien produit.
 
 ### 4.99.2 — 29 octobre 2026
 
