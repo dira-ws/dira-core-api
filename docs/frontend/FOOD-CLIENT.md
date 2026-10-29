@@ -2746,7 +2746,7 @@ relisez `GET /tickets/{id}` à l'ouverture et sur chaque notification.
 
 ⚠️ **`POST /uploads` est au socle — v3.0.0** : `…/api/v1/uploads`, plus `/food/uploads` (404). Multipart, champ `file`, le **type déclaré** de la part fait foi (jpeg, png, webp, svg ; ≤ 5 MiB). Réponse `201 { url }` : téléversez **d'abord**, rattachez l'URL ensuite (`PATCH /me { avatar_url }`) — un envoi qui échoue ne doit pas faire perdre la saisie.
 
-⚠️ **RETIRER la photo : `PATCH /me { "avatar_url": "" }`** (v4.91.0). Le serveur l'a toujours accepté, et ce document ne le disait pas — la seule façon connue de « supprimer sa photo » était donc d'en téléverser une autre. La chaîne **vide**, pas `null` : `null` vaut « inchangé ».
+⚠️ **RETIRER la photo : `PATCH /me { "avatar_url": "" }`** (v4.91.0) — la chaîne **vide**, pas `null`, qui vaut « inchangé ». Le serveur **refusait** cette requête en `422 validation_failed` jusqu'ici : la seule façon de « supprimer sa photo » était d'en téléverser une autre. Corrigé, et **`PATCH /me { "birth_date": "" }`** retire la date de naissance par le même correctif.
 
 Un crédit tombola en attente est appliqué **automatiquement** en remise à la commande suivante — il apparaît dans `discount`.
 

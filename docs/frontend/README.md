@@ -443,9 +443,21 @@ campagne n'arrive.
 `VTC-DRIVER.md`, `PARTNER-FLEET.md` (core#250 §5).
 
 `PATCH /me { "avatar_url": "" }`, la chaîne **vide** et non `null` (qui vaut
-« inchangé »). Le serveur l'acceptait depuis toujours et aucun contrat ne le
-disait : la seule façon connue de supprimer sa photo était d'en téléverser une
-autre. Une épreuve la tient désormais.
+« inchangé »). Et `PATCH /me { "birth_date": "" }` retire la date de naissance.
+
+⚠️⚠️ **LE SERVEUR REFUSAIT LES DEUX EN `422`, ET JE L'AI ÉCRIT ICI AVANT DE LE
+VÉRIFIER.** L'issue disait « le socle l'accepte d'après le code », j'ai lu le
+même code et conclu pareil : le service écrit bien la valeur vide, le dépôt la
+pose bien. Le refus arrivait **deux étages au-dessus**, au décodage —
+`validate:"omitempty,url"` sur un `*string` voit un pointeur NON NUL, donc
+« présent », puis applique `url` à la chaîne vide. Mon épreuve appelait le
+service directement et restait verte.
+
+C'est un parcours **en direct sur la préprod** qui l'a montré. Le serveur est
+corrigé (`url|eq=` se lit « une URL, OU explicitement vide »), et les épreuves
+passent maintenant par la **route**, décodage compris. ⚠️ Pour la date de
+naissance, le service traitait `""` comme « retirer » **depuis toujours** : ce
+code n'avait jamais été atteint.
 
 ### 4.90.0 — 29 octobre 2026
 

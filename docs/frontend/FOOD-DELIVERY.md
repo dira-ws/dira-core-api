@@ -1120,9 +1120,10 @@ Aucune conséquence : il n'y a personne à déconnecter, et rien ne s'affiche.
   garder en session. Deux étapes pour qu'un envoi qui échoue ne fasse pas
   perdre le reste de la saisie.
 - **🆕 RETIRER la photo : `PATCH /me { "avatar_url": "" }`** (v4.91.0). Le
-  serveur l'a toujours accepté, et ce document ne le disait pas — faute de
-  quoi la seule façon connue de « supprimer sa photo » était d'en téléverser
-  une autre. ⚠️ La chaîne **vide**, et non `null` : `null` vaut « inchangé ».
+  ⚠️ La chaîne **vide**, et non `null` : `null` vaut « inchangé ». Le serveur
+  **refusait** cette requête en `422` jusqu'à la v4.91.0 : la seule façon de
+  « supprimer sa photo » était d'en téléverser une autre. Corrigé, et la même
+  correction vaut pour `{ "birth_date": "" }`.
 - **`PATCH /me` n'envoie que ce qui change** :
   `{ name?, first_name?, last_name?, birth_date?, gender?, email?, avatar_url? }`.
   Une clé inconnue → `422 reason: unknown_field`. Quand `name` n'a jamais

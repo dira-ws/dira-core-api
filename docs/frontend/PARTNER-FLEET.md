@@ -298,9 +298,9 @@ PATCH  /me/preferences            { "locale"?, "theme"?, … }
 POST   /me/password               { "current_password", "new_password" }   → 204
 ```
 ⚠️ **RETIRER la photo : `PATCH /me { "avatar_url": "" }`** (v4.91.0) — la chaîne
-**vide**, pas `null`, qui vaut « inchangé ». Le serveur l'a toujours accepté et
-ce document ne le disait pas : la seule façon connue de supprimer une photo
-était d'en téléverser une autre.
+**vide**, pas `null`, qui vaut « inchangé ». Le serveur **refusait** cette
+requête en `422` jusqu'ici : la seule façon de supprimer une photo était d'en
+téléverser une autre.
 
 
 > ### ⚠️⚠️ `POST /me/password` EST NOUVEAU, ET IL COMBLE UN TROU ORDINAIRE

@@ -60,11 +60,13 @@ type AdminCreateUserRequest struct {
 
 // AdminUpdateUserRequest patches identity fields; nil fields are unchanged.
 type AdminUpdateUserRequest struct {
-	Name      *string `json:"name" validate:"omitempty,min=1,max=120"`
-	Email     *string `json:"email" validate:"omitempty,email"`
-	Phone     *string `json:"phone" validate:"omitempty,e164"`
-	Password  *string `json:"password" validate:"omitempty,min=8,max=128"`
-	AvatarURL *string `json:"avatar_url" validate:"omitempty,url"`
+	Name     *string `json:"name" validate:"omitempty,min=1,max=120"`
+	Email    *string `json:"email" validate:"omitempty,email"`
+	Phone    *string `json:"phone" validate:"omitempty,e164"`
+	Password *string `json:"password" validate:"omitempty,min=8,max=128"`
+	// ⚠️ `url|eq=` : voir `UpdateMeRequest` — un pointeur vers "" n'est pas
+	// « absent », et la console doit pouvoir retirer la photo d'un compte.
+	AvatarURL *string `json:"avatar_url" validate:"omitempty,url|eq="`
 }
 
 // Create adds an account; drivers get their token wallet.

@@ -146,10 +146,30 @@ type UpdateMeRequest struct {
 	// BirthDate au format `2006-01-02`. Une date SEULE, sans heure ni fuseau :
 	// une date de naissance n'a pas d'instant, et l'horodater la décalerait
 	// d'un jour selon le fuseau du lecteur.
-	BirthDate *string `json:"birth_date,omitempty" validate:"omitempty,len=10"`
+	// ⚠️ `len=10|eq=` POUR LA MÊME RAISON, et ici le service le DISAIT depuis
+	// toujours : il traite `""` comme « retirer la date ». Le validateur
+	// refusait la chaîne vide avant qu'il n'ait son mot à dire — retirer une
+	// date de naissance n'a donc jamais marché, et le code qui le gère n'a
+	// jamais été atteint.
+	BirthDate *string `json:"birth_date,omitempty" validate:"omitempty,len=10|eq="`
 	Gender    *string `json:"gender,omitempty" validate:"omitempty,oneof=female male other"`
 	Email     *string `json:"email,omitempty" validate:"omitempty,email"`
-	AvatarURL *string `json:"avatar_url,omitempty" validate:"omitempty,url"`
+	// ⚠️⚠️ `url|eq=` ET NON `omitempty,url` : UN POINTEUR VERS "" N'EST PAS « ABSENT ».
+	//
+	// `omitempty` saute la validation d'une valeur NULLE. Sur un `*string`, le
+	// validateur voit un pointeur NON NUL — donc « présent » — puis applique `url`
+	// à la chaîne vide, qui échoue. Résultat : `PATCH /me {"avatar_url": ""}`
+	// répondait `422 validation_failed`, et il n'existait AUCUN moyen de retirer sa
+	// photo autrement qu'en téléversant une autre.
+	//
+	// ⚠️ ET LE SERVICE, LUI, SAVAIT DÉJÀ LE FAIRE. Il écrit `u.AvatarURL = ""` sans
+	// broncher, et le dépôt pose bien la valeur vide. Le refus arrivait DEUX étages
+	// plus haut, au décodage — c'est pourquoi une épreuve qui appelle le service
+	// directement restait verte. Vu en direct sur la préprod, pas en local.
+	//
+	// `url|eq=` se lit « une URL, OU explicitement vide » : une vraie URL passe,
+	// la chaîne vide passe, et n'importe quoi d'autre est toujours refusé.
+	AvatarURL *string `json:"avatar_url,omitempty" validate:"omitempty,url|eq="`
 }
 
 // UpdatePreferencesRequest règle les préférences. Tout est FACULTATIF, et un
