@@ -1,6 +1,6 @@
 # Specs frontend — par rôle
 
-> **Version 4.102.0** · 29 octobre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics`
+> **Version 4.103.0** · 29 octobre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics`
 
 **Cinq** documents, un par application. Chacun est **autonome** : tout ce qu'un frontend doit savoir pour son rôle, sans avoir à ouvrir les vingt specs de modules.
 
@@ -355,6 +355,33 @@ Chaque document porte la même version en en-tête, et son propre journal des ch
 - [ ] ⚠️ **`TRACKING_JWT_SECRET` renseigné dans chaque environnement déployé.** Vide, l'authentification du service de suivi est **désactivée** : n'importe qui connaissant un `delivery_id` suit la course. Le secret doit valoir **exactement** le `JWT_SECRET` de `dira-food-api`.
 
 ## Journal
+
+### 4.103.0 — 29 octobre 2026
+
+🔴 **L'ASSISTANT EN DIRECT** — `DIRA-CLIENT.md` §8 quater (core#267, core#268).
+
+```
+GET  wss://…/api/v1/analytics/live-assistant/ws    (jeton en EN-TÊTE)
+     → 101 ; trames BINAIRES = audio, trames TEXTE = événements JSON
+GET  /app/config → "features": { "assistant_live": … }, "live": { … }
+```
+
+> **⚠️⚠️ `assistant_live` est le SEUL drapeau du catalogue dont le défaut est
+> `false`.** Le direct est facturé à la seconde dans les deux sens, et les
+> langues qu'il parle se mesurent avant de s'ouvrir : il s'allume **pays par
+> pays**. Le drapeau vaut `true` exactement quand le bloc `live` est servi.
+>
+> **⚠️⚠️ `pcm16` 16 kHz, et rien d'autre.** `encodings` ne liste que ce que le
+> serveur sait décoder : un Opus envoyé aujourd'hui partirait dans le vide
+> **sans aucune erreur**. 256 kbit/s en montée : Wi-Fi et 4G, pas la 3G de
+> N'Djamena.
+>
+> **⚠️⚠️ Le modèle PROPOSE, il ne commande pas.** L'exécution demande
+> `ui.confirm` (un appui) ou un « oui » que **le serveur** relie au jeton
+> courant. Le prix affiché vient de `card.summary.price_xof`.
+>
+> **Le direct n'est jamais la seule sortie d'un écran** : cinq raisons
+> l'éteignent, chacune avec son code, et le repli est l'assistant tour par tour.
 
 ### 4.102.0 — 29 octobre 2026
 
