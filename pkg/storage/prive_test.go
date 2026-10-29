@@ -175,3 +175,34 @@ func TestTheSignerTargetsThePublicHost(t *testing.T) {
 		assert.False(t, ok, "base %q", base)
 	}
 }
+
+// ⚠️⚠️ CE QUE LE SERVEUR DIT EST AUSSI PRIVÉ QUE CE QUE LA PERSONNE DIT, et
+// c'est moins évident.
+//
+// « De Moursal à Chagoua, quatre mille cinq cent cinquante francs » est son
+// adresse et le prix de sa course, dans un fichier audio. Public, il serait
+// lisible par qui connaît l'URL — exactement le défaut qu'on vient de corriger
+// sur les vocaux.
+func TestWhatTheServerSaysIsPrivateToo(t *testing.T) {
+	assert.True(t, Private(KindSpeech))
+	assert.True(t, Private(KindVoice))
+	assert.Contains(t, bucketPolicy("dira"), "arn:aws:s3:::dira/speech/*")
+}
+
+// ⚠️⚠️ ET LE MOTEUR ENCODE : pas de WAV, même pour un son que NOUS produisons.
+//
+// J'ai essayé de l'y mettre, avec ce raisonnement : « notre moteur en sort, et
+// refuser obligerait à réencoder ce que nous venons de produire ». Il oubliait
+// QUI TÉLÉCHARGE. Ce son part vers un téléphone sur un réseau d'ici : vingt
+// secondes de WAV pèsent un demi-mégaoctet, la même phrase en opus trente
+// kilooctets. Un garde de ce paquet l'a dit avant moi.
+func TestTheEngineEncodesBeforeSending(t *testing.T) {
+	for _, mime := range []string{"audio/wav", "audio/x-wav", "audio/wave"} {
+		_, ok := Accepts(KindSpeech, mime)
+		assert.False(t, ok, "le WAV passe : un demi-mégaoctet pour vingt secondes, sur un réseau d'ici")
+	}
+	for _, mime := range []string{"audio/opus", "audio/ogg", "audio/mpeg", "audio/mp4"} {
+		_, ok := Accepts(KindSpeech, mime)
+		assert.True(t, ok, "le moteur ne peut plus rendre %s", mime)
+	}
+}
