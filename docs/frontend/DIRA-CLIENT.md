@@ -1,6 +1,6 @@
 # App CLIENT UNIFIÉE — LIVRAISON **et** COURSES — contrat d'API
 
-> **Version 4.88.0** · 29 octobre 2026
+> **Version 4.89.0** · 29 octobre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Livraison : `…/api/v1/food` · Courses : `…/api/v1/vtc` · Combiné : `…/api/v1/analytics` · Suivi : `wss://tracking-staging.dira.llc`
 
 ---
@@ -897,9 +897,15 @@ POST /analytics/ai/voice
   "reply": "Voici deux options depuis votre position.",
   "plan": { … },                  // la même forme qu'au chat, verbatim
   "confidence": 0.91,
+  "threshold": 0.85,              // 🆕 v4.89.0 — le seuil DE CE PAYS
   "routed_by": "lexical",
   "state": "understood" }         // ⚠️ CE QUI A ÉTÉ FAIT — voir le tableau
 ```
+
+⚠️ **🆕 `threshold` SE LIT AVEC `confidence`, JAMAIS SEUL** (v4.89.0). Il était
+annoncé et jamais servi. « J'ai compris à 72 % » ne veut rien dire sans « il en
+faut 85 » : c'est la paire qui dit si la commande partira toute seule.
+`threshold: 0` veut dire que ce pays ne commande **jamais** sans confirmation.
 
 Un seul appel fait tout : l'audio est **gardé**, transcrit, porté à l'assistant
 du métier comme un message écrit, et le tour entier est **écrit dans le fil**.
@@ -909,6 +915,24 @@ du métier comme un message écrit, et le tour entier est **écrit dans le fil**
 > le plan aussi. Sans le fichier, un litige se tranche sur la parole de l'un
 > contre celle de l'autre ; avec lui, le support **réécoute** et tranche en
 > dix secondes.
+
+#### ⚠️⚠️ 🆕 UN ÉCHEC D'ÉCOUTE ARRIVE EN `200`, PAS EN `502` (v4.89.0)
+
+Quand la transcription échoue, vous recevez un **`200`** portant
+`state: "failed"`, `voice_id` et **`audio_url`** — le texte est vide.
+
+```jsonc
+{ "voice_id": "68f0…", "audio_url": "https://files.dira.llc/voice/…", 
+  "seconds": 7, "text": "", "state": "failed", "confidence": 0 }
+```
+
+⚠️ **Proposez la RÉÉCOUTE, pas « nous n'avons pas entendu ».** Le `502` sans
+corps vous faisait annoncer un échec sec alors que **l'audio était gardé** :
+vous aviez de quoi le rejouer, et le vocal restait orphelin dans le stockage.
+
+⚠️ **Et ce n'est pas une panne de notre service** : c'est un enregistrement
+qu'on n'a pas su lire. Le compter en `5xx` le faisait aussi entrer dans nos
+pannes, ce qui noyait les vraies.
 
 #### ⚠️⚠️ `state` DIT CE QUI A ÉTÉ FAIT, et c'est lui qui choisit votre écran
 
@@ -1018,7 +1042,7 @@ c'est l'estimation, et elle est fausse par construction.
 | `422 unknown_language` | code de langue inconnu | un bogue d'application : corrigez le code envoyé |
 | `429 ai_quota_reached` | quota du jour épuisé | « réessayez demain », **et laissez écrire** |
 | `429 ai_budget_reached` | plafond de la plateforme | idem, sans accuser la personne |
-| `502 transcription_failed` | l'audio n'a pas pu être transcrit | « nous n'avons pas entendu » — ⚠️ **l'audio est gardé**, le support peut reprendre |
+| ~~`502 transcription_failed`~~ | 🆕 v4.89.0 — **ce n'est plus un refus** : voir `state: "failed"` ci-dessous | |
 | `503 transcription_unavailable` | aucun fournisseur audio sur ce déploiement | **masquez le bouton micro** |
 | `503 language_not_served` | rien ne transcrit cette langue (`reason` = la langue) | proposez d'écrire, ou une autre langue |
 
@@ -1641,7 +1665,7 @@ commande ou une course. Ne devinez pas le métier d'après la clé ; lisez
 | `502 vertical_unreachable` | ce métier ne répond pas — réessayer |
 | `413 audio_too_large` | **le vocal** dépasse 2 Mio — recommencer plus court |
 | `422 unknown_language` | code de langue inconnu : un bogue d'application |
-| `502 transcription_failed` | ⚠️ **l'audio est gardé** — dire « nous n'avons pas entendu », le support peut reprendre |
+| ~~`502 transcription_failed`~~ | 🆕 v4.89.0 — n'est plus émis : un échec d'écoute arrive en `200` avec `state: "failed"` et l'`audio_url` |
 | `503 transcription_unavailable` | masquer le **bouton micro** (le texte marche) |
 | `503 language_not_served` | `reason` = la langue — proposer d'écrire, ou une autre langue |
 

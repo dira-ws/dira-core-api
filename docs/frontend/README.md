@@ -1,6 +1,6 @@
 # Specs frontend — par rôle
 
-> **Version 4.88.0** · 29 octobre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics`
+> **Version 4.89.0** · 29 octobre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics`
 
 **Cinq** documents, un par application. Chacun est **autonome** : tout ce qu'un frontend doit savoir pour son rôle, sans avoir à ouvrir les vingt specs de modules.
 
@@ -355,6 +355,34 @@ Chaque document porte la même version en en-tête, et son propre journal des ch
 - [ ] ⚠️ **`TRACKING_JWT_SECRET` renseigné dans chaque environnement déployé.** Vide, l'authentification du service de suivi est **désactivée** : n'importe qui connaissant un `delivery_id` suit la course. Le secret doit valoir **exactement** le `JWT_SECRET` de `dira-food-api`.
 
 ## Journal
+
+### 4.89.0 — 29 octobre 2026
+
+🎙️ **LE VOCAL DIT CE QU'IL N'A PAS ENTENDU** — `DIRA-CLIENT.md` §8. Sept écarts
+entre le code et ce contrat, corrigés (core#262). Trois vous concernent
+directement :
+
+⚠️⚠️ **UN ÉCHEC D'ÉCOUTE ARRIVE EN `200`, PAS EN `502`.** Vous recevez
+`state: "failed"` avec `voice_id` et **`audio_url`** : proposez la **réécoute**,
+plus « nous n'avons pas entendu ». Le `502` sans corps vous faisait annoncer un
+échec sec alors que l'audio était gardé — et le vocal restait orphelin.
+
+⚠️ **`threshold` EST ENFIN SERVI**, et se lit avec `confidence` : « compris à
+72 % » ne veut rien dire sans « il en faut 85 ». `0` = ce pays ne commande
+jamais sans confirmation.
+
+⚠️ **`plan` EST UN OBJET SUR `/ai/thread`**, plus une chaîne JSON échappée :
+`plan.items` valait `undefined`, et aucun panier ne s'affichait.
+
+Et trois qui corrigent le serveur sans changer ce que vous envoyez : `vertical`
+était **ignoré** sur un vocal (c'est la **langue** qui partait à sa place, donc
+votre indice était perdu et on repayait un classement) ; un code de langue
+inconnu était **avalé en silence** puis transcrit en français ; la réponse
+était écrite **deux fois** dans le fil sur une commande automatique.
+
+🆕 Et les routes des métiers (`/vtc/ai/voice`, `/food/ai/voice`) rendent
+désormais **`language`** et **ne remplacent plus les refus par `502`** : un
+`422 unknown_language` arrive nommé, avec le champ fautif.
 
 ### 4.88.0 — 29 octobre 2026
 
