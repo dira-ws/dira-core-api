@@ -1,6 +1,6 @@
 # App CLIENT — COURSES (VTC) — contrat d'API
 
-> **Version 4.99.2** · 29 octobre 2026
+> **Version 4.99.3** · 29 octobre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Courses : `https://api-staging.dira.llc/api/v1/vtc` · Suivi : `wss://tracking-staging.dira.llc`
 
 ---
@@ -792,6 +792,50 @@ Réponse : **une entrée par classe**, toutes tarifées sur le même trajet.
 > est refusée (`409 quote_expired`). Une application qui l'ignore laisse son
 > utilisateur devant un bouton qui échouera. Redemandez un devis plutôt que de
 > laisser le bouton actif.
+
+### 🆕 ⚠️⚠️ UN DEVIS SE DÉPENSE UNE FOIS — ET UN RENVOI REND LA MÊME COURSE (v4.99.3)
+
+```
+POST /vtc/rides
+Idempotency-Key: <l'identifiant de CET appel>
+{ "quote_id": "…", "payment_method": "cash" }
+```
+
+⚠️⚠️ **Le même `quote_id` pouvait créer plusieurs courses.** Rien ne consommait
+le devis : trois courses au même prix pour un devis demandé une fois, bornées
+seulement par le nombre de courses simultanées du pays. C'est corrigé — un devis
+est une **offre à un prix**, et une offre se dépense une fois.
+
+⚠️ **`409 quote_spent` n'est pas `409 quote_expired`.** Les deux appellent le
+même geste — redemander un devis — mais ils ne disent pas la même chose :
+
+| refus | ce qui s'est passé | ce que vous montrez |
+|---|---|---|
+| `quote_expired` | le temps a passé | « le prix a changé » → nouveau devis |
+| 🆕 `quote_spent` | **la course existe déjà** | **la course**, pas le bouton |
+
+Reproposer la commande sur `quote_spent` fait appuyer la personne une seconde
+fois en croyant que rien ne s'est passé.
+
+⚠️⚠️ **ENVOYEZ `Idempotency-Key`, ET VOUS NE VERREZ PAS CE REFUS SUR UN
+RENVOI.** Avec la **même** clé, la même requête rend la **même commande** : les
+mêmes identifiants de course, le même ordre de voitures, rien de créé en plus.
+C'est la seule façon de distinguer « ma requête s'est perdue en route » de « je
+commande encore ».
+
+- **Une clé par intention**, la même sur tous les renvois de cet appel — ce que
+  vous voulez (l'identifiant du tour, un UUID), du moment qu'elle est stable sur
+  un renvoi et **différente** sur une nouvelle commande.
+- ⚠️ **Ne réutilisez jamais une clé pour autre chose** : une clé différente sur
+  un devis dépensé est refusée, et une clé réutilisée rendrait une commande que
+  vous n'avez pas faite.
+- ⚠️ **Sans clé, pas de rejeu.** Le silence ne vaut pas accord : un devis
+  dépensé sans clé refuse tout, y compris un renvoi.
+
+⚠️ Une commande de **plusieurs voitures** dépense le devis **une seule fois** —
+c'est l'appel qui se dépense, pas chaque voiture. Et une commande **défaite**
+(une des voitures échoue, tout est annulé) **libère** le devis : elle n'a rien
+produit.
 
 > ⚠️ **La majoration se DIT.** `surge_multiplier` est en **millièmes** :
 > `1300` = ×1,3. Renseigné, il doit apparaître à l'écran — une majoration
