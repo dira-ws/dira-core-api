@@ -1,6 +1,6 @@
 # Specs frontend — par rôle
 
-> **Version 4.93.0** · 29 octobre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics`
+> **Version 4.94.0** · 29 octobre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics`
 
 **Cinq** documents, un par application. Chacun est **autonome** : tout ce qu'un frontend doit savoir pour son rôle, sans avoir à ouvrir les vingt specs de modules.
 
@@ -355,6 +355,49 @@ Chaque document porte la même version en en-tête, et son propre journal des ch
 - [ ] ⚠️ **`TRACKING_JWT_SECRET` renseigné dans chaque environnement déployé.** Vide, l'authentification du service de suivi est **désactivée** : n'importe qui connaissant un `delivery_id` suit la course. Le secret doit valoir **exactement** le `JWT_SECRET` de `dira-food-api`.
 
 ## Journal
+
+### 4.94.0 — 29 octobre 2026
+
+🎙️ **LES MESSAGES VOCAUX D'UNE COURSE — POUR QUI NE LIT PAS** —
+`VTC-CLIENT.md` §7, `VTC-DRIVER.md` § conversation (core#256).
+
+```
+POST /rides/{id}/messages   (multipart : audio, seconds, language?)
+GET  /rides/{id}/messages   → items[].kind | audio_url | seconds
+                              voice { enabled, max_seconds }
+```
+
+Dira Lite sert des zones de **faible alphabétisation** : une conversation qui
+n'accepte que du texte n'est pas une conversation pour ces gens-là.
+
+⚠️⚠️ **`body` PORTE LA TRANSCRIPTION DU VOCAL**, et c'est ce qui rend les vocaux
+compatibles : une app qui ne connaît pas encore `kind` affiche **du texte au lieu
+de rien**. Affichez la barre d'écoute **et** la transcription — c'est elle qui
+permet de décider si on écoute maintenant.
+
+⚠️ **`body` peut être VIDE sur un vocal** : la transcription a échoué et le
+message part quand même. Refuser priverait de parole précisément les gens pour
+qui cette fonction existe. Affichez « Message vocal », pas un blanc.
+
+⚠️⚠️ **NE MONTREZ LE MICRO QUE SI `voice.enabled`.** Un bouton d'enregistrement
+sur un déploiement qui refusera produit un échec **après** que la personne a
+parlé — le pire moment pour l'apprendre quand on ne lit pas le message d'erreur.
+Servi à **chaque lecture** : il peut disparaître en cours de course.
+
+⚠️ **La modération lit la transcription** : une menace dite à voix haute est une
+menace (`422 message_blocked`). Un vocal **non transcrit** lui échappe, et le
+signalement reste la seule prise sur ceux-là.
+
+⚠️ **Un message retiré perd son audio avec son corps** : affichez « message
+retiré », pas un lecteur qui ne joue rien.
+
+⚠️ **Pas de WAV** — un vocal d'une minute y pèse dix mégaoctets, et c'est le
+réseau de quelqu'un qui paie. Et `language` est la langue **parlée**, jamais
+l'`Accept-Language` : un téléphone réglé en français n'empêche pas son
+propriétaire de parler wolof.
+
+Notification : `chat_message` avec la transcription, **`chat_voice_message`**
+sans. Les deux portent `data.kind` et `data.seconds`.
 
 ### 4.93.0 — 29 octobre 2026
 

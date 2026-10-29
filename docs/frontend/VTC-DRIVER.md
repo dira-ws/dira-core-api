@@ -1,6 +1,6 @@
 # App CHAUFFEUR — COURSES (VTC) — contrat d'API
 
-> **Version 4.93.0** · 29 octobre 2026
+> **Version 4.94.0** · 29 octobre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Courses : `https://api-staging.dira.llc/api/v1/vtc` · Suivi : `wss://tracking-staging.dira.llc` · SIG : `https://maps.dira.llc/api`
 
 ---
@@ -3202,6 +3202,81 @@ GET  /rides/{id}/messages          → { items, unread }
 POST /rides/{id}/messages          { "body": "je suis devant le portail" }
 POST /rides/{id}/messages/read
 ```
+
+#### 🆕 🎙️ LES MESSAGES VOCAUX — votre passager peut PARLER (v4.94.0)
+
+⚠️ **Beaucoup de passagers ne lisent ni n'écrivent.** Dira Lite sert des
+zones de faible alphabétisation : ils vous enverront des vocaux, et vous
+pouvez répondre de la même façon.
+
+```
+POST /rides/{id}/messages          (multipart/form-data)
+  audio=<fichier>   seconds=7   language=wo (facultatif)
+→ 201 { "id", "from", "kind": "voice", "body": "…", "audio_url": "…", "seconds": 7 }
+
+GET  /rides/{id}/messages
+→ { "items": [ { …, "kind": "text" | "voice", "audio_url"?, "seconds"? } ],
+    "voice": { "enabled": true, "max_seconds": 60 } }
+```
+
+⚠️⚠️ **NE MONTREZ LE MICRO QUE SI `voice.enabled`.** Un bouton d'enregistrement
+sur un déploiement sans stockage ni transcription produit un échec **après** que
+la personne a parlé — le pire moment pour l'apprendre, et surtout pour quelqu'un
+qui ne lit pas le message d'erreur. `voice` est **absent** là où les vocaux ne
+marchent pas, et il est servi **à chaque lecture** : il peut disparaître en cours
+de course si le stockage tombe.
+
+| Champ | Ce que c'est |
+|---|---|
+| `kind` | `text` ou `voice`. ⚠️ **Toujours servi**, même sur les messages d'avant : ne devinez pas le genre à la présence d'`audio_url` |
+| `audio_url` | où réécouter. ⚠️ **Lisible sans en-tête** : un lecteur audio ne porte pas votre `Authorization`. L'adresse est signée et datée |
+| `seconds` | la durée **déclarée par le téléphone de l'envoyeur**, pour dessiner la barre avant de télécharger le fichier |
+| `body` | ⚠️ **la TRANSCRIPTION du vocal** — voir ci-dessous |
+
+⚠️⚠️ **`body` PORTE LA TRANSCRIPTION, ET C'EST VOULU.** Une app qui ne connaît
+pas encore `kind` affiche alors du texte au lieu de rien. Côté vous : affichez la
+barre d'écoute **et** la transcription sous elle — c'est ce qui permet au
+destinataire de décider s'il écoute maintenant.
+
+⚠️ **`body` peut être VIDE sur un vocal.** La transcription a échoué (service
+indisponible, langue non servie) et **le message part quand même** : refuser
+priverait de parole précisément les gens pour qui cette fonction existe. Affichez
+alors « Message vocal » et la barre, pas un blanc.
+
+#### Envoyer
+
+- `multipart/form-data` sur **la même route** que le texte — c'est le
+  `Content-Type` qui choisit. Pas de seconde route à gérer.
+- `audio` : **m4a, aac, mp3, ogg, opus, webm, 3gp**. ⚠️ **Pas de WAV** — un vocal
+  d'une minute y pèse dix mégaoctets, et c'est le réseau de quelqu'un qui paie.
+- `seconds` : **obligatoire**, la durée que vous avez mesurée, 1 à `max_seconds`.
+- `language` : la langue **parlée** si vous la connaissez (`wo`, `ee`, `shu`…).
+  ⚠️ Pas l'`Accept-Language` : celui-ci dit la langue de l'**interface**, et un
+  téléphone réglé en français n'empêche pas son propriétaire de parler wolof.
+
+| Refus | Quand |
+|---|---|
+| `413 audio_too_large` | au-delà de 2 Mio — encodez en opus ou AAC mono |
+| `422` `fields: ["audio"]` | format non accepté, ou partie `audio` absente |
+| `422` `fields: ["seconds"]` | durée absente, nulle ou hors bornes |
+| `503 voice_messages_unavailable` | les vocaux ne marchent pas ici. ⚠️ C'est le **filet** : `voice.enabled` est la règle |
+| `422 message_blocked` | la **transcription** contient une menace. ⚠️ Oui, la modération lit les vocaux |
+
+⚠️ **La modération lit la transcription**, exactement comme du texte : une menace
+dite à voix haute est une menace. Un vocal **non transcrit**, en revanche, lui
+échappe — le signalement (`POST …/messages/{id}/report`) reste la seule prise sur
+ceux-là.
+
+⚠️ **Un message retiré par la modération perd son audio AVEC son corps** :
+`hidden: true`, `body` et `audio_url` vides. Affichez « message retiré », pas un
+lecteur qui ne joue rien.
+
+#### La notification
+
+`chat_message` quand il y a une transcription (corps = la transcription), et
+**`chat_voice_message`** quand il n'y en a pas (corps = « Message vocal »). Les
+deux portent `data.kind` et, pour un vocal, `data.seconds` — de quoi dessiner le
+bon aperçu **avant** d'ouvrir la conversation.
 
 Mêmes règles que côté passager : `409 conversation_closed` **deux heures** après
 l'arrivée, historique toujours lisible.
