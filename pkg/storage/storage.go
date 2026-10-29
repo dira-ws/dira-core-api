@@ -9,6 +9,7 @@ import (
 	"io"
 	"log/slog"
 	"math"
+	"net/url"
 	"sort"
 	"strconv"
 	"strings"
@@ -301,6 +302,19 @@ type Store struct {
 	client *minio.Client
 	bucket string
 	public string
+	// signer signe les URL POUR L'HÔTE PUBLIC.
+	//
+	// ⚠️⚠️ UN SECOND CLIENT, ET C'EST UNE NÉCESSITÉ, PAS UN CONFORT. La
+	// signature SigV4 couvre l'en-tête `Host` : une URL signée pour
+	// `minio:9000` — le nom de service interne — et servie sur
+	// `files.dira.llc` est REFUSÉE (`403 SignatureDoesNotMatch`). Mesuré en
+	// préproduction : remplacer l'hôte après coup ne marche pas.
+	//
+	// ⚠️ ET CE CLIENT N'ÉMET AUCUNE REQUÊTE. Il ne sert qu'à CALCULER une
+	// signature ; l'hôte public n'a donc pas à être joignable depuis le
+	// service, ce qui est précisément le cas en production (le service parle
+	// au dépôt par le réseau interne, le téléphone par l'adresse publique).
+	signer *minio.Client
 }
 
 // New connects to the object store and ensures the bucket exists with a
@@ -348,7 +362,39 @@ func New(ctx context.Context, cfg Config) (*Store, error) {
 		}
 		public = scheme + "://" + cfg.Endpoint
 	}
-	return &Store{client: client, bucket: cfg.Bucket, public: public}, nil
+	st := &Store{client: client, bucket: cfg.Bucket, public: public, signer: client}
+	// LE SIGNEUR DE L'HÔTE PUBLIC — voir `Store.signer`.
+	//
+	// ⚠️ AU MIEUX : sans lui, on signe pour l'hôte interne, et une URL de genre
+	// privé sera refusée par le dépôt. On le dit fort plutôt que de servir des
+	// adresses mortes en silence.
+	if host, secure, ok := hostOf(public); ok && host != cfg.Endpoint {
+		pub, err := minio.New(host, &minio.Options{
+			Creds:  credentials.NewStaticV4(cfg.AccessKey, cfg.SecretKey, ""),
+			Secure: secure,
+		})
+		if err != nil {
+			slog.WarnContext(ctx, "storage: SIGNED URLS WILL BE REFUSED — cannot sign for the public host",
+				"public_host", host, "error", err)
+		} else {
+			st.signer = pub
+		}
+	}
+	return st, nil
+}
+
+// hostOf extrait l'hôte et le schéma d'une base publique.
+//
+// ⚠️ ELLE EXISTE PARCE QUE LA SIGNATURE COUVRE L'HÔTE. `PublicBaseURL` est une
+// URL complète (`https://files.dira.llc`), le client MinIO veut un `host:port`
+// et un drapeau TLS : les confondre donne une signature calculée pour le
+// mauvais hôte, c'est-à-dire un `403` que rien n'explique.
+func hostOf(base string) (host string, secure, ok bool) {
+	u, err := url.Parse(base)
+	if err != nil || u.Host == "" {
+		return "", false, false
+	}
+	return u.Host, u.Scheme == "https", true
 }
 
 // Put streams an object and returns its public URL. The key is
@@ -472,16 +518,14 @@ func (s *Store) SignedURL(ctx context.Context, publicURL string, ttl time.Durati
 	if !ok {
 		return "", fmt.Errorf("storage: %q n'appartient pas à ce dépôt", publicURL)
 	}
-	u, err := s.client.PresignedGetObject(ctx, s.bucket, key, ttl, nil)
+	// ⚠️⚠️ SIGNÉ PAR LE CLIENT DE L'HÔTE PUBLIC, et non par celui du réseau
+	// interne. La signature SigV4 couvre `Host` : une URL signée pour
+	// `minio:9000` puis servie sur `files.dira.llc` est refusée
+	// (`403 SignatureDoesNotMatch`). Mesuré en préproduction — remplacer
+	// l'hôte après la signature ne marche PAS.
+	u, err := s.signer.PresignedGetObject(ctx, s.bucket, key, ttl, nil)
 	if err != nil {
 		return "", fmt.Errorf("storage: signer %s: %w", key, err)
-	}
-	// ⚠️ L'HÔTE PUBLIC REMPLACE CELUI DU CLIENT. Le dépôt est joint par son nom
-	// de service interne (`minio:9000`) ; une URL signée sur cet hôte ne
-	// s'ouvre pas depuis un téléphone. La signature, elle, ne couvre pas
-	// l'hôte — seulement le chemin et les paramètres.
-	if s.public != "" {
-		return s.public + u.RequestURI(), nil
 	}
 	return u.String(), nil
 }
