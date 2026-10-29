@@ -1,6 +1,6 @@
 # App / console MARCHAND — LIVRAISON — contrat d'API
 
-> **Version 4.97.0** · 29 octobre 2026
+> **Version 4.98.0** · 29 octobre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Livraison : `https://api-staging.dira.llc/api/v1/food`
 
 
@@ -969,6 +969,47 @@ La **génération de vidéo par IA** débite le portefeuille **de ce point de ve
 Une vidéo **fournie** se téléverse d'abord — `POST /api/v1/uploads?kind=feed&entity={store_id}`, au **socle** (v3.0.0) — puis se déclare avec `source: "upload"`, `video_url` et le `duration_seconds` rendu par l'envoi. `feed` est le seul `kind` qui accepte une vidéo (mp4, webm, mov ; ≤ 60 MiB **et ≤ 60 s**, lus dans le fichier : `422 video_too_long` ou `video_unreadable` sinon). Le serveur réencode ensuite en arrière-plan et pose la vignette.
 
 **Publication programmée** : `published_at` porte une date **et une heure**. Une vidéo dont `published_at` est dans le futur n'apparaît pas dans le feed — elle est **filtrée**, pas classée en dernier.
+
+### 🆕 🔗 PARTAGER UNE PUBLICATION — le lien public (v4.98.0)
+
+```
+GET  /stores/{id}/videos   → items[].share_url · items[].deep_link
+GET  /feed                 → items[].share_url · items[].deep_link
+POST /stores/{id}/videos   → share_url · deep_link
+```
+
+⚠️⚠️ **N'ENVOYEZ PLUS `video_url`.** C'était le défaut : « Partager » envoyait
+l'adresse **brute du fichier vidéo**, et celui qui la recevait ouvrait un `.mp4`
+nu — ni le point de vente, ni le plat, ni un moyen de commander.
+
+| champ | ce que c'est | où l'utiliser |
+|---|---|---|
+| `share_url` | `https://dira.llc/p/<id>` — une **page publique, sans compte** : la vidéo, le point de vente, le plat lié, et « Ouvrir dans Dira » | ce qu'on **colle** dans une conversation |
+| `deep_link` | `dira://post/<id>` | ce qu'on met dans un **QR code** |
+
+⚠️ **Les deux, et pas l'un ou l'autre.** Le `https` s'ouvre chez tout le monde,
+avec ou sans application — c'est la seule forme qu'une personne sans Dira peut
+suivre. Le lien d'application va dans un QR code scanné par l'application
+elle-même : un `https` scanné ouvrirait un navigateur par-dessus l'application
+qui vient de le lire.
+
+⚠️ **Ne composez pas ces adresses vous-mêmes.** C'est le serveur qui possède la
+forme du lien : trois applications qui la composeraient chacune de leur côté
+sont trois endroits à corriger le jour où le domaine change, et deux seront
+oubliés.
+
+⚠️⚠️ **ABSENTS QUAND LA PUBLICATION N'EST PAS VISIBLE** — en cours d'encodage,
+bloquée par la modération, ou **programmée** pour plus tard. **Masquez le bouton
+« Partager » quand `share_url` est absent.** C'est ce qui évite d'éventer une
+promotion de demain, et de partager l'adresse d'une page qui répondra
+« cette publication n'est plus disponible ».
+
+⚠️ **Et comptez le partage** : `POST /feed/{id}/share`, **sans `await`** — il
+répond `204` même quand le comptage échoue, et une statistique perdue ne
+justifie pas d'interrompre le geste.
+
+> La page ouvre l'application quand elle est installée (liens universels /
+> App Links sur `dira.llc/p/*`), et propose de l'installer sinon.
 
 ### 🆕 🎵 UN SON DE FOND SUR UN CARROUSEL (v4.81.0)
 

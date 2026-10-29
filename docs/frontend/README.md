@@ -1,6 +1,6 @@
 # Specs frontend — par rôle
 
-> **Version 4.97.0** · 29 octobre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics`
+> **Version 4.98.0** · 29 octobre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics`
 
 **Cinq** documents, un par application. Chacun est **autonome** : tout ce qu'un frontend doit savoir pour son rôle, sans avoir à ouvrir les vingt specs de modules.
 
@@ -355,6 +355,50 @@ Chaque document porte la même version en en-tête, et son propre journal des ch
 - [ ] ⚠️ **`TRACKING_JWT_SECRET` renseigné dans chaque environnement déployé.** Vide, l'authentification du service de suivi est **désactivée** : n'importe qui connaissant un `delivery_id` suit la course. Le secret doit valoir **exactement** le `JWT_SECRET` de `dira-food-api`.
 
 ## Journal
+
+### 4.98.0 — 29 octobre 2026
+
+🔗 **PARTAGER UNE PUBLICATION : LE LIEN PUBLIC** — `FOOD-MERCHANT.md` §6,
+`FOOD-CLIENT.md` §13 bis (core#235).
+
+```
+GET  /food/stores/{id}/videos   → items[].share_url · items[].deep_link
+GET  /food/feed                 → items[].share_url · items[].deep_link
+POST /food/stores/{id}/videos   → share_url · deep_link
+GET  /food/feed/{id}            → la publication, SANS COMPTE (ce que lit la page)
+```
+
+⚠️⚠️ **« PARTAGER » ENVOYAIT L'ADRESSE BRUTE DU FICHIER VIDÉO.** Celui qui la
+recevait ouvrait un `.mp4` nu : ni le point de vente, ni le plat, ni un moyen de
+commander. Ce qu'un marchand partage est une **publication**, pas un fichier.
+
+| champ | ce que c'est |
+|---|---|
+| `share_url` | `https://dira.llc/p/<id>` — une page publique, sans compte |
+| `deep_link` | `dira://post/<id>` — pour un QR code |
+
+⚠️ **Les deux, et pas l'un ou l'autre.** Le `https` s'ouvre chez tout le monde,
+avec ou sans application. Le lien d'application va dans un QR code : un `https`
+scanné ouvrirait un navigateur par-dessus l'application qui vient de le lire.
+
+⚠️ **Ne composez pas ces adresses vous-mêmes.** C'est le serveur qui possède la
+forme du lien — trois applications qui la composeraient chacune de leur côté
+sont trois endroits à corriger le jour où le domaine change, et deux seront
+oubliés.
+
+⚠️⚠️ **ABSENTS quand la publication n'est pas visible** : en cours d'encodage,
+bloquée par la modération, ou **programmée** pour plus tard. **Masquez le bouton
+« Partager » quand `share_url` est absent** — c'est ce qui évite d'éventer une
+promotion de demain. Absents aussi sur une **publicité** : une régie n'a pas de
+page de publication chez nous.
+
+⚠️ **La page ouvre l'application quand elle est installée** (`dira.llc/p/*`
+rejoint `/t/*` dans les liens universels / App Links), et propose de l'installer
+sinon. Elle est **indexable et porte son aperçu social**, contrairement à la page
+de suivi d'un trajet — et c'est le même raisonnement à l'envers : une
+publication est une vitrine, un plat trouvé dans un moteur de recherche est ce
+que le marchand veut, et une vignette dans une conversation est ce qui fait
+ouvrir le lien.
 
 ### 4.97.0 — 29 octobre 2026
 
