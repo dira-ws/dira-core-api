@@ -47,17 +47,22 @@ var collections = []string{
 
 // Les lectures légitimement SANS pays, et pourquoi. Chacune se relit à
 // l'ajout : c'est la seule porte de sortie, et elle est nominative.
+//
+// ⚠️⚠️ UNE LECTURE BORNÉE PAR UN COMPTE N'A RIEN À FAIRE ICI — elle est déjà
+// plus étroite qu'un pays, et le garde la reconnaît. `fleet.ByMember` y a
+// pourtant figuré : son filtre est monté par une fonction à part
+// (`memberFilter`, bornée par `owner_user_id`), et le garde ne suivait un
+// monteur de filtre que pour y chercher `country.Restrict`, jamais un
+// identifiant. Faute de la voir, on l'avait inscrite ICI — en écrivant dans
+// le registre « cette lecture est mondiale » alors que le code disait le
+// contraire, et l'exemption aurait couvert la prochaine lecture du même nom.
+// Le garde suit désormais les deux (`pkg/country/guard`), et cette liste a
+// maigri d'une ligne fausse.
 var global = map[string]string{
 	// L'identité : on cherche quelqu'un AVANT de savoir d'où il est. La
 	// connexion d'un Sénégalais depuis un déploiement togolais doit le
 	// trouver, sans quoi il ne pourrait plus se connecter du tout.
 	"user.FindByPhone": "la connexion cherche un compte avant de connaître son pays",
-	// ⚠️ LA FLOTTE D'UN COMPTE CONNECTÉ, pas une liste d'exploitation : c'est le
-	// COMPTE qui la désigne, et il n'y en a qu'une. Y ajouter le pays de la
-	// requête n'ajouterait aucune protection et couperait un partenaire
-	// togolais dont le contrat est enregistré depuis Dakar — ou un répartiteur
-	// qui se connecte en voyage.
-	"fleet.ByMember":   "la flotte du compte connecté, désignée par son identifiant : plus étroit qu'un pays",
 	"user.FindByEmail": "la connexion cherche un compte avant de connaître son pays",
 	// ⚠️⚠️ LE CHAÎNAGE DU JOURNAL EST MONDIAL PAR CONSTRUCTION, et c'est une
 	// décision, pas un oubli.

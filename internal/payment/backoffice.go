@@ -93,9 +93,14 @@ func (r *Repository) List(ctx context.Context, status, purpose, cursor string, l
 // à faire, et le nier ici ferait croire au client que c'est parti.
 //
 // Le filtre exige `status: "succeeded"` : rembourser un paiement en attente ou
-// échoué n'a pas de sens, et l'index sur (purpose, ref_id) rend l'écriture
-// atomique — deux résolutions de litige simultanées ne rembourseront pas deux
-// fois.
+// échoué n'a pas de sens, et c'est le FILTRE du `FindOneAndUpdate` qui rend
+// l'écriture atomique — deux résolutions de litige simultanées ne
+// rembourseront pas deux fois.
+//
+// ⚠️ Ce commentaire créditait l'index « sur (purpose, ref_id) » de cette
+// atomicité. L'index n'existait pas : cette recherche balayait la collection
+// entière, et le commentaire rassurait sur le mauvais mécanisme. L'index est
+// posé depuis (`internal/indexes`), et l'atomicité reste celle du filtre.
 func (r *Repository) RefundOrderPayment(ctx context.Context, orderID string) (string, error) {
 	oid, err := primitive.ObjectIDFromHex(orderID)
 	if err != nil {

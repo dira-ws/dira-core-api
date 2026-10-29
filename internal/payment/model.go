@@ -5,6 +5,7 @@
 package payment
 
 import (
+	"strings"
 	"time"
 
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -55,6 +56,48 @@ const (
 // DefaultCurrency is the platform currency (smallest unit, integer amounts).
 const DefaultCurrency = "XOF"
 
+// PendingWindow est la durée pendant laquelle un paiement « en cours » vaut
+// encore la peine d'être attendu.
+//
+// ⚠️ ELLE EST SERVIE, PAS DEVINÉE. Les applications la codaient en dur —
+// dix minutes dans l'app complète, dix minutes recopiées dans Dira Lite — et
+// retenaient le bouton « Payer » pendant ce temps-là. Une valeur recopiée
+// dans trois applications ne peut plus bouger : la changer ici ne changerait
+// rien chez elles, et la changer chez elles demanderait trois revues de
+// magasin. Elle part donc sur le fil (`expires_at`), et les apps s'alignent.
+const PendingWindow = 10 * time.Minute
+
+// reservedRefPrefix préfixe la référence d'un paiement RÉSERVÉ — écrit avant
+// que l'opérateur ne soit contacté, et qui n'a donc pas encore la sienne.
+//
+// ⚠️⚠️ UN PRÉFIXE, ET NON LA CHAÎNE VIDE, À CAUSE D'UN INDEX QU'ON NE PEUT PAS
+// MIGRER EN SILENCE. `provider_ref` porte un index unique NON partiel : deux
+// réservations sans référence entreraient en collision sur la valeur vide, et
+// la seconde échouerait. Le rendre partiel serait la correction naturelle —
+// sauf que `Indexes().CreateOne` sur un index EXISTANT aux options
+// différentes échoue (`IndexOptionsConflict`), et que `db.EnsureIndexes` se
+// contente de JOURNALISER cet échec. La préprod garderait donc son ancien
+// index, le service démarrerait vert, et la deuxième réservation de chaque
+// client serait refusée — un défaut qu'aucune épreuve locale ne voit, puisque
+// localement la base est neuve et l'index se pose comme demandé.
+//
+// `pending:<identifiant du paiement>` est unique par construction, tient dans
+// l'index tel qu'il est, et se lit.
+const reservedRefPrefix = "pending:"
+
+// reservedRef est la référence d'attente d'un paiement qu'on vient de
+// réserver.
+func reservedRef(id primitive.ObjectID) string { return reservedRefPrefix + id.Hex() }
+
+// IsReservedRef reconnaît une référence d'attente.
+//
+// ⚠️ ELLE SERT À REFUSER UN RAPPEL QUI LA PORTERAIT. Un rappel de prestataire
+// cherche un paiement PAR sa référence : s'il en nommait une référence
+// d'attente, il tomberait sur un paiement que l'opérateur n'a jamais vu — et
+// le ferait aboutir. La signature du rappel est vérifiée avant, mais une
+// porte qui ne doit jamais s'ouvrir se ferme à clé aussi.
+func IsReservedRef(ref string) bool { return strings.HasPrefix(ref, reservedRefPrefix) }
+
 // Meta keys used for token purchases.
 const (
 	MetaWalletOwnerID = "wallet_owner_id"
@@ -77,7 +120,42 @@ type Payment struct {
 	Country string `bson:"country,omitempty"`
 	// ProviderRef is the provider-side identifier; unique index guarantees
 	// webhook idempotency.
+	//
+	// Vaut `pending:<id>` entre la réservation de la ligne et la réponse de
+	// l'opérateur — voir `reservedRefPrefix`.
 	ProviderRef string `bson:"provider_ref"`
+	// Reached dit si l'opérateur a RÉPONDU à la demande d'initiation.
+	//
+	// ⚠️⚠️ C'EST LA SEULE CHOSE HONNÊTE QU'ON PUISSE DIRE D'UN PAIEMENT DONT
+	// L'INITIATION A ÉCHOUÉ. Le serveur contacte l'opérateur, et n'obtient ni
+	// « parti » ni « pas parti » : un délai dépassé, une coupure, un `5xx`
+	// peuvent très bien avoir laissé une demande de paiement sur le téléphone
+	// du client. `reached:false` ne dit donc pas « rien n'est parti », il dit
+	// « on a demandé et on ne sait pas » — et c'est ce que l'application doit
+	// afficher, parce que proposer « Réessayer » comme si rien ne s'était
+	// passé peut déclencher une SECONDE demande de paiement.
+	Reached bool `bson:"reached"`
+	// PaymentURL est l'endroit où le payeur termine le paiement chez
+	// l'opérateur.
+	//
+	// ⚠️ GARDÉE, parce que c'est elle qu'on rend quand la réponse de
+	// l'initiation s'est perdue. Sans elle, retrouver le paiement ne servait à
+	// rien : l'application savait qu'il existait, et n'avait aucun moyen de le
+	// terminer.
+	PaymentURL string `bson:"payment_url,omitempty"`
+	// IdempotencyKey est la clé que l'application a choisie pour CETTE
+	// intention de paiement. Deux initiations de la même clé rendent le même
+	// paiement, et n'en demandent qu'un à l'opérateur.
+	IdempotencyKey string `bson:"idempotency_key,omitempty"`
+	// ExpiresAt est l'instant après lequel un paiement en attente ne vaut plus
+	// la peine d'être attendu — voir `PendingWindow`.
+	//
+	// ⚠️ UNE INFORMATION, PAS UN COUPERET : rien ne marque un paiement
+	// « échoué » à cette date. Un rappel d'opérateur qui arrive après doit
+	// encore pouvoir le faire aboutir, et `SetStatusIfPending` ne fait passer
+	// que `pending` → final : un balayage qui aurait écrit `failed` entre-temps
+	// aurait fait tomber le rappel tardif, et le client aurait payé pour rien.
+	ExpiresAt time.Time `bson:"expires_at,omitempty"`
 	// Meta carries purpose-specific context, e.g. wallet_owner_id and tokens
 	// count for token purchases.
 	Meta      map[string]any `bson:"meta,omitempty"`

@@ -134,6 +134,34 @@ var applicationIndexes = []db.Index{
 	{Collection: "payments", Keys: db.K("user_id", 1)},
 	{Collection: "payments", Keys: db.K("status", 1)},
 	{Collection: "payments", Keys: db.K("country", 1, "_id", -1)},
+	// ⚠️ UNE CLÉ D'IDEMPOTENCE PAR COMPTE, et c'est CET index qui le garantit
+	// — pas une relecture applicative. Lire « cette clé existe-t-elle ? » puis
+	// écrire laisse une fenêtre entre les deux : deux initiations simultanées
+	// de la même intention passeraient le test, et DEUX demandes de paiement
+	// partiraient sur le téléphone du client. C'est aussi ce qui permet au
+	// perdant de relire le gagnant plutôt que de rendre une erreur.
+	//
+	// PARTIEL, parce que la plupart des paiements n'ont pas de clé : `sparse`
+	// ne les écarterait que si le champ est ABSENT, et deux paiements sans clé
+	// suffiraient à empêcher l'index de se construire — le service démarrerait
+	// alors sans lui, et le journal serait le seul à le dire. `$gt: ""`
+	// sélectionne les chaînes non vides.
+	{
+		Collection:    "payments",
+		Keys:          db.K("user_id", 1, "idempotency_key", 1),
+		Unique:        true,
+		PartialFilter: bson.D{{Key: "idempotency_key", Value: bson.D{{Key: "$gt", Value: ""}}}},
+	},
+	// RETROUVER UN PAIEMENT PERDU : `GET /payments?purpose=&ref_id=`, le plus
+	// récent d'abord. L'ordre des clés suit l'ordre des filtres, et
+	// `created_at` avant `_id` suit `db.NewestFirst`.
+	{Collection: "payments", Keys: db.K("user_id", 1, "purpose", 1, "ref_id", 1, "created_at", -1, "_id", -1)},
+	// ⚠️ LE REMBOURSEMENT D'UNE COMMANDE CHERCHAIT SANS INDEX. Son commentaire
+	// affirmait pourtant que « l'index sur (purpose, ref_id) rend l'écriture
+	// atomique » — cet index n'existait pas, et le `FindOneAndUpdate` balayait
+	// la collection. L'atomicité, elle, venait du filtre ; la lenteur, de
+	// l'index manquant. Le voici.
+	{Collection: "payments", Keys: db.K("purpose", 1, "ref_id", 1, "status", 1)},
 
 	// --- notifications ---
 	{Collection: "push_devices", Keys: db.K("token", 1), Unique: true},

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"sort"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -16,17 +17,32 @@ import (
 
 // --- fakes ---
 
+// fakeRepo est une doublure, et sa FIDÉLITÉ EST LE SUJET.
+//
+// ⚠️⚠️ ELLE MODÈLE LES INDEX UNIQUES DE LA VRAIE COLLECTION — `provider_ref`,
+// et `(user_id, idempotency_key)`. Sans cela, elle serait plus permissive que
+// Mongo : une réservation sans référence passerait ici et serait refusée en
+// préprod, et la doublure aurait certifié le défaut qu'elle existe pour
+// attraper. Sur cette plateforme, la doublure s'est déjà trouvée plus fidèle
+// que la base une fois ; l'inverse est bien plus dangereux.
 type fakeRepo struct {
 	byID  map[primitive.ObjectID]*Payment
 	byRef map[string]*Payment
+	byKey map[string]*Payment // "<user>|<clé>"
+	// attachFails simule l'écriture de la référence qui échoue APRÈS que
+	// l'opérateur a répondu — le trou résiduel, nommé dans `ask`.
+	attachFails bool
 }
 
 func newFakeRepo() *fakeRepo {
 	return &fakeRepo{
 		byID:  map[primitive.ObjectID]*Payment{},
 		byRef: map[string]*Payment{},
+		byKey: map[string]*Payment{},
 	}
 }
+
+func keyOf(userID primitive.ObjectID, key string) string { return userID.Hex() + "|" + key }
 
 func (f *fakeRepo) Create(ctx context.Context, p *Payment) error {
 	if p.ID.IsZero() {
@@ -35,10 +51,72 @@ func (f *fakeRepo) Create(ctx context.Context, p *Payment) error {
 	if _, exists := f.byRef[p.ProviderRef]; exists {
 		return apperr.Conflict("duplicate_provider_ref", "duplicate provider ref")
 	}
+	if p.IdempotencyKey != "" {
+		if _, exists := f.byKey[keyOf(p.UserID, p.IdempotencyKey)]; exists {
+			return apperr.Conflict("duplicate_idempotency_key", "duplicate idempotency key")
+		}
+	}
 	cp := *p
 	f.byID[p.ID] = &cp
 	f.byRef[p.ProviderRef] = &cp
+	if p.IdempotencyKey != "" {
+		f.byKey[keyOf(p.UserID, p.IdempotencyKey)] = &cp
+	}
 	return nil
+}
+
+func (f *fakeRepo) AttachProviderRef(ctx context.Context, id primitive.ObjectID, ref, paymentURL string) (bool, error) {
+	if f.attachFails {
+		return false, apperr.Internal(errors.New("mongo is down"))
+	}
+	p, ok := f.byID[id]
+	// ⚠️ LE MÊME FILTRE QUE LA BASE : la doublure le LIT, elle ne le réécrit pas.
+	if !ok || p.ProviderRef != attachFilter(id)["provider_ref"] {
+		return false, nil
+	}
+	if _, taken := f.byRef[ref]; taken {
+		return false, apperr.Conflict("duplicate_provider_ref", "duplicate provider ref")
+	}
+	delete(f.byRef, p.ProviderRef)
+	p.ProviderRef, p.PaymentURL, p.Reached = ref, paymentURL, true
+	f.byRef[ref] = p
+	return true, nil
+}
+
+func (f *fakeRepo) FindByIdempotencyKey(ctx context.Context, userID primitive.ObjectID, key string) (*Payment, error) {
+	if key == "" {
+		return nil, nil
+	}
+	p, ok := f.byKey[keyOf(userID, key)]
+	if !ok {
+		return nil, nil
+	}
+	cp := *p
+	return &cp, nil
+}
+
+func (f *fakeRepo) ListOwn(ctx context.Context, q PaymentQuery) ([]Payment, error) {
+	var out []Payment
+	for _, p := range f.byID {
+		if p.UserID != q.UserID {
+			continue
+		}
+		if q.Purpose != "" && p.Purpose != q.Purpose {
+			continue
+		}
+		if !q.RefID.IsZero() && p.RefID != q.RefID {
+			continue
+		}
+		if q.Status != "" && p.Status != q.Status {
+			continue
+		}
+		out = append(out, *p)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].CreatedAt.After(out[j].CreatedAt) })
+	if q.Limit > 0 && len(out) > q.Limit+1 {
+		out = out[:q.Limit+1]
+	}
+	return out, nil
 }
 
 func (f *fakeRepo) FindByID(ctx context.Context, id primitive.ObjectID) (*Payment, error) {
@@ -51,6 +129,10 @@ func (f *fakeRepo) FindByID(ctx context.Context, id primitive.ObjectID) (*Paymen
 }
 
 func (f *fakeRepo) FindByProviderRef(ctx context.Context, ref string) (*Payment, error) {
+	// ⚠️ LA MÊME RÈGLE QUE LA BASE, APPELÉE ET NON RECOPIÉE.
+	if !usableProviderRef(ref) {
+		return nil, errPaymentNotFound
+	}
 	p, ok := f.byRef[ref]
 	if !ok {
 		return nil, errPaymentNotFound
