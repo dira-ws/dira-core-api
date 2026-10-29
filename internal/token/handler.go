@@ -4,6 +4,7 @@ import (
 	"context"
 	"github.com/kgtech-org/dira-core-api/pkg/appconfig"
 	"net/http"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 
@@ -358,7 +359,10 @@ func (h *Handler) listTransactions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	page := httpx.PageFromRequest(r)
-	items, next, err := h.svc.ListTransactions(r.Context(), userID, role, r.URL.Query().Get("store_id"), page)
+	p := transactionPageFromRequest(r)
+	p.Limit, p.Cursor = page.Limit, page.Cursor
+	items, next, err := h.svc.ListTransactions(r.Context(), userID, role,
+		r.URL.Query().Get("store_id"), p)
 	if err != nil {
 		httpx.Error(w, r, err)
 		return
@@ -425,4 +429,23 @@ func caller(r *http.Request) (userID, role string, err error) {
 	}
 	role, _ = auth.RoleFromContext(r.Context())
 	return userID, role, nil
+}
+
+// transactionPageFromRequest lit `unit` et `order` — PURE, pour être
+// vérifiable sans monter de service.
+//
+// ⚠️ TOLÉRANTE : une valeur qu'on ne connaît pas vaut « pas de filtre » et « le
+// plus récent d'abord ». Refuser en `422` aurait cassé l'écran d'historique
+// d'une application qui envoie `unit=tokens` au pluriel, pour un filtre dont
+// l'absence ne gêne personne — la liste serait seulement plus longue.
+func transactionPageFromRequest(r *http.Request) TransactionPage {
+	q := r.URL.Query()
+	unit := strings.ToLower(strings.TrimSpace(q.Get("unit")))
+	if unit != UnitToken && unit != UnitXOF {
+		unit = ""
+	}
+	return TransactionPage{
+		Unit:   unit,
+		Oldest: strings.EqualFold(strings.TrimSpace(q.Get("order")), "asc"),
+	}
 }

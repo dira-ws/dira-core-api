@@ -178,38 +178,58 @@ func (f *fakeRepo) InsertTransaction(_ context.Context, t *Transaction) error {
 	return nil
 }
 
-func (f *fakeRepo) ListTransactions(_ context.Context, walletID primitive.ObjectID, limit int, cursor string) ([]Transaction, string, error) {
+// ListTransactionsPage REPRODUIT LE VRAI — l'ordre, le curseur, et surtout la
+// règle de l'unité.
+//
+// ⚠️⚠️ L'ABSENCE DU CHAMP VAUT « JETON », et une doublure qui l'ignorerait
+// laisserait passer le défaut qu'on vient de corriger : un filtre naïf rendrait
+// zéro ligne sur tout l'historique d'un compte ancien, et l'épreuve resterait
+// verte. Une doublure plus permissive que la base ne prouve rien.
+func (f *fakeRepo) ListTransactionsPage(_ context.Context, walletID primitive.ObjectID, p TransactionPage) ([]Transaction, string, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	var items []Transaction
-	for _, t := range f.transactions {
-		if t.WalletID == walletID && (cursor == "" || t.ID.Hex() > cursor) {
-			items = append(items, t)
-		}
-	}
-	next := ""
-	if len(items) > limit {
-		items = items[:limit]
-		next = items[limit-1].ID.Hex()
-	}
-	return items, next, nil
-}
 
-// ListTransactionsNewest REPRODUIT le vrai : du plus récent au plus ancien.
-func (f *fakeRepo) ListTransactionsNewest(_ context.Context, walletID primitive.ObjectID, limit int, cursor string) ([]Transaction, string, error) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
+	garde := func(t Transaction) bool {
+		if t.WalletID != walletID {
+			return false
+		}
+		switch p.Unit {
+		case UnitToken:
+			if t.Unit != UnitToken && t.Unit != "" {
+				return false
+			}
+		case UnitXOF:
+			if t.Unit != UnitXOF {
+				return false
+			}
+		}
+		if p.Cursor == "" {
+			return true
+		}
+		if p.Oldest {
+			return t.ID.Hex() > p.Cursor
+		}
+		return t.ID.Hex() < p.Cursor
+	}
+
 	var items []Transaction
-	for i := len(f.transactions) - 1; i >= 0; i-- {
-		t := f.transactions[i]
-		if t.WalletID == walletID && (cursor == "" || t.ID.Hex() < cursor) {
-			items = append(items, t)
+	if p.Oldest {
+		for _, t := range f.transactions {
+			if garde(t) {
+				items = append(items, t)
+			}
+		}
+	} else {
+		for i := len(f.transactions) - 1; i >= 0; i-- {
+			if garde(f.transactions[i]) {
+				items = append(items, f.transactions[i])
+			}
 		}
 	}
 	next := ""
-	if len(items) > limit {
-		items = items[:limit]
-		next = items[limit-1].ID.Hex()
+	if len(items) > p.Limit {
+		items = items[:p.Limit]
+		next = items[p.Limit-1].ID.Hex()
 	}
 	return items, next, nil
 }
@@ -467,12 +487,12 @@ func TestListTransactionsPaginated(t *testing.T) {
 		require.NoError(t, svc.Consume(context.Background(), ownerID.Hex(), 1, ReasonOrderAccept, "", "", nil))
 	}
 
-	page1, next, err := svc.ListTransactions(context.Background(), ownerID.Hex(), auth.RoleDriver, "", httpx.Page{Limit: 2})
+	page1, next, err := svc.ListTransactions(context.Background(), ownerID.Hex(), auth.RoleDriver, "", TransactionPage{Limit: 2, Oldest: true})
 	require.NoError(t, err)
 	assert.Len(t, page1, 2)
 	require.NotEmpty(t, next)
 
-	page2, next2, err := svc.ListTransactions(context.Background(), ownerID.Hex(), auth.RoleDriver, "", httpx.Page{Limit: 2, Cursor: next})
+	page2, next2, err := svc.ListTransactions(context.Background(), ownerID.Hex(), auth.RoleDriver, "", TransactionPage{Limit: 2, Cursor: next, Oldest: true})
 	require.NoError(t, err)
 	assert.Len(t, page2, 1)
 	assert.Empty(t, next2)

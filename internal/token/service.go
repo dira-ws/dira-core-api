@@ -53,9 +53,9 @@ type Repo interface {
 	TakeMoney(ctx context.Context, walletID primitive.ObjectID, amount int, partial bool) (int, error)
 	// AdjustDebt déplace la dette (positif = doit plus, négatif = rembourse).
 	AdjustDebt(ctx context.Context, walletID primitive.ObjectID, delta int) error
-	ListTransactions(ctx context.Context, walletID primitive.ObjectID, limit int, cursor string) ([]Transaction, string, error)
-	// ListTransactionsNewest : les derniers mouvements d'abord — la fiche.
-	ListTransactionsNewest(ctx context.Context, walletID primitive.ObjectID, limit int, cursor string) ([]Transaction, string, error)
+	// ListTransactionsPage : une page du grand livre — le plus récent d'abord
+	// par défaut, filtrable par unité. Voir #237.
+	ListTransactionsPage(ctx context.Context, walletID primitive.ObjectID, p TransactionPage) ([]Transaction, string, error)
 	WithTransaction(ctx context.Context, fn func(ctx context.Context) error) error
 
 	// ClaimOperation réserve un mouvement d'argent, ou dit qu'il a déjà eu
@@ -298,7 +298,8 @@ func (s *Service) TransactionsOf(ctx context.Context, ownerID string, page httpx
 	if err != nil {
 		return nil, "", err
 	}
-	items, next, err := s.repo.ListTransactionsNewest(ctx, wallet.ID, page.Limit, page.Cursor)
+	items, next, err := s.repo.ListTransactionsPage(ctx, wallet.ID,
+		TransactionPage{Limit: page.Limit, Cursor: page.Cursor})
 	if err != nil {
 		return nil, "", apperr.Internal(err)
 	}
@@ -339,7 +340,13 @@ func (s *Service) PromoByOperator(ctx context.Context, actorID, ownerID string, 
 }
 
 // ListTransactions returns one page of transactions for the resolved wallet.
-func (s *Service) ListTransactions(ctx context.Context, userID, role, storeID string, page httpx.Page) ([]TransactionResponse, string, error) {
+//
+// ⚠️ LE PLUS RÉCENT D'ABORD, comme la fiche de la console le faisait déjà. La
+// route de la personne rendait l'ordre ASCENDANT : pour afficher ses derniers
+// mouvements, une application devait lire TOUTES les pages puis retourner la
+// liste, et ne pouvait pas proposer « afficher plus » vers le passé (#237).
+// `order=asc` garde l'ancien sens pour qui rejoue un relevé du début.
+func (s *Service) ListTransactions(ctx context.Context, userID, role, storeID string, p TransactionPage) ([]TransactionResponse, string, error) {
 	ownerID, err := s.resolveOwner(ctx, userID, role, storeID)
 	if err != nil {
 		return nil, "", err
@@ -348,7 +355,7 @@ func (s *Service) ListTransactions(ctx context.Context, userID, role, storeID st
 	if err != nil {
 		return nil, "", err
 	}
-	items, next, err := s.repo.ListTransactions(ctx, wallet.ID, page.Limit, page.Cursor)
+	items, next, err := s.repo.ListTransactionsPage(ctx, wallet.ID, p)
 	if err != nil {
 		return nil, "", apperr.Internal(err)
 	}
