@@ -1,6 +1,6 @@
 # Specs frontend — par rôle
 
-> **Version 4.98.0** · 29 octobre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics`
+> **Version 4.99.0** · 29 octobre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics`
 
 **Cinq** documents, un par application. Chacun est **autonome** : tout ce qu'un frontend doit savoir pour son rôle, sans avoir à ouvrir les vingt specs de modules.
 
@@ -355,6 +355,44 @@ Chaque document porte la même version en en-tête, et son propre journal des ch
 - [ ] ⚠️ **`TRACKING_JWT_SECRET` renseigné dans chaque environnement déployé.** Vide, l'authentification du service de suivi est **désactivée** : n'importe qui connaissant un `delivery_id` suit la course. Le secret doit valoir **exactement** le `JWT_SECRET` de `dira-food-api`.
 
 ## Journal
+
+### 4.99.0 — 29 octobre 2026
+
+🧵 **LE FIL DIT CE QU'UN TOUR EST DEVENU** — `DIRA-CLIENT.md` §8 bis
+(core#234).
+
+```jsonc
+{ "role": "assistant", "plan": { … }, "voice_id": "68f0…",
+  "state": "ordered", "ref_kind": "ride", "ref_id": "68f4…" }
+```
+
+⚠️⚠️ **SANS CELA, UNE APPLICATION POUVAIT FAIRE COMMANDER DEUX FOIS.** Une bulle
+`assistant` portait son `plan` et **rien** sur la suite : un tour abouti en
+`ordered` réapparaissait dans l'historique comme un plan tout neuf, avec son
+bouton « Confirmer » — et à des prix périmés. **Lisez `state`** : un plan dont
+le tour est `ordered` est de l'historique, pas une proposition. Proposez
+« Suivre la course », pas « Confirmer ».
+
+⚠️ **`ref_id` arrive quelques instants APRÈS la bulle** : la commande ne part
+qu'une fois le fil écrit, pour ne jamais annoncer une course qui n'existe pas.
+Son absence sur un tour `ordered` n'est donc pas une erreur.
+
+⚠️ **`voice_id` apparie les deux bulles** d'un même tour — celle du client et
+celle de l'assistant. C'est aussi par lui que le serveur retrouve la bonne
+bulle : deux vocaux qui se suivent ne se mélangent pas.
+
+⚠️ **`audio_url` est publique, NON signée, SANS échéance** — lisible sans
+en-tête, et elle ne périme pas. Un lecteur audio n'envoie pas nos en-têtes.
+Contrepartie écrite noir sur blanc : **son secret est son identifiant**, donc à
+ne pas recopier dans un journal ni dans un lien de partage.
+
+⚠️⚠️ **`origin` : LA LONGITUDE D'ABORD**, dans les deux formes
+(`[9.45, 0.41]` pour le chat, `"9.45,0.41"` pour le vocal). À Libreville, lu à
+l'envers, le départ part à **mille kilomètres** au nord-est — et rien ne le
+signalerait, les deux nombres étant valides.
+
+⚠️ Et l'entrée **4.84.0** de ce journal est corrigée : elle listait le multipart
+sans `seconds` et un `updated_at` toujours présent, contredisant la 4.84.1.
 
 ### 4.98.0 — 29 octobre 2026
 
@@ -1047,13 +1085,19 @@ LA MAIN** — `DIRA-CLIENT.md` §8 et §8 bis ; notes dans `FOOD-CLIENT.md` et
 `VTC-CLIENT.md`.
 
 ```
-POST /analytics/ai/voice    multipart : file, language?, origin?, vertical?
+POST /analytics/ai/voice    multipart : file, seconds, language?, origin?, vertical?
     → { voice_id, audio_url, seconds, text, language, vertical, reply, plan,
         confidence, routed_by, state, ordered? }
 
 GET  /analytics/ai/thread
-    → { country, message_count, updated_at, messages[] }
+    → { country, message_count, updated_at?, messages[] }
 ```
+
+> ⚠️ **Corrigé le 29 octobre 2026** : ce bloc listait le multipart **sans
+> `seconds`** et un `updated_at` toujours présent, alors que la 4.84.1
+> juste au-dessus dit l'inverse. Les applications avaient suivi le corps, pas
+> le journal (core#234 §4). Un journal qui contredit la version suivante est
+> pire qu'un journal muet : il fait écrire du code contre un contrat périmé.
 
 Trois constats d'exploitation qui n'en font qu'un :
 
