@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/kgtech-org/dira-core-api/pkg/obs"
@@ -38,6 +39,29 @@ func New(baseURL string) *Client {
 
 // Enabled dit si un SIG est configuré.
 func (c *Client) Enabled() bool { return c != nil && c.baseURL != "" }
+
+// routeURL monte l'adresse du calcul d'itinéraire, QUE LA BASE PORTE OU NON
+// SON `/api`.
+//
+// ⚠️⚠️ ELLE EXISTE PARCE QUE LA DURÉE D'UNE TOURNÉE N'A JAMAIS MARCHÉ EN
+// PRÉPROD, et que personne ne pouvait le voir. `MAPS_BASE_URL` y vaut
+// `…:8000/api` — comme pour le suivi — et ce client ajoutait `/api/calc/route`
+// par-dessus : chaque appel partait sur `/api/api/calc/route`. Comme la durée
+// est AU MIEUX, l'échec se journalisait et la course se créait sans elle.
+// Relevé en vérifiant le tracé prévu en direct (core#230).
+//
+// ⚠️ ET LA LEÇON ÉTAIT DÉJÀ APPRISE À CÔTÉ. `dira-vtc-api/internal/mapsbridge`
+// porte ce commentaire mot pour mot : « baseURL porte DÉJÀ le `/api` […]
+// l'ajouter ici produisait `/api/api/calc/route` ». Deux clients du même
+// service, deux conventions, et le PARTAGÉ était celui qui avait tort. On ne
+// choisit donc pas une convention : on accepte les deux.
+func (c *Client) routeURL() string {
+	base := strings.TrimRight(c.baseURL, "/")
+	if strings.HasSuffix(base, "/api") {
+		return base + "/calc/route"
+	}
+	return base + "/api/calc/route"
+}
 
 // Route est ce que le réseau routier dit d'une tournée : sa durée, et son
 // TRACÉ.
@@ -90,7 +114,7 @@ func (c *Client) Route(ctx context.Context, city string, points [][2]float64) (R
 	if err != nil {
 		return Route{}, err
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/api/calc/route", bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.routeURL(), bytes.NewReader(body))
 	if err != nil {
 		return Route{}, err
 	}
