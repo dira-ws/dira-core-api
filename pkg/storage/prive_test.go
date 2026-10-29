@@ -143,3 +143,35 @@ func TestThePrivateRetentionIsAShotSetting(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 90*24*time.Hour, b.PrivateMediaRetention)
 }
+
+// ⚠️⚠️ LA SIGNATURE COUVRE L'HÔTE, ET CETTE ÉPREUVE EXISTE PARCE QUE JE L'AI
+// CRUE LE CONTRAIRE.
+//
+// Premier jet : on signait avec le client du réseau INTERNE (`minio:9000`),
+// puis on remplaçait l'hôte par le public (`files.dira.llc`) — en écrivant en
+// commentaire que « la signature ne couvre pas l'hôte ». C'est FAUX pour
+// SigV4 : `Host` est un en-tête signé. Mesuré en préproduction — l'adresse
+// servie répondait `403`, comme l'adresse nue, et la doublure de l'analytique
+// ne pouvait pas le voir puisqu'elle rend une signature inventée.
+//
+// La vérification en direct a trouvé ce que trente mutations n'auraient pas
+// trouvé.
+func TestTheSignerTargetsThePublicHost(t *testing.T) {
+	host, secure, ok := hostOf("https://files.dira.llc")
+	require.True(t, ok)
+	assert.Equal(t, "files.dira.llc", host)
+	assert.True(t, secure, "https doit donner TLS, sinon la signature vise le mauvais schéma")
+
+	host, secure, ok = hostOf("http://localhost:9000")
+	require.True(t, ok)
+	assert.Equal(t, "localhost:9000", host, "le PORT fait partie de l'hôte signé")
+	assert.False(t, secure)
+
+	// ⚠️ UNE BASE ILLISIBLE NE DONNE PAS D'HÔTE : on signe alors pour le
+	// client interne, et le journal de démarrage le dit. Deviner un hôte
+	// produirait des adresses mortes en silence.
+	for _, base := range []string{"", "pas-une-url", "/chemin/seul"} {
+		_, _, ok := hostOf(base)
+		assert.False(t, ok, "base %q", base)
+	}
+}
