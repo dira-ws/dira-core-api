@@ -28,6 +28,7 @@ import (
 	"go.mongodb.org/mongo-driver/bson/primitive"
 
 	"github.com/kgtech-org/dira-core-api/pkg/auth"
+	"github.com/kgtech-org/dira-core-api/pkg/country"
 )
 
 // --- le routeur réel, avec un porteur ---
@@ -589,4 +590,82 @@ func TestWithoutWiredBoundsNothingIsRefused(t *testing.T) {
 	code, _ := appel(t, routeur(t, svc, payeur, "client"), http.MethodPost, "/payments/initiate",
 		`{"purpose":"wallet_topup","amount":1,"ref_id":"`+payeur+`"}`, nil)
 	assert.Equal(t, http.StatusCreated, code)
+}
+
+// --- LA MONNAIE D'UN PAIEMENT EST CELLE DU PAYS ---
+
+// ⚠️⚠️ CHAQUE PAIEMENT ÉTAIT ÉTIQUETÉ `XOF`, QUEL QUE SOIT LE PAYS.
+//
+// Vu en direct sur la préprod, et seulement grâce à #250 : `GET /wallet`
+// annonçait des bornes de recharge en `XAF` (Gabon) et le paiement initié dans
+// la minute revenait en `XOF`. Deux monnaies pour un seul geste.
+//
+// Le montant était juste — les deux francs CFA sont à parité — mais
+// l'ÉTIQUETTE est ce qui part chez l'opérateur mobile et sur l'écran. Et en
+// Guinée elle n'est pas seulement fausse : l'unité y vaut quinze fois moins, et
+// « 5 000 XOF » pour 5 000 GNF se lit comme un montant quinze fois plus gros.
+func TestAPaymentIsLabelledInTheCountrysCurrency(t *testing.T) {
+	for _, c := range []struct{ pays, monnaie string }{
+		{"TG", "XOF"}, // franc CFA UEMOA
+		{"GA", "XAF"}, // franc CFA CEMAC — à parité, mais PAS la même monnaie
+		{"GN", "GNF"}, // franc guinéen : une unité ~15 fois plus petite
+		{"GH", "GHS"}, // cedi : deux décimales
+		{"NG", "NGN"}, // naira : deux décimales
+	} {
+		svc, _, _, _ := newTestService(t)
+		r := routeur(t, svc, payeur, "client")
+		req := httptest.NewRequest(http.MethodPost, "/payments/initiate",
+			strings.NewReader(`{"purpose":"wallet_topup","amount":5000,"ref_id":"`+payeur+`"}`))
+		req.Header.Set("Content-Type", "application/json")
+		ctx := country.WithCountry(req.Context(), c.pays, country.SourceClaims)
+		rec := httptest.NewRecorder()
+		r.ServeHTTP(rec, req.WithContext(ctx))
+		require.Equal(t, http.StatusCreated, rec.Code, c.pays)
+
+		var body map[string]any
+		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
+		assert.Equal(t, c.monnaie, body["payment"].(map[string]any)["currency"], "pays %s", c.pays)
+	}
+}
+
+// ⚠️ ET LA MONNAIE PART AUSSI CHEZ L'OPÉRATEUR. C'est le point qui compte le
+// plus : l'écran, on le relit ; une demande de paiement envoyée à l'opérateur
+// avec la mauvaise monnaie, non.
+func TestTheOperatorIsToldTheRightCurrency(t *testing.T) {
+	svc, _, _, _ := newTestService(t)
+	espion := &espionDeMonnaie{PaymentProvider: svc.providers["mock"]}
+	svc.providers["mock"] = espion
+	r := routeur(t, svc, payeur, "client")
+
+	req := httptest.NewRequest(http.MethodPost, "/payments/initiate",
+		strings.NewReader(`{"purpose":"wallet_topup","amount":5000,"ref_id":"`+payeur+`"}`))
+	req.Header.Set("Content-Type", "application/json")
+	ctx := country.WithCountry(req.Context(), "GN", country.SourceClaims)
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req.WithContext(ctx))
+	require.Equal(t, http.StatusCreated, rec.Code)
+
+	assert.Equal(t, "GNF", espion.vue, "l'opérateur guinéen doit être payé en francs guinéens")
+}
+
+// ⚠️ UN PAIEMENT SANS PAYS GARDE UNE MONNAIE. Un travail de fond ou un service
+// mal câblé n'a pas de requête : une étiquette vide ne se lit pas mieux qu'une
+// fausse, et un montant sans monnaie n'est pas un montant.
+func TestAPaymentWithoutACountryKeepsACurrency(t *testing.T) {
+	svc, _, _, _ := newTestService(t)
+	code, body := appel(t, routeur(t, svc, payeur, "client"), http.MethodPost, "/payments/initiate",
+		`{"purpose":"wallet_topup","amount":5000,"ref_id":"`+payeur+`"}`, nil)
+	require.Equal(t, http.StatusCreated, code)
+	assert.Equal(t, DefaultCurrency, body["payment"].(map[string]any)["currency"])
+}
+
+// espionDeMonnaie retient la monnaie annoncée à l'opérateur.
+type espionDeMonnaie struct {
+	PaymentProvider
+	vue string
+}
+
+func (e *espionDeMonnaie) Initiate(ctx context.Context, req InitiateRequest) (InitiateResult, error) {
+	e.vue = req.Currency
+	return e.PaymentProvider.Initiate(ctx, req)
 }
