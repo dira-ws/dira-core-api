@@ -93,3 +93,6 @@ other = "This feature is not available in your app"
 
 [errors.voice_messages_unavailable]
 other = "Voice messages are not available here"
+
+[errors.voice_too_long]
+other = "That voice message is too long"

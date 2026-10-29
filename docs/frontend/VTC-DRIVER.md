@@ -1,6 +1,6 @@
 # App CHAUFFEUR — COURSES (VTC) — contrat d'API
 
-> **Version 4.95.0** · 29 octobre 2026
+> **Version 4.96.0** · 29 octobre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Courses : `https://api-staging.dira.llc/api/v1/vtc` · Suivi : `wss://tracking-staging.dira.llc` · SIG : `https://maps.dira.llc/api`
 
 ---
@@ -3254,13 +3254,32 @@ alors « Message vocal » et la barre, pas un blanc.
   ⚠️ Pas l'`Accept-Language` : celui-ci dit la langue de l'**interface**, et un
   téléphone réglé en français n'empêche pas son propriétaire de parler wolof.
 
-| Refus | Quand |
-|---|---|
-| `413 audio_too_large` | au-delà de 2 Mio — encodez en opus ou AAC mono |
-| `422` `fields: ["audio"]` | format non accepté, ou partie `audio` absente |
-| `422` `fields: ["seconds"]` | durée absente, nulle ou hors bornes |
+| Refus | Quand | Que faire |
+|---|---|---|
+| `413 audio_too_large` | au-delà de 2 Mio | encoder en opus ou AAC mono |
+| 🆕 `422 audio_unsupported_type` | format non accepté — `reason` porte le type envoyé | **réenregistrer** dans un format accepté ; inutile de réessayer tel quel |
+| 🆕 `422 audio_required` | la partie `audio` n'est pas arrivée | **réessayer** : le fichier s'est perdu en chemin |
+| 🆕 `422 voice_too_long` | plus long que `voice.max_seconds` | **réenregistrer** plus court |
+| `422` `fields: ["seconds"]` | `seconds` absent ou illisible | un défaut de votre code : la durée est obligatoire |
 | `503 voice_messages_unavailable` | les vocaux ne marchent pas ici. ⚠️ C'est le **filet** : `voice.enabled` est la règle |
 | `422 message_blocked` | la **transcription** contient une menace. ⚠️ Oui, la modération lit les vocaux |
+
+⚠️ **CES QUATRE REFUS AVAIENT LE MÊME CODE (v4.96.0).** Jusqu'ici, un format
+refusé, un fichier manquant et une durée trop longue rendaient tous les trois
+`validation_failed` avec un `fields` pour seule différence : impossible de
+choisir entre « recommencez, c'était trop long », « votre téléphone enregistre
+dans un format qu'on ne prend pas » et un défaut de votre propre code. Ces
+phrases n'ont rien à voir — et la première s'adresse à quelqu'un qui ne sait pas
+lire, pour qui les vocaux existent.
+
+⚠️ **La borne n'est PAS dans le refus**, et c'est volontaire : elle est servie à
+chaque lecture de la conversation (`voice.max_seconds`). N'écrivez pas « une
+minute » en dur — un pays peut la changer.
+
+⚠️ **`audio_unsupported_type` porte le type fautif dans `reason`.** Mettez-le
+dans vos traces : les téléphones d'entrée de gamme enregistrent dans des formats
+qu'on découvre un par un, et c'est cette ligne qu'on lit pour décider d'en
+ajouter un à la liste.
 
 ⚠️ **La modération lit la transcription**, exactement comme du texte : une menace
 dite à voix haute est une menace. Un vocal **non transcrit**, en revanche, lui

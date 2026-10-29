@@ -1,6 +1,6 @@
 # Specs frontend — par rôle
 
-> **Version 4.95.0** · 29 octobre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics`
+> **Version 4.96.0** · 29 octobre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics`
 
 **Cinq** documents, un par application. Chacun est **autonome** : tout ce qu'un frontend doit savoir pour son rôle, sans avoir à ouvrir les vingt specs de modules.
 
@@ -355,6 +355,36 @@ Chaque document porte la même version en en-tête, et son propre journal des ch
 - [ ] ⚠️ **`TRACKING_JWT_SECRET` renseigné dans chaque environnement déployé.** Vide, l'authentification du service de suivi est **désactivée** : n'importe qui connaissant un `delivery_id` suit la course. Le secret doit valoir **exactement** le `JWT_SECRET` de `dira-food-api`.
 
 ## Journal
+
+### 4.96.0 — 29 octobre 2026
+
+🎙️ **UN VOCAL REFUSÉ DIT ENFIN POURQUOI** — `VTC-CLIENT.md` §7,
+`VTC-DRIVER.md` § conversation.
+
+```
+422 audio_unsupported_type   reason = le type envoyé   → réenregistrer
+422 audio_required                                     → réessayer
+422 voice_too_long           voir voice.max_seconds    → réenregistrer plus court
+413 audio_too_large                                    → compresser
+```
+
+⚠️⚠️ **CES TROIS REFUS AVAIENT LE MÊME CODE.** Mesuré sur une vraie course du
+Gabon : un format non accepté, un fichier manquant et une durée trop longue
+rendaient tous les trois `validation_failed`, avec un `fields` pour seule
+différence. Impossible de choisir entre « recommencez, c'était trop long »,
+« votre téléphone enregistre dans un format qu'on ne prend pas » et un défaut de
+votre propre code. Ces phrases n'ont rien à voir — et la première s'adresse à
+quelqu'un qui **ne sait pas lire**, c'est-à-dire la personne pour qui les vocaux
+existent.
+
+⚠️ **La borne n'est pas dans le refus**, volontairement : elle est servie à
+chaque lecture de la conversation (`voice.max_seconds`). N'écrivez pas « une
+minute » en dur — un pays peut la changer.
+
+⚠️ **`audio_unsupported_type` porte le type fautif dans `reason`.** Mettez-le
+dans vos traces : les téléphones d'entrée de gamme enregistrent dans des formats
+qu'on découvre un par un, et c'est cette ligne qu'on lit pour décider d'en
+ajouter un à la liste.
 
 ### 4.95.0 — 29 octobre 2026
 

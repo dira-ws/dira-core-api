@@ -144,21 +144,52 @@ func TestHidingAVoiceMessageAlsoTakesTheAudio(t *testing.T) {
 	assert.Equal(t, 4, resp.Seconds, "la durée reste : la ligne garde sa place")
 }
 
-// ⚠️ LES BORNES DE DURÉE, REFUSÉES NOMMÉMENT.
+// ⚠️⚠️ LES BORNES DE DURÉE, ET « TROP LONG » NE SE CONFOND PLUS AVEC LE RESTE.
+//
+// Mesuré en préproduction le 29 octobre 2026, sur une vraie course du Gabon :
+// un vocal trop long, un format d'audio refusé et un `seconds` manquant
+// rendaient TOUS LES TROIS `validation_failed` avec un `fields` pour seule
+// différence. L'application ne pouvait donc pas choisir entre « recommencez,
+// c'était trop long », « votre téléphone enregistre dans un format qu'on ne
+// prend pas » et un défaut de son propre code — alors que la première phrase
+// s'adresse à quelqu'un qui ne sait pas lire, et que c'est pour lui que les
+// vocaux existent. Septième fois dans cette plateforme qu'un refus devant être
+// LU n'a pas son code.
+//
+// ⚠️ Cette épreuve regardait `fields[0] == "seconds"`, ce qui était vrai des
+// DEUX causes : elle serait restée verte le jour où l'une se met à mentir.
 func TestTheVoiceDurationIsBounded(t *testing.T) {
 	svc := NewService(nil, RefRide, fakeParties{c: conv(driverID, "onboard", nil)})
 	svc.SetVoiceIntake(intakeDeTest{})
 
-	for _, s := range []int{0, -1, MaxVoiceSeconds + 1} {
+	// TROP LONG : un code à lui, que l'écran peut traduire.
+	_, err := svc.SendVoice(context.Background(), driverID, "driver", orderID,
+		Voice{AudioURL: "u", Seconds: MaxVoiceSeconds + 1})
+	require.Error(t, err)
+	assert.Equal(t, "voice_too_long", apperr.From(err).Code,
+		"« trop long » doit se dire à la personne, donc se distinguer")
+	assert.Equal(t, "seconds", apperr.From(err).Meta["fields"].([]string)[0])
+
+	// ⚠️ ET LA BORNE N'EST PAS DANS LE TEXTE DU REFUS : elle est servie à
+	// chaque lecture de la conversation (`voice.max_seconds`). La redire ici
+	// inviterait à l'écrire en dur dans l'application, qui vieillirait le jour
+	// où un pays la change.
+	assert.NotContains(t, apperr.From(err).Message, "60")
+
+	// ZÉRO OU NÉGATIF : un défaut de l'appelant, pas une situation à expliquer.
+	// Aucun téléphone n'envoie « zéro seconde » ; un appelant qui a oublié de
+	// mesurer, oui.
+	for _, s := range []int{0, -1} {
 		_, err := svc.SendVoice(context.Background(), driverID, "driver", orderID,
 			Voice{AudioURL: "u", Seconds: s})
 		require.Error(t, err, "durée %d", s)
-		champs := apperr.From(err).Meta["fields"].([]string)
-		assert.Equal(t, "seconds", champs[0])
+		e := apperr.From(err)
+		assert.Equal(t, "validation_failed", e.Code, "durée %d", s)
+		assert.Equal(t, "seconds", e.Meta["fields"].([]string)[0])
 	}
 
 	// Et sans audio stocké, il n'y a rien à poser.
-	_, err := svc.SendVoice(context.Background(), driverID, "driver", orderID,
+	_, err = svc.SendVoice(context.Background(), driverID, "driver", orderID,
 		Voice{Seconds: 5})
 	require.Error(t, err)
 }
