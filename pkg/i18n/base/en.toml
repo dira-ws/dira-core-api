@@ -90,3 +90,6 @@ other = "This message does not exist"
 # ⚠️ Raised by three services (core, rides, delivery) — see fr.toml.
 [errors.feature_unavailable_in_edition]
 other = "This feature is not available in your app"
+
+[errors.voice_messages_unavailable]
+other = "Voice messages are not available here"

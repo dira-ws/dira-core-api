@@ -124,3 +124,11 @@ other = "Ce message n'existe pas"
 # avant de perdre son auditeur.
 [errors.feature_unavailable_in_edition]
 other = "Cette fonction n'est pas disponible dans votre application"
+
+# ⚠️ Dira Lite LIT CE REFUS À VOIX HAUTE à quelqu'un qui ne lit pas : une
+# phrase non traduite serait PRONONCÉE en anglais. Et le micro ne devrait pas
+# être affiché là où il ne marche pas (`voice.enabled`) — ce refus est le
+# filet, pas la règle.
+
+[errors.voice_messages_unavailable]
+other = "Les messages vocaux ne sont pas disponibles ici"

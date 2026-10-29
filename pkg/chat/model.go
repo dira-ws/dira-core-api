@@ -59,6 +59,19 @@ const MaxBody = 1000
 const WriteWindowAfterCompletion = 2 * time.Hour
 
 // Message is one line of a conversation.
+// Les deux genres de message.
+const (
+	KindText  = "text"
+	KindVoice = "voice"
+)
+
+// MaxVoiceSeconds borne un message vocal.
+//
+// ⚠️ SOIXANTE SECONDES, et c'est une borne de CONVERSATION, pas de stockage.
+// Un vocal d'une minute se réécoute ; un vocal de cinq minutes ne se réécoute
+// pas, et le destinataire — souvent au volant — ne l'écoutera pas du tout.
+const MaxVoiceSeconds = 60
+
 type Message struct {
 	ID primitive.ObjectID `bson:"_id,omitempty"`
 	// RefID et RefKind disent SUR QUOI l'on parle : une commande de repas, une
@@ -71,7 +84,25 @@ type Message struct {
 	SenderID   primitive.ObjectID `bson:"sender_id"`
 	SenderRole string             `bson:"sender_role"`
 	Body       string             `bson:"body"`
-	CreatedAt  time.Time          `bson:"created_at"`
+	// Kind : `text` (défaut, et absent sur les messages d'avant) ou `voice`.
+	//
+	// ⚠️ ABSENT VAUT `text`, et c'est pour ça que ce champ est `omitempty` :
+	// les messages écrits avant les vocaux n'en portent pas, et les réécrire
+	// pour poser une valeur par défaut aurait touché toute la collection pour
+	// une information qu'on sait déduire.
+	Kind string `bson:"kind,omitempty"`
+	// AudioURL et Seconds : le vocal. Vides sur un message texte.
+	//
+	// ⚠️ LA DURÉE VIENT DU TÉLÉPHONE, et c'est assumé : le serveur ne décode
+	// pas l'audio pour la mesurer. Elle sert à dessiner la barre avant de
+	// télécharger le fichier — une barre un peu fausse vaut mieux qu'un écran
+	// qui attend le fichier pour savoir quoi dessiner. C'est la même décision
+	// que le guichet vocal, où un « 0:01 » pour cinq secondes mesurées l'a
+	// montré : on sert ce que le téléphone dit, et on ne le présente pas comme
+	// une vérité.
+	AudioURL  string    `bson:"audio_url,omitempty"`
+	Seconds   int       `bson:"seconds,omitempty"`
+	CreatedAt time.Time `bson:"created_at"`
 	// ReadAt est l'instant où le DESTINATAIRE l'a lu. Porté par le message et
 	// non par un compteur sur la conversation : un compteur se désynchronise,
 	// et personne ne sait plus lequel des deux dit vrai.
