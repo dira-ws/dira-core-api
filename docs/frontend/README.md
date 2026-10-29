@@ -1,6 +1,6 @@
 # Specs frontend — par rôle
 
-> **Version 4.99.0** · 29 octobre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics`
+> **Version 4.99.2** · 29 octobre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics`
 
 **Cinq** documents, un par application. Chacun est **autonome** : tout ce qu'un frontend doit savoir pour son rôle, sans avoir à ouvrir les vingt specs de modules.
 
@@ -355,6 +355,29 @@ Chaque document porte la même version en en-tête, et son propre journal des ch
 - [ ] ⚠️ **`TRACKING_JWT_SECRET` renseigné dans chaque environnement déployé.** Vide, l'authentification du service de suivi est **désactivée** : n'importe qui connaissant un `delivery_id` suit la course. Le secret doit valoir **exactement** le `JWT_SECRET` de `dira-food-api`.
 
 ## Journal
+
+### 4.99.2 — 29 octobre 2026
+
+🔗 **RELIER UNE CONFIRMATION AU TOUR QUI L'A PROPOSÉE** — `DIRA-CLIENT.md`
+§8 bis, `VTC-CLIENT.md` §4 (core#234 §1).
+
+```
+POST /vtc/rides { quote_id, payment_method, voice_id? }
+```
+
+⚠️ **Facultatif, et il ne décide de rien** : mêmes règles, même devis, même
+prix. Il **relie** la course au tour de conversation qui l'a proposée, et c'est
+ce qui fait apparaître `state: "ordered"` et `ref_kind`/`ref_id` sur la bulle
+quand le fil est relu. Sans lui, un plan confirmé à la main réapparaît dans
+l'historique comme une proposition toute neuve — et l'application repropose une
+confirmation à des prix périmés.
+
+⚠️ **Un champ dans un corps que vous envoyez déjà**, et pas un appel de plus :
+un second appel aurait pu échouer entre les deux, laissant la bulle incomplète
+sans que personne ne le sache.
+
+⚠️ **`POST /food/orders` ne le prend pas encore** : côté repas, gardez
+l'historique en lecture seule.
 
 ### 4.99.0 — 29 octobre 2026
 

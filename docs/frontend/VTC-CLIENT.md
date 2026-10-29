@@ -1,6 +1,6 @@
 # App CLIENT — COURSES (VTC) — contrat d'API
 
-> **Version 4.99.0** · 29 octobre 2026
+> **Version 4.99.2** · 29 octobre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Courses : `https://api-staging.dira.llc/api/v1/vtc` · Suivi : `wss://tracking-staging.dira.llc`
 
 ---
@@ -1219,6 +1219,12 @@ POST /rides
 ```
 
 ⚠️ **Aucun montant.** Le prix vient du devis mémorisé.
+
+⚠️ 🆕 **`voice_id` (v4.99.2)** : si cette course vient d'un plan que l'assistant
+a proposé et que la personne vient de **confirmer**, passez le `voice_id` de la
+bulle. Facultatif, et il ne change **rien** au prix ni aux règles — il relie la
+course au tour, pour que le fil cesse de reproposer la confirmation d'un plan
+déjà commandé. Voir `DIRA-CLIENT.md` §8 bis.
 
 ### 🆕 🚗🚗 PLUSIEURS VOITURES EN UNE COMMANDE (v4.83.0)
 
