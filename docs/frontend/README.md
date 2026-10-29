@@ -1,6 +1,6 @@
 # Specs frontend — par rôle
 
-> **Version 4.92.0** · 29 octobre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics`
+> **Version 4.93.0** · 29 octobre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics`
 
 **Cinq** documents, un par application. Chacun est **autonome** : tout ce qu'un frontend doit savoir pour son rôle, sans avoir à ouvrir les vingt specs de modules.
 
@@ -355,6 +355,48 @@ Chaque document porte la même version en en-tête, et son propre journal des ch
 - [ ] ⚠️ **`TRACKING_JWT_SECRET` renseigné dans chaque environnement déployé.** Vide, l'authentification du service de suivi est **désactivée** : n'importe qui connaissant un `delivery_id` suit la course. Le secret doit valoir **exactement** le `JWT_SECRET` de `dira-food-api`.
 
 ## Journal
+
+### 4.93.0 — 29 octobre 2026
+
+🤝 **PASSER LA MAIN : LES SIX MANQUES COMBLÉS** — `VTC-DRIVER.md` § passer la
+main (core#215).
+
+```
+POST /rides/{id}/transfer/joined → 204          ← la jonction
+transfer.from_position { lng, lat, at }         ← où rejoindre la voiture
+transfer.role: "from" | "to"                    ← ce que vous avez été
+transfer.previous_share_xof                     ← ce qui est déjà figé
+ride_transfer_done → data.amount_xof            ← le montant, hors de la phrase
+```
+
+⚠️⚠️ **LE CANAL DE SUIVI NE VOUS MÈNERA JAMAIS À LA VOITURE À REJOINDRE**, et
+ce n'est pas un défaut à corriger : il ne relaie que les positions émises
+**sous la course**. L'ancien chauffeur l'a lâchée, et le preneur y émet la
+sienne — le canal pointe sur sa propre voiture. La position arrive donc **sur
+la course**, et seulement au preneur.
+
+⚠️ **`at` n'est pas décoratif** : affichez l'âge du point et cessez de guider
+au-delà d'une minute. Un point **sans** `at` n'est jamais servi — `from_position`
+absent veut dire « position inconnue », pas « il n'a pas bougé ».
+
+⚠️ **La jonction est un geste, pas une déduction.** Deux voitures à dix mètres
+peuvent être garées devant le même immeuble sans que personne ne soit descendu.
+Idempotente, et l'instant gardé est celui de la **première** fois.
+
+⚠️ **Le preneur voyait la part de TOUTE la course** : `driver_xof` est désormais
+**sa** part, les parts figées déduites. Et la course qu'un chauffeur a **passée**
+reste dans son historique **et s'ouvre** — avant, elle disparaissait dès la
+reprise, et sa part arrivait au grand livre sans course à laquelle la rattacher.
+
+⚠️ **Et la poussée d'appel porte enfin la `meta`** (`transfer`,
+`transfer_reason`, `rider_on_board`, `fare_xof`…). Sur iOS, l'appel peut
+n'arriver **que** par la poussée : un chauffeur ne reconnaissait une reprise
+qu'**après** avoir accepté.
+
+⚠️ Deux défauts corrigés au passage : une course **terminée** gardait sa
+recherche de remplaçant ouverte (un remplaçant pouvait reprendre une course
+finie), et un ancien chauffeur recevait `403` en ouvrant une course de son
+propre historique.
 
 ### 4.92.0 — 29 octobre 2026
 
