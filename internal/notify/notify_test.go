@@ -433,7 +433,14 @@ func TestTheDeliveryTransferMessagesSpeakOfAParcelAndNotOfAnotherCar(t *testing.
 		KeyDeliveryTransferStarted: {"reason"},
 		KeyDeliveryTransferred:     {"courier", "vehicle"},
 		KeyDeliveryTransferFailed:  {"courier"},
-		KeyDeliveryTransferDone:    {"amount"},
+		// ⚠️ LE MÊME FAIT, DIT AU LIVREUR — et il doit être dans cette table,
+		// sinon le gabarit du cinquième message échapperait aux cinq
+		// contrôles ci-dessous. « Personne n'a pu reprendre » n'était poussé
+		// qu'au CLIENT : le livreur ne l'apprenait qu'en relisant sa commande,
+		// c'est-à-dire en se demandant d'abord pourquoi personne n'arrive
+		// (core#228 §4).
+		KeyDeliveryTransferKept: {"order_ref"},
+		KeyDeliveryTransferDone: {"amount"},
 	}
 	byKey := map[string]Template{}
 	for _, d := range Defaults() {
@@ -468,6 +475,19 @@ func TestTheDeliveryTransferMessagesSpeakOfAParcelAndNotOfAnotherCar(t *testing.
 			}
 		}
 	}
+	// ⚠️⚠️ ET LES DEUX VERSIONS DE « PERSONNE N'A REPRIS » NE SE RESSEMBLENT
+	// PAS. Au client, la bonne nouvelle est « votre livreur continue » ; au
+	// livreur, c'est « la commande reste à vous, repartez ». Le même texte
+	// pour les deux aurait annoncé à chacun la nouvelle de l'autre.
+	auClient := byKey[KeyDeliveryTransferFailed].Locales[LocaleFR].Body
+	auLivreur := byKey[KeyDeliveryTransferKept].Locales[LocaleFR].Body
+	if auClient == auLivreur {
+		t.Fatal("les deux versions de « personne n'a repris » sont le même texte")
+	}
+	if !strings.Contains(auLivreur, "vous") {
+		t.Fatal("le message au livreur doit lui parler de SA commande")
+	}
+
 	// Et la première phrase nomme bien ce qui est en jeu : la commande.
 	if !strings.Contains(byKey[KeyDeliveryTransferStarted].Locales[LocaleFR].Body, "commande") {
 		t.Fatal("le message d'ouverture doit nommer la COMMANDE : c'est elle que le client attend")

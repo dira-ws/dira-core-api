@@ -257,7 +257,20 @@ const (
 	KeyDeliveryTransferStarted = "delivery_transfer_started"
 	KeyDeliveryTransferred     = "delivery_transferred"
 	KeyDeliveryTransferFailed  = "delivery_transfer_failed"
-	KeyDeliveryTransferDone    = "delivery_transfer_done"
+	// KeyDeliveryTransferKept : LE MÊME FAIT, DIT AU LIVREUR.
+	//
+	// ⚠️⚠️ IL EXISTE PARCE QUE « personne n'a pu reprendre » N'ÉTAIT POUSSÉ
+	// QU'AU CLIENT (core#228 §4). Le livreur, lui, ne l'apprenait qu'en
+	// relisant sa commande — c'est-à-dire en se demandant d'abord pourquoi
+	// personne n'arrive. Or c'est LUI qui doit repartir : il attendait un
+	// remplaçant, et il est encore responsable du repas.
+	//
+	// ⚠️ ET CE N'EST PAS LE MÊME GABARIT QUE CELUI DU CLIENT. Au client, la
+	// bonne nouvelle est « votre livreur continue » ; au livreur, c'est
+	// « la commande reste à vous, repartez ». Un seul texte pour les deux
+	// aurait annoncé à quelqu'un la nouvelle de l'autre.
+	KeyDeliveryTransferKept = "delivery_transfer_kept"
+	KeyDeliveryTransferDone = "delivery_transfer_done"
 	// KeyRideStopsChanged va au CHAUFFEUR quand le trajet d'une course en
 	// cours change — un arrêt ajouté ou retiré, et un prix recalculé. Il
 	// relit la course : c'est elle qui porte la nouvelle destination.
@@ -1107,6 +1120,15 @@ var defaults = map[string]Template{
 			LocaleEN: {Title: "Your courier continues", Body: "We found no other courier: [courier] is continuing your delivery."},
 		},
 	},
+	KeyDeliveryTransferKept: {
+		Key:         KeyDeliveryTransferKept,
+		Description: "Personne n'a repris la commande — message au LIVREUR qui voulait passer la main. ⚠️ Elle reste à lui, et il doit repartir : il attendait un remplaçant.",
+		Enabled:     true,
+		Locales: map[string]Text{
+			LocaleFR: {Title: "La commande reste à vous", Body: "Aucun autre livreur n'a pu reprendre la commande [order_ref]. Elle reste à vous — reprenez la route."},
+			LocaleEN: {Title: "The order stays with you", Body: "No other courier could take over order [order_ref]. It stays with you — get back on the road."},
+		},
+	},
 	KeyDeliveryTransferDone: {
 		Key:         KeyDeliveryTransferDone,
 		Description: "La commande a été reprise — message à L'ANCIEN LIVREUR, avec sa part. Son écran se ferme sur une course qu'il n'a pas terminée.",
@@ -1219,6 +1241,7 @@ var provided = map[string][]string{
 	KeyDeliveryTransferStarted: {"reason"},
 	KeyDeliveryTransferred:     {"courier", "vehicle"},
 	KeyDeliveryTransferFailed:  {"courier"},
+	KeyDeliveryTransferKept:    {"order_ref"},
 	KeyDeliveryTransferDone:    {"amount"},
 	KeyRideSearchExhausted:     {"pickup"},
 	// LA COURSE PARTAGÉE : le LIEU DE DÉPART, et lui seul. ⚠️ Pas le nom du

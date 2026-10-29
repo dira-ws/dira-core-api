@@ -66,6 +66,34 @@ func SetFaultSink(f obs.Faulter) { faults = f }
 // messages. Called once at startup; without it English fallbacks are used.
 func SetTranslator(t *i18n.Translator) { translator = t }
 
+// Phrase traduit un texte QUI N'EST PAS UN REFUS, dans la langue de la requête.
+//
+// ⚠️⚠️ ELLE EXISTE PARCE QU'UN VOCABULAIRE SERVI PAR LE SERVEUR DOIT SE LIRE.
+// `GET /deliveries/transfer-reasons` et ses jumelles rendaient des CODES
+// (`courier_breakdown`, `shift_end`) et rien d'autre : chaque application
+// portait sa propre table de phrases, donc un motif ajouté côté serveur
+// s'affichait comme un code brut jusqu'à la prochaine publication sur les
+// magasins — c'est-à-dire des semaines, pendant lesquelles un livreur en panne
+// choisit « courier_breakdown » dans une liste (core#228 §5).
+//
+// ⚠️ ET LE CODE RESTE SERVI À CÔTÉ. Le libellé est pour l'œil ; c'est le code
+// que l'application renvoie, et lui seul. Servir le libellé seul aurait fait
+// voyager du texte traduit comme identifiant.
+//
+// ⚠️ `fallback` EST RENDU TEL QUEL quand la clé manque — jamais une chaîne
+// vide. Un écran qui reçoit un libellé vide affiche un bouton muet, et
+// personne ne sait sur quoi il appuie ; le code brut, lui, est au moins
+// diagnosticable.
+func Phrase(ctx context.Context, key, fallback string) string {
+	if translator == nil {
+		return fallback
+	}
+	if localized, ok := translator.Translate(i18n.LangFromContext(ctx), key, nil); ok {
+		return localized
+	}
+	return fallback
+}
+
 // JSON writes v as a JSON response with the given status.
 func JSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
