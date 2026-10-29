@@ -1,6 +1,6 @@
 # App CLIENT UNIFIÉE — LIVRAISON **et** COURSES — contrat d'API
 
-> **Version 4.102.0** · 29 octobre 2026
+> **Version 4.103.0** · 29 octobre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Livraison : `…/api/v1/food` · Courses : `…/api/v1/vtc` · Combiné : `…/api/v1/analytics` · Suivi : `wss://tracking-staging.dira.llc`
 
 ---
@@ -231,13 +231,27 @@ GET /app/config          # SANS jeton — lu AVANT l'écran de connexion
     "multi_car": false, "trip_share": true, "subscriptions": false,
     "promo_codes": false, "challenges": false, "raffle": false,
     "banners": false, "feed": true, "assistant": true,
-    "assistant_auto_order": false, "voice_messages": true, "wallet": false
+    "assistant_auto_order": false, "voice_messages": true, "wallet": false,
+    "assistant_live": true
   },
   "lists": {
     "payment_methods": ["cash", "mobile_money"],
     "vehicle_modes": ["comfort", "eco", "moto"]
+  },
+  "live": {
+    "max_session_seconds": 300, "idle_timeout_seconds": 20,
+    "languages": ["fr"],
+    "input": { "encodings": ["pcm16"], "sample_rate": 16000 }
   } }
 ```
+
+> 🆕 ⚠️⚠️ **`assistant_live` est le SEUL drapeau de ce catalogue dont le défaut
+> est `false`** (v4.103.0). Tous les autres partent de « disponible partout » et
+> une règle les retire ; l'assistant **en direct**, lui, s'allume pays par pays
+> — il est facturé à la seconde dans les deux sens, et les langues qu'il parle
+> se mesurent avant de s'ouvrir. Il vaut `true` **exactement** quand le bloc
+> `live` est servi, et le serveur garantit que les deux ne se contredisent
+> jamais. Détail du mode : **§8 quater**.
 
 **Lisez-la une fois à l'ouverture**, gardez-la en mémoire, et **cachez vos
 entrées de menu** sur ce qu'elle dit. C'est ce qui évite de proposer un bouton
@@ -1379,6 +1393,259 @@ c'est pour cela qu'il est livrable sans nouvelle version d'application.
 
 ---
 
+## 8 quater. 🆕 🔴 L'ASSISTANT **EN DIRECT** — la personne parle, Dira répond de vive voix (v4.103.0)
+
+Un mode **en plus** de l'assistant tour par tour. La personne parle, Dira
+répond **de vive voix**, et un mot suffit à l'interrompre.
+
+> ⚠️⚠️ **L'assistant tour par tour reste le défaut ET le repli.** Le direct
+> s'éteint pour cinq raisons (pays, édition, quota, réseau, panne), et chacune
+> porte un code que vous lisez pour **retomber sur `POST /ai/chat`** ou sur un
+> message vocal. Ne construisez jamais un écran dont le direct est la seule
+> sortie.
+
+### 8 quater.1 ⚠️ Il n'existe que si `/app/config` le dit
+
+```
+GET /app/config          # SANS jeton, à l'ouverture
+  →
+{ "features": { "assistant_live": true, … },
+  "live": {
+    "max_session_seconds": 300,
+    "idle_timeout_seconds": 20,
+    "languages": ["fr"],
+    "input": { "encodings": ["pcm16"], "sample_rate": 16000 }
+  } }
+```
+
+**⚠️⚠️ Ce drapeau-là est le seul du catalogue dont le défaut est `false`.** Tous
+les autres partent de « disponible partout » et une règle les retire ; le direct
+est facturé **à la seconde dans les deux sens**, et la prise en charge vocale
+des langues qui en ont besoin se **mesure** avant de s'ouvrir. Il s'allume donc
+pays par pays, et `features.assistant_live` vaut `true` **exactement** quand le
+bloc `live` est servi — les deux ne peuvent pas se contredire, c'est le serveur
+qui le garantit.
+
+- **Pas de bloc `live`** → n'affichez aucune entrée « En direct ». Rien d'autre
+  ne change.
+- **Bloc présent** → le micro de l'accueil peut ouvrir le direct, et l'écran de
+  l'assistant gagne une entrée « En direct ».
+- `languages` dit **les langues ouvertes ici**. Une langue absente est refusée à
+  l'ouverture de la session, pas au premier mot.
+
+### 8 quater.2 La socket
+
+```
+GET  wss://api-staging.dira.llc/api/v1/analytics/live-assistant/ws
+     Authorization: Bearer <access_token>
+     X-Dira-Country: TD
+     X-Dira-Edition: lite
+  → 101   (la conversation se joue ensuite sur la socket)
+```
+
+**⚠️⚠️ Le jeton va dans l'en-tête, JAMAIS dans l'URL.** Une URL finit dans les
+journaux d'accès, dans les traces de connexion et chez les proxys. OkHttp
+(Android) et `URLSessionWebSocketTask` (iOS) savent poser cet en-tête ; si un
+navigateur en a besoin un jour, demandez-nous un ticket à usage unique.
+
+**Les refus d'ouverture sont des codes HTTP**, parce qu'ils ne dépendent pas de
+ce qui se dira :
+
+| Statut | `code` | Ce que vous faites |
+|---|---|---|
+| `403` | `live_disabled` | **N'essayez plus** dans ce pays / cette édition. Montrez le tour par tour. |
+| `403` | `live_quota_reached` | **Plus aujourd'hui.** Repli, et proposez-le à nouveau demain. |
+| `401` | `invalid_token` | Rafraîchissez le jeton. |
+| `503` | `live_unavailable` | **Réessayez** une fois, puis repli. |
+
+### 8 quater.3 Le protocole
+
+Les trames **binaires** portent l'audio. Les trames **texte** portent des
+événements JSON, chacun avec un champ `type`.
+
+> ⚠️ **Les champs inconnus sont tolérés dans les deux sens.** Une socket vit des
+> minutes et traverse des versions d'application : ne refusez pas une trame
+> parce qu'elle porte un champ que vous ne connaissez pas encore, et nous ne le
+> ferons pas non plus. Ignorez un `type` inconnu.
+
+#### De votre application vers le serveur
+
+```json
+{ "type": "session.start", "language": "fr",
+  "origin": [15.0557, 12.1348],
+  "resume_token": "…",
+  "input": { "encoding": "pcm16", "sample_rate": 16000 } }
+```
+
+**⚠️⚠️ `session.start` d'abord, et `language` est OBLIGATOIRE.** Vous avez
+**15 secondes** pour l'envoyer ; de l'audio envoyé avant est signalé
+(`live_bad_event`, réessayable) et **jeté** — la session ne se ferme pas, vous
+vous rattrapez. Une langue absente ou non ouverte rend
+`live_language_unavailable`, **avec la liste des langues ouvertes dans
+`message`**.
+
+Puis :
+
+| Trame | Quand |
+|---|---|
+| trames **binaires** de 100 ms | l'audio du micro, au format négocié |
+| `{"type":"mic.mute"}` / `{"type":"mic.unmute"}` | la personne coupe son micro, ou un appel arrive |
+| `{"type":"text","message":"…"}` | elle tape pendant le direct |
+| `{"type":"ui.confirm","confirmation_token":"…"}` | elle appuie sur **Confirmer** |
+| `{"type":"ui.cancel"}` | elle referme la carte |
+| `{"type":"session.end"}` | elle appuie sur **Terminer** |
+
+**⚠️ `mic.mute` arrête la facturation.** Pendant une coupure, votre audio n'est
+ni transmis ni compté, **et il ne retarde pas la coupure pour silence** : un
+téléphone qui continue d'émettre pendant un appel téléphonique ne doit pas tenir
+une session payante ouverte.
+
+#### Du serveur vers votre application
+
+```json
+{ "type": "session.ready", "session_id": "…", "resume_token": "…",
+  "output": { "encoding": "pcm16", "sample_rate": 24000 },
+  "limits": { "max_session_seconds": 300, "idle_timeout_seconds": 20,
+              "minutes_left_today": 5 } }
+```
+
+| `type` | Contenu | Ce que vous faites |
+|---|---|---|
+| `session.ready` | voir ci-dessus | ouvrez la lecture au format `output` ; gardez `resume_token` |
+| trames **binaires** | l'audio de la réponse | jouez-les en flux (≈ 200 ms de tampon) |
+| `transcript` | `role`, `text`, `final` | affichez ; `final` absent = partielle |
+| **`interrupted`** | — | **videz immédiatement votre lecture** |
+| `turn.complete` | — | le tour est fini |
+| `tool.status` | `name`, `phase` | « je cherche le prix… » |
+| `ui.state` | `goal`, `card` | dessinez l'étape (§8 ter) et la carte |
+| `ordered` | `kind`, `id` | menez au suivi |
+| `error` | `code`, `message`, `retryable` | voir le tableau des codes |
+| `session.ending` | `reason`, `seconds_left` | « le direct s'arrête bientôt » |
+| `session.end` | `reason` | fermez proprement |
+
+**⚠️ `final` et `retryable` sont `omitempty` : absent vaut `false`.** Une
+transcription partielle est la trame la plus fréquente de toutes ; l'alourdir
+d'un `false` explicite aurait coûté de la bande sur de la 3G.
+
+### 8 quater.4 ⚠️⚠️ L'audio : ce que nous prenons, et ce que nous rendons
+
+| Sens | Format | Débit |
+|---|---|---|
+| **vous → nous** | PCM **16 bits signé**, **16 000 Hz**, mono, petit-boutien, trames de 100 ms (3 200 octets) | ≈ 256 kbit/s |
+| **nous → vous** | PCM **16 bits signé**, **24 000 Hz**, mono | ≈ 384 kbit/s |
+
+**⚠️⚠️ `encodings` ne liste QUE ce que le serveur sait décoder.** Aujourd'hui :
+`pcm16`, et rien d'autre. **N'envoyez pas d'Opus** même si votre encodeur le
+propose : le micro partirait et le serveur n'entendrait rien — une panne muette.
+Quand l'Opus sera accepté, il **apparaîtra dans `encodings`**, et c'est la seule
+chose à regarder.
+
+> ⚠️ **Conséquence à assumer dès maintenant** : à ce débit, le direct est
+> utilisable en **Wi-Fi et en 4G**, pas sur la 3G de N'Djamena. C'est aussi
+> pourquoi il reste éteint par défaut. Mesurez le débit et la file d'envoi ; si
+> elle gonfle, proposez **Messages vocaux** (le tour par tour) plutôt que de
+> laisser la personne parler dans le vide.
+
+**Annulation d'écho, côté téléphone** : capturez sur `VOICE_COMMUNICATION`
+(Android) avec `AcousticEchoCanceler`, sinon la voix de Dira dans le haut-parleur
+déclenche son propre barge-in.
+
+### 8 quater.5 ⚠️⚠️ Confirmer : ce que le modèle NE PEUT PAS faire
+
+Le direct **propose**, il ne commande pas. Quand l'assistant a un devis, vous
+recevez :
+
+```json
+{ "type": "ui.state",
+  "goal": { … voir §8 ter … },
+  "card": { "kind": "ride_quote",
+            "summary": { "pickup": "…", "dropoff": "…", "class": "confort",
+                         "price_xof": 1800, "payment": "cash" },
+            "plan": { … le plan de la verticale, verbatim … },
+            "confirmation_token": "…",
+            "expires_at": "2026-10-29T21:02:28Z" } }
+```
+
+`kind` vaut `ride_quote` ou `food_cart`. **Dessinez vos cartes existantes**
+(`RidePlanCard`, panier) et un bouton **Confirmer**.
+
+Deux chemins, et **un seul** crée quelque chose :
+
+1. **L'appui** : envoyez `ui.confirm` avec le `confirmation_token`. C'est la
+   preuve la plus forte, et c'est le chemin qui reste quand le modèle a mal
+   entendu. Désactivez le bouton pendant l'envoi.
+2. **Le « oui » parlé** : **ne faites rien**. C'est **le serveur** qui relie
+   l'accord au jeton courant — il relit la dernière phrase de la personne avec
+   son propre vocabulaire du « oui », et refuse si ce n'en était pas un.
+
+**⚠️⚠️ Le modèle ne peut pas confirmer à la place de la personne.** Il peut
+*demander* ; le serveur vérifie. N'ajoutez aucun chemin qui exécuterait sur la
+seule parole du modèle.
+
+**⚠️ Et le prix qu'on entend est celui de la carte.** La phrase prononcée est
+composée **des données du plan**, pas écrite par le modèle (§8 bis bis). Si vous
+affichez un prix, prenez `card.summary.price_xof` — jamais ce que le modèle a
+dit.
+
+Après exécution : `{"type":"ordered","kind":"ride","id":"…"}` → menez au suivi.
+
+### 8 quater.6 Durée, silence, quota, reprise
+
+| Ce qui coupe | Ce que vous recevez | Ce que vous montrez |
+|---|---|---|
+| **silence** (`idle_timeout_seconds`) | `session.end` `reason: "idle"` | « on reprend quand vous voulez » |
+| **durée** (`max_session_seconds`) | `session.ending` 30 s avant, puis `session.end` `reason: "max_session"` | « le direct s'arrête bientôt » — **la demande est gardée** |
+| **quota** | `error` `live_quota_reached`, puis `session.end` `reason: "quota"` | repli sur le tour par tour |
+| **votre `session.end`** | `session.end` `reason: "client"` | — |
+
+**⚠️ Le silence est celui où PERSONNE ne parle.** Dira qui parle, un outil qui
+travaille, votre audio : tout cela réarme la borne. Un téléphone posé sur une
+table, micro ouvert, est le seul cas qu'elle coupe.
+
+**La reprise** : gardez `resume_token` et renvoyez-le dans `session.start` après
+une coupure réseau. La conversation reprend où elle en était.
+
+> ⚠️ Ce jeton est **le vôtre et celui de votre compte** : présenté par quelqu'un
+> d'autre, il ne reprend rien. Il vit **15 minutes**.
+
+**⚠️ Et le fournisseur qui ferme sa session ne vous concerne pas.** Le relais
+reprend tout seul, sans rien vous envoyer : ne traitez pas un silence de
+quelques centaines de millisecondes comme une panne.
+
+### 8 quater.7 Ce qui est écrit, et ce qui ne l'est pas
+
+- Les transcriptions **finales** des deux côtés entrent dans le **fil**
+  (§8 bis), marquées `input_modality: "live"` et `output_modality: "live"`.
+  Le support et l'assistant écrit voient donc la même conversation — c'est ce
+  qui rend le repli possible.
+- **Aucun son n'est conservé.** Il n'y a pas de fichier à réécouter : une bulle
+  `live` du fil n'a ni `audio_url` ni bouton « écouter ».
+- Un tour coupé au milieu est **quand même** écrit, avec la dernière
+  transcription connue.
+
+### 8 quater.8 Les codes d'erreur du direct
+
+| `code` | Réessayable | Ce que ça veut dire |
+|---|---|---|
+| `live_disabled` | non | pas ouvert ici — montrez le tour par tour |
+| `live_quota_reached` | non (aujourd'hui) | minutes du jour épuisées |
+| `live_language_unavailable` | non | cette langue n'est pas ouverte ; `message` liste celles qui le sont |
+| `live_encoding_unsupported` | non | envoyez `pcm16` |
+| `live_unavailable` | oui | le fournisseur ne répond pas |
+| `live_bad_event` | oui | trame inattendue ou inconnue — la session continue |
+
+Les refus de la verticale arrivent **avec leur propre code** (`quote_expired`,
+`insufficient_funds`, `store_closed`…) : traitez-les comme ailleurs.
+
+### 8 quater.9 Développer sans le serveur
+
+Le protocole est entièrement décrit ci-dessus : **montez un faux relais local**
+et développez l'écran contre lui. Les trois états qui demandent le plus de soin
+sont `interrupted` (vider la lecture), l'appel entrant (couper le micro sans
+couper la session) et le repli réseau.
+
+---
+
 ## 8 bis ter. 🆕 ⚠️⚠️ `Idempotency-Key` — UN RENVOI REND LE MÊME TOUR (v4.100.0)
 
 ```
@@ -2152,6 +2419,19 @@ commande ou une course. Ne devinez pas le métier d'après la clé ; lisez
 | `503 transcription_unavailable` | masquer le **bouton micro** (le texte marche) |
 | `503 language_not_served` | `reason` = la langue — proposer d'écrire, ou une autre langue |
 
+**🆕 L'assistant EN DIRECT (§8 quater, v4.103.0)** — ⚠️ chacun commande un geste
+DIFFÉRENT, et les aplatir ferait réessayer d'ouvrir un micro dans un pays où le
+direct n'existe pas :
+
+| Code | Geste |
+|---|---|
+| `403 live_disabled` | **n'essayez plus ici** — montrez l'assistant tour par tour |
+| `403 live_quota_reached` | **plus aujourd'hui** — repli, et reproposez demain |
+| `403 live_language_unavailable` | `message` liste les langues ouvertes — proposez-en une, ou un vocal |
+| `422 live_encoding_unsupported` | envoyez `pcm16` (c'est le seul format accepté) |
+| `503 live_unavailable` | **réessayez une fois**, puis repli |
+| `live_bad_event` (événement) | trame inattendue — **la session continue**, corrigez l'envoi |
+
 **Les métiers** : leurs refus sont décrits dans leurs specs, et ils arrivent
 **tels quels** à travers l'assistant combiné — traitez-les comme s'ils venaient
 du métier.
@@ -2189,11 +2469,69 @@ du métier.
 - [ ] Deux sockets distincts, cycles de vie séparés ; `GET` à chaque reconnexion.
 - [ ] Notifications routées sur `data.type` ; clé inconnue affichée sans ouvrir.
 - [ ] Un seul carnet d'adresses, un seul solde, une seule boîte.
+- [ ] 🆕 **Le direct** (§8 quater) : l'entrée « En direct » n'existe que si `features.assistant_live` **et** le bloc `live` sont servis ; jamais la seule sortie d'un écran.
+- [ ] 🆕 Le jeton du direct part dans l'en-tête `Authorization`, **jamais** dans l'URL de la socket.
+- [ ] 🆕 `session.start` envoyé dans les 15 s, avec `language` **pris dans `live.languages`** — sinon `live_language_unavailable`.
+- [ ] 🆕 **`pcm16` 16 kHz mono seulement** : rien d'autre n'est décodé, et un Opus envoyé part dans le vide sans erreur.
+- [ ] 🆕 `interrupted` **vide la lecture immédiatement** ; sans annulation d'écho (`VOICE_COMMUNICATION`), la voix de Dira déclenche son propre barge-in.
+- [ ] 🆕 `mic.mute` pendant un appel téléphonique : l'audio n'est **ni envoyé ni compté**, et la session n'est pas fermée.
+- [ ] 🆕 La confirmation passe par `ui.confirm` **ou** par un « oui » que **le serveur** relie au jeton — aucun chemin ne doit exécuter sur la parole du modèle.
+- [ ] 🆕 Le prix affiché vient de `card.summary.price_xof`, **jamais** de ce que le modèle a dit.
+- [ ] 🆕 `resume_token` gardé et renvoyé après une coupure réseau ; un silence de quelques centaines de millisecondes n'est **pas** une panne.
+- [ ] 🆕 Les cinq `session.end.reason` écrivent cinq phrases différentes, et `live_quota_reached` **ne propose pas de réessayer**.
+- [ ] 🆕 Le réseau faible propose **Messages vocaux**, pas un direct qui saccade : 256 kbit/s en montée, 384 en descente.
 - [ ] Suppression de compte : écran de conséquences **avant** la preuve d'identité, `erase_at` affiché, « les courses et commandes passées restent » dit **avant** le bouton, `409 wallet_not_empty` renvoyé vers le solde, `403 account_closed` traité à la connexion **et** à l'inscription.
 
 ---
 
 ## 15. Journal
+
+### 4.103.0 — 29 octobre 2026
+
+🔴 **L'ASSISTANT EN DIRECT : la personne parle, Dira répond de vive voix**
+(§8 quater, §4 ter, §13, §14).
+
+```
+GET  wss://…/api/v1/analytics/live-assistant/ws
+     Authorization: Bearer <token>        ⚠️ JAMAIS dans l'URL
+     X-Dira-Country, X-Dira-Edition
+  → 101, puis : trames BINAIRES = audio, trames TEXTE = événements JSON
+
+GET  /app/config  →  "features": { "assistant_live": true },
+                     "live": { max_session_seconds, idle_timeout_seconds,
+                               languages[], input{ encodings[], sample_rate } }
+```
+
+⚠️⚠️ **`assistant_live` est le SEUL drapeau du catalogue dont le défaut est
+`false`.** Le direct est facturé à la seconde dans les deux sens, et les langues
+qu'il parle se **mesurent** avant de s'ouvrir : il s'allume pays par pays. Le
+drapeau vaut `true` **exactement** quand le bloc `live` est servi.
+
+⚠️⚠️ **`pcm16` à 16 kHz, et rien d'autre.** `encodings` ne liste que ce que le
+serveur sait décoder : un Opus envoyé aujourd'hui partirait dans le vide **sans
+aucune erreur**. À 256 kbit/s en montée, le direct est utilisable en Wi-Fi et en
+4G, pas sur la 3G de N'Djamena — c'est aussi pourquoi il reste éteint par
+défaut. Quand l'Opus sera accepté, il apparaîtra dans `encodings`.
+
+⚠️⚠️ **Le modèle PROPOSE, il ne commande pas.** Une proposition arrive en
+`ui.state.card` avec son `confirmation_token` ; l'exécution demande soit
+`ui.confirm` (un appui), soit un « oui » que **le serveur** relie lui-même au
+jeton courant — il relit la dernière phrase de la personne. N'ajoutez aucun
+chemin qui exécuterait sur la parole du modèle. Et le prix affiché vient de
+`card.summary.price_xof`, jamais de ce que le modèle a dit.
+
+⚠️ **`mic.mute` arrête la facturation** et ne retarde pas la coupure pour
+silence : un téléphone qui émet pendant un appel téléphonique ne doit pas tenir
+une session payante ouverte. Le silence coupé est celui où PERSONNE ne parle —
+Dira qui parle réarme la borne.
+
+⚠️ **Le direct n'est jamais la seule sortie d'un écran.** Cinq raisons
+l'éteignent (pays, édition, quota, réseau, panne), chacune avec son code, et le
+repli est l'assistant tour par tour — qui reste le défaut.
+
+Aucun son n'est conservé : les transcriptions **finales** entrent dans le fil,
+marquées `live`, et c'est tout ce qui reste d'une conversation parlée.
+
 
 ### 4.84.0 — 28 octobre 2026
 
