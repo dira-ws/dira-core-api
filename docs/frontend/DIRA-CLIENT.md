@@ -1,6 +1,6 @@
 # App CLIENT UNIFIÉE — LIVRAISON **et** COURSES — contrat d'API
 
-> **Version 4.87.0** · 28 octobre 2026
+> **Version 4.88.0** · 29 octobre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Livraison : `…/api/v1/food` · Courses : `…/api/v1/vtc` · Combiné : `…/api/v1/analytics` · Suivi : `wss://tracking-staging.dira.llc`
 
 ---
@@ -1026,6 +1026,122 @@ c'est l'estimation, et elle est fausse par construction.
 veut dire que l'archivage n'a pas répondu : la transcription, le plan et l'état
 sont justes, mais la bulle n'aura pas de lecteur. **N'échouez pas** pour cela —
 affichez la bulle avec son texte seul.
+
+---
+
+## 8 ter. 🆕 🎯 LE FIL D'UNE DEMANDE — 6 objectifs, 4 étapes au plus (v4.88.0)
+
+L'assistant **garde le fil d'une demande en cours** et vous mène au résultat en
+**quatre étapes au plus**. Il ne pose **qu'une** question par tour : celle de
+l'étape manquante suivante.
+
+### Les six objectifs, et leurs étapes dans l'ordre
+
+| `goal.key` | Étapes (`slot`) | Ce qui agit |
+|---|---|---|
+| `profile` | `profile_edit` | enregistrer — après confirmation |
+| `orders` | `reorder` | un plan **aux prix du jour**, à confirmer |
+| `wallet` | `topup` **ou** `wallet_history` | recharger — après confirmation |
+| `ride` | `pickup` → `dropoff` → `vehicle_class` → `payment` | le plan de course, à confirmer |
+| `food` | `dishes` → `delivery_address` → `payment` | le plan de commande, à confirmer |
+| `track` | `which` *(sautée s'il n'y en a qu'une)* | lire l'état ; appeler, écrire ; annuler après confirmation |
+
+### Ce que chaque réponse porte
+
+Sur `POST /analytics/ai/chat`, `POST /analytics/ai/voice`, et sur
+`GET /analytics/ai/thread` :
+
+```jsonc
+"goal": {
+  "key": "ride",
+  "step": 3, "steps": 4,
+  "filled": {
+    "pickup":  { "label": "Ma position — Moursal", "point": [15.05, 12.11] },
+    "dropoff": { "label": "Marché central" }
+  },
+  "asking": "vehicle_class",
+  "missing": ["vehicle_class", "payment"],
+  "options": [
+    { "value": "moto", "label": "Moto", "price_xof": 700 },
+    { "value": "eco",  "label": "Éco",  "price_xof": 1000 }
+  ]
+}
+```
+
+⚠️ **`goal` est ABSENT quand aucune demande n'est en cours** (`goal: null`).
+Une application qui l'ignore se comporte **exactement comme avant** : c'est ce
+qui permet de le servir sans attendre que vos deux applications l'adoptent.
+
+⚠️ **`step` compte ce qui est SU, pas le rang de la question.** Trois choses
+connues et une seule manquante donnent « étape 4 sur 4 », même si c'est la
+**première** étape de la liste qu'on vous demande. Dire « 1 sur 4 » à quelqu'un
+qui a presque fini est exactement ce qui fait abandonner.
+
+⚠️ **`options` n'arrive QUE pendant qu'on demande quelque chose.** Sur une
+demande complète, il n'y a plus de boutons : un appui aurait rouvert une étape
+déjà réglée.
+
+⚠️ **Et `options` n'est jamais servi sur `GET /thread`** — ces choix portent des
+**prix**, et un fil se relit des heures plus tard. Un tarif d'avant la
+majoration, lu à voix haute, se découvrirait au moment de payer. Redemandez
+l'état par un message si vous avez besoin des prix.
+
+### Un appui : `choice`
+
+```jsonc
+POST /analytics/ai/chat
+{ "message": "Moto", "choice": { "slot": "vehicle_class", "value": "moto" } }
+```
+
+⚠️ **Envoyez `choice` quand la personne APPUIE sur un bouton**, pour que nous
+n'ayons pas à re-deviner le mot. Un appui est une certitude ; le repasser au
+modèle rendrait incertain ce qui était sûr — et pour Dira Lite, une étape mal
+comprise se repose à voix haute.
+
+⚠️ **Un `choice` périmé est IGNORÉ, pas refusé.** Si vos boutons sont restés à
+l'écran après l'abandon d'une demande, l'appui ne provoque pas d'erreur : le
+tour se poursuit comme un message ordinaire.
+
+### Repartir de zéro : `reset_goal`
+
+```jsonc
+{ "message": "", "reset_goal": true }
+```
+
+⚠️ **Mettez-le derrière un bouton « Nouvelle demande ».** Les trois autres
+sorties — confirmer, « laisse tomber », demander autre chose — passent par le
+modèle ; celle-ci n'a pas besoin d'être **comprise**, et c'est la seule dont
+dispose une personne coincée.
+
+### Ce que vous n'avez PAS à faire
+
+⚠️⚠️ **Le contexte vit sur le SERVEUR.** Ne le renvoyez pas, ne le stockez pas :
+une application relancée, ou le passage du widget à l'application, **reprend**
+la demande. À l'ouverture, lisez `GET /analytics/ai/thread` et proposez
+« On reprend : un taxi vers le marché central, il manque le mode ».
+
+⚠️ **Une demande est abandonnée après 30 minutes d'inactivité**, et `thread` ne
+la propose plus. Reprendre un taxi de ce matin ce soir ferait croire que
+l'assistant n'écoute pas.
+
+⚠️ **Une question à côté ne fait pas perdre le fil.** « Combien j'ai sur mon
+portefeuille ? » au milieu d'un taxi : on répond, et la demande reste entière.
+
+⚠️ **Une correction ne change qu'une étape.** « Plutôt une moto » garde le
+départ et l'arrivée — et le paiement déjà choisi.
+
+### 🚧 Ce qui n'est pas encore là
+
+⚠️ **`register=simple` n'est PAS accepté** (#239). Il doit agir sur la réponse,
+qui vient du métier ; l'envoyer aujourd'hui ferait `422 unknown field` sur
+chaque message. **Ne l'envoyez pas** : il arrivera quand les deux métiers
+sauront le lire, et ce document le dira.
+
+⚠️ **`reply_audio_url` et `POST /analytics/ai/speech` n'existent pas** (#239).
+Nous transcrivons chez nous (`dira-stt`), nous ne **parlons** pas : aucune
+synthèse n'est installée, et pour `shu`, `sba`, `ff`, `ewe`, `wo` aucune voix
+grand public n'existe à ce jour. Continuez de lire avec la voix du téléphone
+(`fr`, `en`, `ar` en repli pour `shu`).
 
 ---
 
