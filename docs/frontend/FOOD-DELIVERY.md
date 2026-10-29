@@ -1,6 +1,6 @@
 # App LIVREUR — LIVRAISON — contrat d'API
 
-> **Version 4.90.0** · 29 octobre 2026
+> **Version 4.91.0** · 29 octobre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Livraison : `https://api-staging.dira.llc/api/v1/food` · Suivi : `wss://tracking-staging.dira.llc` · SIG : `https://maps.dira.llc/api`
 
 
@@ -1119,6 +1119,10 @@ Aucune conséquence : il n'y a personne à déconnecter, et rien ne s'affiche.
   `PATCH /me { "avatar_url": url }` → la réponse est le compte à jour, à
   garder en session. Deux étapes pour qu'un envoi qui échoue ne fasse pas
   perdre le reste de la saisie.
+- **🆕 RETIRER la photo : `PATCH /me { "avatar_url": "" }`** (v4.91.0). Le
+  serveur l'a toujours accepté, et ce document ne le disait pas — faute de
+  quoi la seule façon connue de « supprimer sa photo » était d'en téléverser
+  une autre. ⚠️ La chaîne **vide**, et non `null` : `null` vaut « inchangé ».
 - **`PATCH /me` n'envoie que ce qui change** :
   `{ name?, first_name?, last_name?, birth_date?, gender?, email?, avatar_url? }`.
   Une clé inconnue → `422 reason: unknown_field`. Quand `name` n'a jamais
@@ -1171,6 +1175,13 @@ Aucune conséquence : il n'y a personne à déconnecter, et rien ne s'affiche.
 > livreur — des commissions sur des commandes en espèces que son solde n'a
 > pas couvertes, `GET /wallet` → `debt_xof` — dépasse le plafond du pays.
 > Elle se rembourse d'office sur son prochain gain en ligne, ou à l'agence.
+
+⚠️ **ET `topup` N'EST PAS SERVI SUR VOTRE PORTEFEUILLE** (v4.91.0). Les bornes
+de recharge par pays (`min`, `max`, `presets`) ne partent que sur le
+portefeuille d'un **client**, qui se recharge en argent par mobile money. Le
+vôtre s'alimente autrement — n'affichez pas d'écran « Recharger » en argent, et
+si `topup` est absent de la réponse, c'est normal et définitif.
+
 
 ---
 

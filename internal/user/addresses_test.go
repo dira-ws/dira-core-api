@@ -185,3 +185,48 @@ func TestBirthDateIsValidated(t *testing.T) {
 	_, err = svc.UpdateProfile(ctx, uid, UpdateMeRequest{BirthDate: &future})
 	assertUserCode(t, err, "validation_failed")
 }
+
+// ⚠️⚠️ RETIRER SA PHOTO : `PATCH /me { "avatar_url": "" }`.
+//
+// Le serveur l'a toujours accepté — `validate:"omitempty,url"` laisse passer la
+// chaîne vide, et l'affectation l'écrit — mais AUCUN contrat ne le disait et
+// aucune épreuve ne le tenait. La seule façon connue de « supprimer sa photo »
+// était d'en téléverser une autre.
+//
+// ⚠️ Et c'est une promesse de contrat désormais (specs v4.91.0, #250 §5) : une
+// phrase de spec qu'aucune épreuve ne tient est précisément ce qui a produit
+// sept refus sans détail sur cette plateforme. Celle-ci est tenue ici.
+func TestAnEmptyAvatarURLRemovesThePhoto(t *testing.T) {
+	svc, uid := addrFixture(t)
+	ctx := context.Background()
+
+	avatar := "https://cdn.dira.llc/a/awa.jpg"
+	_, err := svc.UpdateProfile(ctx, uid, UpdateMeRequest{AvatarURL: &avatar})
+	require.NoError(t, err)
+	posée, err := svc.Me(ctx, uid)
+	require.NoError(t, err)
+	require.Equal(t, avatar, posée.AvatarURL)
+
+	vide := ""
+	rendu, err := svc.UpdateProfile(ctx, uid, UpdateMeRequest{AvatarURL: &vide})
+	require.NoError(t, err, "la chaîne vide ne doit pas tomber sur la règle `url`")
+	assert.Empty(t, rendu.AvatarURL, "la réponse doit déjà montrer la photo retirée")
+
+	// ⚠️ ET APRÈS RELECTURE : c'est l'erreur exacte que l'épreuve au-dessus
+	// avait attrapée pour la POSE — la photo rendue, jamais écrite.
+	again, err := svc.Me(ctx, uid)
+	require.NoError(t, err)
+	assert.Empty(t, again.AvatarURL, "la photo doit être RETIRÉE en base, pas seulement dans la réponse")
+
+	// ⚠️ `nil` VAUT « INCHANGÉ », et la distinction est tout l'intérêt du
+	// pointeur : sans elle, un formulaire qui n'envoie pas le champ effacerait
+	// la photo de quelqu'un qui changeait seulement son nom.
+	_, err = svc.UpdateProfile(ctx, uid, UpdateMeRequest{AvatarURL: &avatar})
+	require.NoError(t, err)
+	nom := "Awa N."
+	_, err = svc.UpdateProfile(ctx, uid, UpdateMeRequest{Name: &nom})
+	require.NoError(t, err)
+	encore, err := svc.Me(ctx, uid)
+	require.NoError(t, err)
+	assert.Equal(t, avatar, encore.AvatarURL, "un champ absent ne doit RIEN effacer")
+}
