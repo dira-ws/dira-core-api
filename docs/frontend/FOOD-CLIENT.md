@@ -1,6 +1,6 @@
 # App CLIENT — LIVRAISON — contrat d'API
 
-> **Version 4.97.0** · 29 octobre 2026
+> **Version 4.98.0** · 29 octobre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Livraison : `https://api-staging.dira.llc/api/v1/food` · Suivi : `wss://tracking-staging.dira.llc`
 
 
@@ -2857,6 +2857,31 @@ POST /banners/{id}/click  · une ouverture de carte publicitaire
 Trois compteurs, **204 sans corps**, publics. Ils existaient depuis le feed et n'étaient cités nulle part — c'est ce qui alimente les statistiques d'un marchand et le rendement d'un emplacement.
 
 > **Ne les attendez jamais.** Ils répondent `204` même quand le comptage échoue : l'application est en train de naviguer, et une statistique perdue ne justifie pas d'interrompre le geste. Appelez-les **sans `await`**, et n'affichez aucune erreur.
+
+### 🆕 🔗 PARTAGER UNE PUBLICATION DU FIL (v4.98.0)
+
+Chaque entrée du fil porte désormais son lien public :
+
+```jsonc
+{ "id": "6ae35e52…", "format": "vid", "video_url": "…",
+  "share_url": "https://dira.llc/p/6ae35e52…",   // à coller dans une conversation
+  "deep_link": "dira://post/6ae35e52…" }          // pour un QR code
+```
+
+⚠️⚠️ **Partagez `share_url`, jamais `video_url`.** Celui qui reçoit l'adresse du
+fichier ouvre un `.mp4` nu : ni le point de vente, ni le plat, ni un moyen de
+commander. `share_url` ouvre une **page publique, sans compte**, qui montre tout
+cela et propose d'ouvrir l'application.
+
+⚠️ **ABSENTS sur une PUBLICITÉ** : une régie n'a pas de page de publication chez
+nous, et un lien vers un contenu qui n'est pas le nôtre ferait une page morte.
+**Masquez le bouton « Partager » quand `share_url` est absent** — c'est aussi le
+cas d'une publication retirée entre-temps.
+
+⚠️ **Ne composez pas cette adresse vous-mêmes** : c'est le serveur qui possède
+la forme du lien.
+
+Et comptez le partage avec `POST /feed/{id}/share`, **sans `await`** (ci-dessus).
 
 ---
 
