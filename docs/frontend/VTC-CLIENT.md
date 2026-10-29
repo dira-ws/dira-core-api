@@ -1,6 +1,6 @@
 # App CLIENT — COURSES (VTC) — contrat d'API
 
-> **Version 4.101.0** · 29 octobre 2026
+> **Version 4.102.0** · 29 octobre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Courses : `https://api-staging.dira.llc/api/v1/vtc` · Suivi : `wss://tracking-staging.dira.llc`
 
 ---

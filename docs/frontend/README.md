@@ -1,6 +1,6 @@
 # Specs frontend — par rôle
 
-> **Version 4.101.0** · 29 octobre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics`
+> **Version 4.102.0** · 29 octobre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics`
 
 **Cinq** documents, un par application. Chacun est **autonome** : tout ce qu'un frontend doit savoir pour son rôle, sans avoir à ouvrir les vingt specs de modules.
 
@@ -355,6 +355,44 @@ Chaque document porte la même version en en-tête, et son propre journal des ch
 - [ ] ⚠️ **`TRACKING_JWT_SECRET` renseigné dans chaque environnement déployé.** Vide, l'authentification du service de suivi est **désactivée** : n'importe qui connaissant un `delivery_id` suit la course. Le secret doit valoir **exactement** le `JWT_SECRET` de `dira-food-api`.
 
 ## Journal
+
+### 4.102.0 — 29 octobre 2026
+
+🗣️ **CHAQUE TOUR GARDE SA MODALITÉ** — `DIRA-CLIENT.md` §8 bis (core#263).
+
+```jsonc
+"turn_id": "tour-12", "input_modality": "audio", "output_modality": "audio",
+"audio": { "kind": "native_tts_instruction", "text": "…", "language": "fr" },
+"audio_error": null
+```
+
+> **Texte → texte, vocal → réponse vocale.** Décidée à **ce** tour-là, jamais
+> d'après l'historique : un message tapé juste après un vocal répond en texte,
+> et n'appelle **aucune** synthèse.
+
+⚠️⚠️ **LISEZ `audio.text`, JAMAIS `reply`, POUR DIRE UN PRIX.** `reply` est écrit
+par un modèle qui n'a pas vu le plan. Même règle que `action.say`, même raison :
+une personne qui **entend** un prix inventé dirait « oui » à ce prix-là.
+
+⚠️ **`native_tts_instruction` est le défaut partout** : faites parler le
+téléphone avec `text` et `language` — gratuit, instantané, hors ligne, et les
+appareils portent `fr`, `en`, `ar` (ce dernier en repli pour `shu`). `cloud`
+rend une `url` **signée et courte** ; expirée, relisez le fil, qui en rend une
+neuve **sans** resynthétiser.
+
+⚠️⚠️ **N'AFFICHEZ JAMAIS UN LECTEUR SUR UN TOUR SANS `audio`.** `audio_error`
+(`tts_unavailable`, `tts_language_unsupported`) est une **réponse**, pas une
+panne : lisez `reply` avec la voix de l'appareil. « Réponse vocale » annoncée
+sans son est la pire des deux moitiés — la personne appuie, rien ne sort, et
+elle croit son téléphone cassé.
+
+⚠️ `turn_id` est **le même identifiant** que votre `Idempotency-Key` et que
+`voice_id` : un seul nom pour une seule chose.
+
+🤫 **UN ENREGISTREMENT MUET EST `failed`, PAS UN TICKET.** Un vocal sans parole
+finissait `needs_support` — « nous vous rappelons » — sur un silence. Même
+conduite que pour une transcription ratée ; **rien à changer** si vous traitez
+déjà `failed`.
 
 ### 4.101.0 — 29 octobre 2026
 
