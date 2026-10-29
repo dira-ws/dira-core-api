@@ -1,6 +1,6 @@
 # Specs frontend — par rôle
 
-> **Version 4.100.0** · 29 octobre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics`
+> **Version 4.101.0** · 29 octobre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics`
 
 **Cinq** documents, un par application. Chacun est **autonome** : tout ce qu'un frontend doit savoir pour son rôle, sans avoir à ouvrir les vingt specs de modules.
 
@@ -355,6 +355,40 @@ Chaque document porte la même version en en-tête, et son propre journal des ch
 - [ ] ⚠️ **`TRACKING_JWT_SECRET` renseigné dans chaque environnement déployé.** Vide, l'authentification du service de suivi est **désactivée** : n'importe qui connaissant un `delivery_id` suit la course. Le secret doit valoir **exactement** le `JWT_SECRET` de `dira-food-api`.
 
 ## Journal
+
+### 4.101.0 — 29 octobre 2026
+
+🔊 **`audio_url` EST COURTE ET SIGNÉE** — `DIRA-CLIENT.md` §8 (la v4.99.0
+l'annonçait ; c'est fait).
+
+```
+"audio_url": "https://files.dira.llc/…/a1b2.m4a?X-Amz-Signature=…"   ⚠️ 15 minutes
+```
+
+⚠️⚠️ **UNE APPLICATION QUI MET `audio_url` EN CACHE EST CASSÉE MAINTENANT.**
+Relisez `GET /analytics/ai/thread` au moment d'ouvrir la conversation, et jouez
+l'adresse qu'il vient de rendre. Celle de `POST /analytics/ai/voice` est bonne
+tout de suite, pas demain.
+
+⚠️ **Lisible sans en-tête** : l'adresse porte sa propre signature, donc votre
+lecteur audio n'a rien à ajouter. C'était déjà le cas, cela ne change pas.
+
+⚠️ **Le fichier s'efface tout seul** au bout de quatre-vingt-dix jours, et avec
+la suppression du compte. Une bulle plus ancienne garde son texte et perd son
+lecteur — c'est normal, ne le présentez pas comme une erreur. Et `audio_url`
+peut être **absent** sur une réponse par ailleurs normale : affichez la bulle
+avec son texte seul.
+
+> Pourquoi : une voix est une donnée personnelle. Une adresse qui vivrait des
+> jours serait une adresse publique avec une date, et elle finirait dans un
+> journal, une capture d'écran, un historique de navigateur.
+
+🎙️ **ET VOS TRANSCRIPTIONS COMPTENT MAINTENANT DANS VOTRE QUOTA.**
+`POST /vtc/ai/voice` et `POST /food/ai/voice` n'étaient comptées que dans le
+budget global de la plateforme ; elles entrent désormais dans le quota **par
+personne**, comme `POST /analytics/ai/voice` depuis toujours. Rien à changer
+chez vous — mais si vous dictez champ par champ, sachez que chaque champ coûte
+un appel.
 
 ### 4.100.0 — 29 octobre 2026
 
