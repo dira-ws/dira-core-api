@@ -91,3 +91,43 @@ func TestRouteDurationStillAnswersAlone(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 43, d)
 }
+
+// ⚠️⚠️ L'ADRESSE DU SIG, QUE LA BASE PORTE OU NON SON `/api`.
+//
+// La durée d'une tournée n'a JAMAIS marché en préprod : `MAPS_BASE_URL` y vaut
+// `…:8000/api`, et ce client ajoutait `/api/calc/route` par-dessus — chaque
+// appel partait sur `/api/api/calc/route`. Comme la durée est AU MIEUX,
+// l'échec se journalisait et la course se créait sans elle. Personne ne pouvait
+// le voir sans lire les journaux.
+//
+// ⚠️ Et la leçon était déjà apprise à côté : `dira-vtc-api/internal/mapsbridge`
+// porte le même commentaire. Deux clients du même service, deux conventions, et
+// le PARTAGÉ avait tort. On accepte donc les deux formes.
+func TestTheRouteURLToleratesBothBaseConventions(t *testing.T) {
+	for _, c := range []struct{ base, attendu string }{
+		{"http://maps:8000", "http://maps:8000/api/calc/route"},
+		{"http://maps:8000/", "http://maps:8000/api/calc/route"},
+		{"http://maps:8000/api", "http://maps:8000/api/calc/route"},
+		{"http://maps:8000/api/", "http://maps:8000/api/calc/route"},
+	} {
+		assert.Equal(t, c.attendu, New(c.base).routeURL(), "base %q", c.base)
+	}
+}
+
+// Et le chemin réellement appelé est le bon, des deux côtés — l'épreuve
+// ci-dessus compare une chaîne, celle-ci regarde ce que le serveur REÇOIT.
+func TestTheSIGIsCalledOnTheRightPathWhateverTheBase(t *testing.T) {
+	for _, suffixe := range []string{"", "/", "/api", "/api/"} {
+		var vu string
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			vu = r.URL.Path
+			_, _ = w.Write([]byte(`{"routes":[{"duration_s":60}]}`))
+		}))
+		c := New(srv.URL + suffixe)
+		_, err := c.Route(context.Background(), "lome", tournée)
+		srv.Close()
+		require.NoError(t, err, "suffixe %q", suffixe)
+		assert.Equal(t, "/api/calc/route", vu,
+			"base %q : le chemin doublé (`/api/api/…`) est le défaut qu'on corrige", srv.URL+suffixe)
+	}
+}
