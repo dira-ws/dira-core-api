@@ -91,13 +91,20 @@ type Billing struct {
 	Rides      VerticalBilling `bson:"rides" json:"rides"`
 	Deliveries VerticalBilling `bson:"deliveries" json:"deliveries"`
 	UpdatedBy  string          `bson:"updated_by,omitempty" json:"updated_by,omitempty"`
-	UpdatedAt  time.Time       `bson:"updated_at" json:"updated_at"`
+	UpdatedAt  *time.Time      `bson:"updated_at,omitempty" json:"updated_at,omitempty"`
 }
 
 // DefaultBilling : ce que la plateforme fait quand rien n'est réglé — ce
 // qu'elle a toujours fait. Les courses se paient en commission à la classe,
 // le client est débité à l'acceptation ; la livraison se paie en jetons, le
 // client est débité à la commande.
+// ptrTime : la date qu'on POSE, par pointeur.
+//
+// ⚠️ Le champ est un pointeur pour que la date ABSENTE se distingue de la date
+// zéro. `0001-01-01T00:00:00Z` partait sur le fil comme une vraie date sur la
+// facturation d'un pays qui n'a jamais rien réglé.
+func ptrTime(t time.Time) *time.Time { return &t }
+
 func DefaultBilling(country string) Billing {
 	return Billing{
 		Country:    country,

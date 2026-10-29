@@ -13,14 +13,14 @@ type SettingsInput struct {
 }
 
 type SettingsResponse struct {
-	Country             string    `json:"country"`
-	Currency            string    `json:"currency"`
-	DefaultFrequency    string    `json:"default_frequency"`
-	DefaultPayDay       int       `json:"default_pay_day"`
-	DefaultPayWeekday   int       `json:"default_pay_weekday"`
-	MaxDeductionPercent int       `json:"max_deduction_percent"`
-	MinNet              int       `json:"min_net"`
-	UpdatedAt           time.Time `json:"updated_at"`
+	Country             string     `json:"country"`
+	Currency            string     `json:"currency"`
+	DefaultFrequency    string     `json:"default_frequency"`
+	DefaultPayDay       int        `json:"default_pay_day"`
+	DefaultPayWeekday   int        `json:"default_pay_weekday"`
+	MaxDeductionPercent int        `json:"max_deduction_percent"`
+	MinNet              int        `json:"min_net"`
+	UpdatedAt           *time.Time `json:"updated_at,omitempty"`
 	// Le VOCABULAIRE, pour que la console propose exactement ce que le serveur
 	// accepte. Deux listes recopiées divergeraient au premier ajout.
 	Frequencies []string `json:"frequencies"`
@@ -28,12 +28,31 @@ type SettingsResponse struct {
 	Methods     []string `json:"methods"`
 }
 
+// whenSet rend la date, ou NIL si elle n'a jamais été posée.
+//
+// ⚠️⚠️ LA DATE ZÉRO D'UN `time.Time` GO PART SUR LE FIL COMME UNE VRAIE DATE.
+// `0001-01-01T00:00:00Z` ne se distingue pas d'une décision d'exploitation
+// prise un 1er janvier : une application qui compare `updated_at` pour savoir
+// si son cache a vieilli se compare à l'an 1, donc ne rafraîchit jamais, et une
+// console l'affiche « modifié le 01/01/0001 ». La console de Dira porte
+// d'ailleurs encore le contournement écrit à la main le jour où quelqu'un l'a
+// découvert (`!updated_at.startsWith("0001")`).
+//
+// « Jamais réglé » et « réglé à telle date » sont deux faits différents, et
+// seul un champ ABSENT dit le premier.
+func whenSet(t time.Time) *time.Time {
+	if t.IsZero() {
+		return nil
+	}
+	return &t
+}
+
 func toSettings(s *Settings, currency string) SettingsResponse {
 	return SettingsResponse{
 		Country: s.Country, Currency: currency,
 		DefaultFrequency: s.DefaultFrequency, DefaultPayDay: s.DefaultPayDay,
 		DefaultPayWeekday: s.DefaultPayWeekday, MaxDeductionPercent: s.MaxDeductionPercent,
-		MinNet: s.MinNet, UpdatedAt: s.UpdatedAt,
+		MinNet: s.MinNet, UpdatedAt: whenSet(s.UpdatedAt),
 		Frequencies: Frequencies, Statuses: Statuses, Methods: Methods,
 	}
 }
