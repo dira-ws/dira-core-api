@@ -381,10 +381,12 @@ Son absence sur un tour `ordered` n'est donc pas une erreur.
 celle de l'assistant. C'est aussi par lui que le serveur retrouve la bonne
 bulle : deux vocaux qui se suivent ne se mélangent pas.
 
-⚠️ **`audio_url` est publique, NON signée, SANS échéance** — lisible sans
-en-tête, et elle ne périme pas. Un lecteur audio n'envoie pas nos en-têtes.
-Contrepartie écrite noir sur blanc : **son secret est son identifiant**, donc à
-ne pas recopier dans un journal ni dans un lien de partage.
+⚠️⚠️ **`audio_url` se lit sans en-tête AUJOURD'HUI, et NE SE CACHE PAS.** Elle
+est appelée à devenir **courte et signée** : une voix est une donnée
+personnelle, et son adresse finira par expirer. **Relisez-la du fil** à chaque
+ouverture de la conversation plutôt que de la ranger — c'est la seule chose à
+faire pour que le changement soit sans rupture. Et traitez-la comme la voix de
+quelqu'un : ni dans un journal, ni dans un lien de partage.
 
 ⚠️⚠️ **`origin` : LA LONGITUDE D'ABORD**, dans les deux formes
 (`[9.45, 0.41]` pour le chat, `"9.45,0.41"` pour le vocal). À Libreville, lu à

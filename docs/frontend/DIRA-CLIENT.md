@@ -1348,16 +1348,23 @@ suivent ne se mélangent pas.
 
 ### 🆕 ⚠️ `audio_url` : COMMENT ON LE LIT (v4.99.0)
 
-- **Lisible SANS en-tête.** L'adresse est publique et **ne porte aucune
-  signature** : ni jeton, ni échéance. Un lecteur audio dans une bulle de
-  conversation n'envoie pas nos en-têtes, et exiger le jeton Dira aurait rendu
-  les vocaux injouables sur les deux plateformes.
-- **Elle ne périme pas.** Un fil relu une semaine — ou un an — plus tard se
-  réécoute. C'est voulu : le vocal **est** le message.
-- ⚠️ **Et c'est donc une adresse à ne pas laisser traîner.** Son secret est son
-  identifiant, long et non devinable : qui l'a peut écouter. Ne la recopiez pas
-  dans vos journaux, ne la mettez pas dans un lien de partage, et ne la montrez
-  pas hors de la conversation.
+- **Lisible SANS en-tête**, aujourd'hui : l'adresse ne porte aucune signature.
+  Un lecteur audio dans une bulle de conversation n'envoie pas nos en-têtes, et
+  exiger le jeton Dira aurait rendu les vocaux injouables sur les deux
+  plateformes. Donnez-la directement à votre lecteur.
+
+⚠️⚠️ **NE LA GARDEZ PAS, NE LA RECOPIEZ PAS — RELISEZ-LA DU FIL.** Elle est
+appelée à devenir **courte et signée** : une voix est une donnée personnelle, et
+son adresse finira par expirer. Une application qui met `audio_url` en cache, la
+range dans sa base ou la met dans un lien se cassera ce jour-là. **Relisez
+`GET /ai/thread` au moment d'ouvrir la conversation**, et jouez l'adresse qu'il
+vient de rendre.
+
+⚠️ **Et traitez-la comme la voix de quelqu'un** : pas dans vos journaux, pas
+dans un partage, pas hors de la conversation.
+
+> Le changement sera **sans rupture pour vous** si vous relisez l'adresse à
+> chaque ouverture — c'est la seule chose à faire dès maintenant.
 
 ### Les trois rôles
 
