@@ -1,6 +1,6 @@
 # App CLIENT — LIVRAISON — contrat d'API
 
-> **Version 4.107.0** · 30 octobre 2026
+> **Version 4.108.0** · 30 octobre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Livraison : `https://api-staging.dira.llc/api/v1/food` · Suivi : `wss://tracking-staging.dira.llc`
 
 
@@ -2397,6 +2397,43 @@ ne le traduisez pas, montrez-le tel quel.
 l'**affichez dans le champ de saisie**, corrigible, et c'est le client qui
 l'envoie à `/ai/chat`. Commander depuis un vocal non relu ferait livrer
 « riz gras » à qui a dit « riz sauce ».
+
+### 🆕 🎯 CHERCHER UN PLAT OU UNE BOUTIQUE À LA VOIX (v4.108.0)
+
+```
+POST /ai/voice   multipart : file, language?, seconds?, context=dish_search|store_search, near="lng,lat"
+→ { "text": "un poulet nyembwe", "language": "fr", "context": "dish_search",
+    "candidates": [
+      { "dish_id": "…", "store_id": "…", "name": "Poulet nyembwe",
+        "store_name": "Chez Mado", "price_from_xof": 4000,
+        "distance_m": 500, "confidence": 1 } ] }
+```
+
+**Pour Dira Lite, et pour toute recherche qu'on fait en parlant.** La
+reconnaissance du téléphone ne connaît ni « poulet nyembwe » ni
+« thiéboudienne » ; le catalogue, si. Ajoutez `context` (`dish_search` ou
+`store_search`) et `near` (la position du téléphone, « longitude,latitude ») :
+les plats — ou les boutiques — servis **autour** **orientent la
+transcription** (leurs noms sont soufflés au modèle), puis reviennent dans
+`candidates` quand leur nom est dans ce qui a été dit.
+
+- **Montrez « J'ai entendu « … » »** dans la recherche, corrigible, et
+  **proposez les candidats** — le premier lu à voix haute.
+- **Cinq au plus**, classés par `confidence` — la part du nom retrouvée dans ce
+  qui a été dit, de 0,5 à 1 : la moitié du nom au moins — puis par la distance.
+- ⚠️ **Seulement ce qui se commande ici** : boutiques proches, ouvertes et
+  servables ; plats disponibles. Un plat servi par plusieurs boutiques est
+  **un seul** candidat : `store_id` est la boutique **la plus proche**, et
+  `price_from_xof` le prix le plus bas — « **à partir de** », ⚠️ **pas un
+  total** (les frais de livraison n'y sont pas ; le total vient du devis,
+  `POST /orders/quote`).
+- ⚠️ **`near` est nécessaire aux candidats** : sans position, il n'y a pas de
+  « autour », et vous recevez une transcription nue.
+- ⚠️ **`candidates` absent ou vide n'est PAS une erreur** : lancez votre
+  recherche habituelle sur `text`.
+- ⚠️ **Rien n'est commandé ni ajouté au panier** : une liste à montrer.
+- **Envoyez `seconds`** : au-delà de 60, `413 audio_too_long`, avant toute
+  transcription.
 
 > ### 🆕 ⚠️⚠️ CETTE ROUTE NE GARDE RIEN, ET C'EST VOULU (v4.84.0)
 >

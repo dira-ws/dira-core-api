@@ -1,6 +1,6 @@
 # App CLIENT — COURSES (VTC) — contrat d'API
 
-> **Version 4.107.0** · 30 octobre 2026
+> **Version 4.108.0** · 30 octobre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Courses : `https://api-staging.dira.llc/api/v1/vtc` · Suivi : `wss://tracking-staging.dira.llc`
 
 ---
@@ -1206,6 +1206,44 @@ ne le traduisez pas, montrez-le tel quel.
 ⚠️ **La transcription n'est PAS exécutée.** Elle revient à vous ; vous
 l'**affichez dans le champ de saisie**, corrigible, et c'est le client qui
 l'envoie à `/ai/chat`.
+
+### 🆕 🎯 REMPLIR LE DÉPART OU LA DESTINATION À LA VOIX (v4.108.0)
+
+```
+POST /ai/voice   multipart : file, language?, seconds?, context=pickup|dropoff, near="lng,lat"
+→ { "text": "au marché de Bè", "language": "fr", "context": "dropoff",
+    "candidates": [
+      { "label": "Marché de Bè, Lomé", "point": [1.2390, 6.1319],
+        "place_id": "dira:overture:42", "kind": "market",
+        "distance_m": 1500, "confidence": 1 } ] }
+```
+
+**Pour Dira Lite, et pour tout champ qu'on remplit en parlant.** La
+reconnaissance du téléphone ne connaît ni les quartiers ni les repères d'ici ;
+la carte de Dira, si. Ajoutez `context` (le champ : `pickup` ou `dropoff`) et
+`near` (la position du téléphone, « longitude,latitude ») : ce qui a été dit
+est cherché dans la carte — sa base locale d'abord —, et les lieux trouvés
+reviennent dans `candidates`.
+
+- **Montrez « J'ai entendu « … » »** dans le champ, corrigible, et **proposez
+  les candidats** directement — le premier lu à voix haute. Un candidat touché
+  remplit le champ avec `label` et `point`.
+- **Cinq au plus**, classés par `confidence` — la part de ce qui a été dit
+  retrouvée dans le nom du lieu, de 0 à 1 — puis par l'ordre de la carte.
+  `distance_m` est mesurée à vol d'oiseau depuis `near` (absente sans lui) ;
+  `kind` est la catégorie la plus précise que la carte connaisse (`market`,
+  `hospital`…), absente quand elle ne sait pas.
+- ⚠️ **Les tournures d'ouverture ne sont pas cherchées** : « emmène-moi au
+  marché de Bè » cherche « marché de Bè ». Vous n'avez rien à nettoyer.
+- ⚠️ **`candidates` absent ou vide n'est PAS une erreur** : la carte n'a rien
+  trouvé. Lancez votre recherche habituelle sur `text`.
+- ⚠️ **Rien n'est choisi à la place de la personne** : ce n'est jamais une
+  course, ni même un lieu retenu — une liste à montrer.
+- **Envoyez `seconds`**, la durée mesurée par l'enregistreur : au-delà de 60,
+  `413 audio_too_long`, **avant** toute transcription (même écran que
+  `audio_too_large` : « message trop long, recommencez plus court »).
+- Sans `context`, ou avec une valeur inconnue : une transcription nue, comme
+  avant. Une `near` illisible est ignorée, jamais refusée.
 
 > ### 🆕 ⚠️⚠️ CETTE ROUTE NE GARDE RIEN, ET C'EST VOULU (v4.84.0)
 >
