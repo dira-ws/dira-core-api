@@ -268,3 +268,57 @@ func TestAForeignAddressIsServedAsIsWithoutNoise(t *testing.T) {
 	assert.Equal(t, "https://files.dira.llc/demo/piece.jpg", resp.Documents[0].FileURL)
 	assert.Zero(t, vault.signed, "une adresse étrangère a été présentée au signataire")
 }
+
+type removedFiles struct{ urls []string }
+
+func (r *removedFiles) Remove(_ context.Context, url string) error {
+	r.urls = append(r.urls, url)
+	return nil
+}
+
+// ⚠️⚠️ UNE PIÈCE REMPLACÉE PART AVEC SON FICHIER — sinon l'effacement d'un
+// compte, qui suit les lignes, laisserait la photo d'avant pour toujours.
+func TestAReplacedDocumentTakesItsFileAway(t *testing.T) {
+	fx := newFixture()
+	files := &removedFiles{}
+	fx.svc.SetFiles(files)
+	driver, _ := fx.newDriver(t, 5)
+
+	submit(t, fx, driver, SubmitDocumentRequest{Kind: DocLicence, FileURL: ours + "document/u/ancien.jpg", ExpiresAt: inDays(400)})
+	assert.Empty(t, files.urls, "un premier dépôt n'a rien à retirer")
+	submit(t, fx, driver, SubmitDocumentRequest{Kind: DocLicence, FileURL: ours + "document/u/nouveau.jpg", ExpiresAt: inDays(400)})
+	assert.Equal(t, []string{ours + "document/u/ancien.jpg"}, files.urls, "le fichier remplacé est resté dans le seau")
+
+	// Le même fichier redéposé (adresse signée ou nue) n'est pas retiré.
+	files.urls = nil
+	submit(t, fx, driver, SubmitDocumentRequest{Kind: DocLicence, FileURL: ours + "document/u/nouveau.jpg?sig=1", ExpiresAt: inDays(400)})
+	assert.Empty(t, files.urls, "le fichier qu'on vient de redéposer a été retiré")
+}
+
+// ⚠️ UN FICHIER QU'UNE AUTRE PIÈCE DU MÊME PORTEUR DÉSIGNE ENCORE RESTE.
+func TestASharedFileIsNotRemoved(t *testing.T) {
+	fx := newFixture()
+	files := &removedFiles{}
+	fx.svc.SetFiles(files)
+	driver, _ := fx.newDriver(t, 5)
+	shared := ours + "document/u/recto-verso.jpg"
+	submit(t, fx, driver, SubmitDocumentRequest{Kind: DocLicence, FileURL: shared, ExpiresAt: inDays(400)})
+	submit(t, fx, driver, SubmitDocumentRequest{Kind: DocIDCard, FileURL: shared})
+	submit(t, fx, driver, SubmitDocumentRequest{Kind: DocLicence, FileURL: ours + "document/u/autre.jpg", ExpiresAt: inDays(400)})
+	assert.Empty(t, files.urls, "la photo d'une autre pièce a été retirée")
+}
+
+// ⚠️ LES PAPIERS D'UNE SOCIÉTÉ AUSSI.
+func TestAReplacedFleetDocumentTakesItsFileAway(t *testing.T) {
+	f := newFixture()
+	files := &removedFiles{}
+	f.svc.SetFiles(files)
+	_, _, fleetID, vehicleID := f.newFleetDriver(t)
+	for _, url := range []string{ours + "document/f/cg1.jpg", ours + "document/f/cg2.jpg"} {
+		_, err := f.svc.SubmitFleetDocument(context.Background(), fleetID, SubmitDocumentRequest{
+			Kind: DocRegistration, FileURL: url, VehicleID: vehicleID,
+		})
+		require.NoError(t, err)
+	}
+	assert.Equal(t, []string{ours + "document/f/cg1.jpg"}, files.urls)
+}

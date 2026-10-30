@@ -24,6 +24,8 @@ import (
 	"strings"
 	"time"
 
+	"go.mongodb.org/mongo-driver/bson/primitive"
+
 	"github.com/kgtech-org/dira-core-api/pkg/apperr"
 )
 
@@ -147,4 +149,60 @@ func (s *Service) AdoptStrays(ctx context.Context, limit int) (int, error) {
 		moved++
 	}
 	return moved, nil
+}
+
+// replacedFile : l'adresse de la pièce qu'un dépôt va REMPLACER — même
+// porteur, même type, même véhicule. Vide s'il n'y en a pas.
+func (s *Service) replacedFile(ctx context.Context, owner primitive.ObjectID, kind string, vehicle *primitive.ObjectID) string {
+	docs, err := s.repo.DocumentsByOwner(ctx, owner)
+	if err != nil {
+		return ""
+	}
+	want := docKey(kind, vehicle)
+	for _, d := range docs {
+		if docKey(d.Kind, d.VehicleID) == want {
+			return d.FileURL
+		}
+	}
+	return ""
+}
+
+// dropReplaced retire du dépôt le fichier d'une pièce REMPLACÉE.
+//
+// ⚠️⚠️ SANS CE GESTE, L'EFFACEMENT D'UN COMPTE N'EST PAS COMPLET. Le dépôt
+// remplace la LIGNE d'une pièce ; l'ancien fichier restait dans le seau, et
+// plus rien ne le désignait. Le jour où le compte est effacé, l'effacement
+// suit les lignes : la photo de la carte d'identité d'avant, elle, restait
+// pour toujours — impossible à retrouver, impossible à justifier.
+//
+// ⚠️ ET UN FICHIER ENCORE DÉSIGNÉ PAR UNE AUTRE PIÈCE DU MÊME PORTEUR N'EST PAS
+// RETIRÉ : une application qui joint la même photo à deux pièces ne doit pas
+// en perdre une parce que l'autre a été remplacée. AU MIEUX : un retrait qui
+// échoue est dit, et n'empêche pas le dépôt.
+func (s *Service) dropReplaced(ctx context.Context, owner primitive.ObjectID, old string) {
+	// ⚠️ LE SEUL GARDE-FOU, ET IL SUFFIT : un fichier encore désigné par une
+	// pièce de ce porteur — y compris celle qu'on vient de déposer, si c'est
+	// le même fichier — reste.
+	if s.files == nil || old == "" {
+		return
+	}
+	if docs, err := s.repo.DocumentsByOwner(ctx, owner); err == nil {
+		for _, d := range docs {
+			if storageBare(d.FileURL) == storageBare(old) {
+				return
+			}
+		}
+	}
+	if err := s.files.Remove(ctx, old); err != nil {
+		slog.WarnContext(ctx, "compliance: the replaced document file stays in the bucket", "error", err)
+	}
+}
+
+// storageBare : une adresse sans sa signature — deux adresses du même objet,
+// l'une signée, l'autre nue, désignent le même fichier.
+func storageBare(raw string) string {
+	if i := strings.IndexAny(raw, "?#"); i >= 0 {
+		return raw[:i]
+	}
+	return raw
 }
