@@ -372,6 +372,7 @@ func (s *Service) SubmitDocument(ctx context.Context, userID string, req SubmitD
 	if err != nil {
 		return nil, err
 	}
+	replaced := s.replacedFile(ctx, ownerOID, req.Kind, vehicleOID)
 	doc, err := s.repo.UpsertDocument(ctx, &Document{
 		OwnerID: ownerOID, VehicleID: vehicleOID, Kind: req.Kind,
 		FileURL: fileURL, ExpiresAt: req.ExpiresAt,
@@ -379,6 +380,7 @@ func (s *Service) SubmitDocument(ctx context.Context, userID string, req SubmitD
 	if err != nil {
 		return nil, err
 	}
+	s.dropReplaced(ctx, ownerOID, replaced)
 	s.record(ctx, "compliance.document.submit", doc.ID.Hex(), nil,
 		map[string]any{"kind": doc.Kind, "owner_id": driverID})
 	if s.watch != nil {
@@ -572,6 +574,7 @@ func (s *Service) SubmitFleetDocument(ctx context.Context, fleetID string, req S
 	if err != nil {
 		return nil, err
 	}
+	replaced := s.replacedFile(ctx, fleetOID, req.Kind, &vid)
 	doc, err := s.repo.UpsertDocument(ctx, &Document{
 		// ⚠️ LA FLOTTE EST L'OWNER : c'est elle qui répond de cette pièce, et
 		// la clé d'unicité (`owner_id`, `kind`, `vehicle_id`) la distingue
@@ -582,6 +585,7 @@ func (s *Service) SubmitFleetDocument(ctx context.Context, fleetID string, req S
 	if err != nil {
 		return nil, err
 	}
+	s.dropReplaced(ctx, fleetOID, replaced)
 	s.record(ctx, "compliance.document.submit", doc.ID.Hex(), nil,
 		map[string]any{"kind": doc.Kind, "fleet_id": fleetID, "vehicle_id": req.VehicleID})
 	// ⚠️ LE MÊME SIGNAL QUE POUR UNE PERSONNE : sans lui, une pièce déposée par
