@@ -1,6 +1,6 @@
 # App CLIENT — LIVRAISON — contrat d'API
 
-> **Version 4.111.0** · 30 octobre 2026
+> **Version 4.112.0** · 30 octobre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Livraison : `https://api-staging.dira.llc/api/v1/food` · Suivi : `wss://tracking-staging.dira.llc`
 
 
@@ -821,6 +821,26 @@ GET /banners
 - **`lat` + `lng` vont ensemble.** Sans position **ni** `q`, la requête est refusée : rendre la plateforme entière n'aiderait personne.
 - Avec position, chaque boutique porte `distance_m` et la liste est triée du plus proche. Sans position, tri par nom et **pas de `distance_m`** — c'est le cas d'un utilisateur qui a refusé la localisation.
 - `tags=italien,libanais` **élargit** (l'un OU l'autre) : personne ne cherche un restaurant qui serait les deux.
+
+#### 🆕 🔎 Chercher un PLAT par ses mots, là où l'on livre (v4.112.0)
+
+```
+GET /dishes/search?q=poulet+braisé&near=9.45,0.41        (connecté)
+→ { "items": [ { "dish_id": "…", "store_id": "…", "name": "Poulet braisé",
+                 "store_name": "Chez Mado", "price_from_xof": 4000,
+                 "distance_m": 450, "confidence": 1 } ] }
+```
+
+`GET /stores?q=` cherche des **enseignes** : « poulet braisé » n'y trouve aucun
+plat. Celle-ci cherche les plats **disponibles** dans les boutiques **proches,
+ouvertes et servables**.
+
+- ⚠️ **`near` est obligatoire** (`422` sans lui) : un plat se cherche là où il
+  se livre.
+- Un plat servi par plusieurs boutiques est **un** candidat : `store_id` est la
+  boutique la plus **proche**, `price_from_xof` le prix le plus **bas** — « à
+  partir de », **sans** les frais de livraison. Cinq candidats au plus.
+- `items: []` n'est pas une erreur : proposez la recherche d'enseignes.
 
 #### 🆕 Le carrousel : réservez sa place AVANT de charger les images (v4.91.0)
 

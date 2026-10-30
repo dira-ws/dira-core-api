@@ -1,6 +1,6 @@
 # App CLIENT — COURSES (VTC) — contrat d'API
 
-> **Version 4.111.0** · 30 octobre 2026
+> **Version 4.112.0** · 30 octobre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Courses : `https://api-staging.dira.llc/api/v1/vtc` · Suivi : `wss://tracking-staging.dira.llc`
 
 ---
@@ -1178,6 +1178,23 @@ Ce qu'il faut envoyer et afficher :
 
 `502`/`503 assistant_unavailable` : l'assistant est indisponible — dites-le
 et **laissez la composition manuelle**, qui ne dépend d'aucun modèle.
+
+### 🆕 🔎 Chercher un LIEU par ses mots (v4.112.0)
+
+```
+GET /places/search?q=marché+de+Bè&near=1.2255,6.1319     (passager connecté)
+→ { "items": [ { "label": "Marché de Bè, Lomé", "point": [1.24, 6.12],
+                 "place_id": "…", "kind": "market",
+                 "distance_m": 1850, "confidence": 1 } ] }
+```
+
+La recherche de la saisie vocale d'un champ, pour ce qui s'**écrit** : la carte
+de la ville **de votre pays** — sa base locale d'abord, les repères d'ici —,
+cinq lieux au plus. `near` est facultatif (sans lui, pas de `distance_m`).
+
+- ⚠️ **Rien n'est choisi** : une liste à montrer. `items: []` n'est pas une
+  erreur — la carte ne connaît pas ce lieu ; proposez la recherche d'adresse
+  habituelle.
 
 ### 🎙️ Le VOCAL — 60 s, transcrit, MONTRÉ, puis envoyé
 
