@@ -1,6 +1,6 @@
 # Specs frontend — par rôle
 
-> **Version 4.110.0** · 30 octobre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics`
+> **Version 4.111.0** · 30 octobre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics`
 
 **Cinq** documents, un par application. Chacun est **autonome** : tout ce qu'un frontend doit savoir pour son rôle, sans avoir à ouvrir les vingt specs de modules.
 
@@ -355,6 +355,16 @@ Chaque document porte la même version en en-tête, et son propre journal des ch
 - [ ] ⚠️ **`TRACKING_JWT_SECRET` renseigné dans chaque environnement déployé.** Vide, l'authentification du service de suivi est **désactivée** : n'importe qui connaissant un `delivery_id` suit la course. Le secret doit valoir **exactement** le `JWT_SECRET` de `dira-food-api`.
 
 ## Journal
+
+### 4.111.0 — 30 octobre 2026
+
+🟢 **CE QUE LES APPLICATIONS SEULES MESURENT D'UN TOUR** — `DIRA-CLIENT.md` §8 bis
+(dira-core-api#266). `POST /analytics/ai/turns/{turn_id}/experience` (rôle
+client) → `204` : `turn_input_type`, `turn_output_type`, `audio_duration_s`,
+`time_to_playable_ms`, `play_error` (liste fermée), `confirmation_step`,
+`repeated_question`, `completed_booking`. Aucun contenu. Un rapport complète le
+précédent, chaque fait n'est compté qu'une fois ; `404 turn_not_found` pour un
+tour inconnu.
 
 ### 4.110.0 — 30 octobre 2026
 
