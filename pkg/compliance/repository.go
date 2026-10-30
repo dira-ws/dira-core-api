@@ -3,6 +3,7 @@ package compliance
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"time"
 
 	"go.mongodb.org/mongo-driver/bson"
@@ -239,4 +240,32 @@ func (r *Repository) DeleteDocumentsOf(ctx context.Context, ownerID primitive.Ob
 		return 0, fmt.Errorf("compliance: delete documents of %s: %w", ownerID.Hex(), err)
 	}
 	return res.DeletedCount, nil
+}
+
+// DocumentsOutside rend les pièces dont l'adresse ne contient pas `marker` —
+// celles déposées hors du genre des pièces, à ranger.
+func (r *Repository) DocumentsOutside(ctx context.Context, marker string, limit int) ([]Document, error) {
+	if limit <= 0 || limit > 1000 {
+		limit = 1000
+	}
+	cur, err := r.documents.Find(ctx,
+		bson.M{"file_url": bson.M{"$exists": true, "$ne": "", "$not": primitive.Regex{Pattern: regexp.QuoteMeta(marker)}}},
+		options.Find().SetLimit(int64(limit)))
+	if err != nil {
+		return nil, err
+	}
+	var out []Document
+	if err := cur.All(ctx, &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// SetFileURL réécrit l'adresse d'UNE pièce — seulement si elle n'a pas changé
+// entre-temps (un nouveau dépôt l'aurait remplacée : on ne l'écrase pas).
+func (r *Repository) SetFileURL(ctx context.Context, d *Document, fileURL string) error {
+	_, err := r.documents.UpdateOne(ctx,
+		bson.M{"_id": d.ID, "file_url": d.FileURL},
+		bson.M{"$set": bson.M{"file_url": fileURL}})
+	return err
 }

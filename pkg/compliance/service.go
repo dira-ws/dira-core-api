@@ -284,6 +284,9 @@ type Service struct {
 	// remind relance les gens à qui il manque des pièces — voir `campaign.go`.
 	// Facultatif : sans elle, `Remind` ne prétend rien avoir envoyé.
 	remind Reminder
+	// vault RANGE chaque pièce sous son genre au dépôt, et la SIGNE à la
+	// lecture — voir `vault.go`. Facultatif.
+	vault Vault
 }
 
 // Watcher est prévenu d'un DÉPÔT : la verticale en fait une alerte au staff
@@ -365,9 +368,13 @@ func (s *Service) SubmitDocument(ctx context.Context, userID string, req SubmitD
 			"kind": req.Kind, "fields": []string{"expires_at"},
 		})
 	}
+	fileURL, err := s.keep(ctx, req.FileURL, driverID)
+	if err != nil {
+		return nil, err
+	}
 	doc, err := s.repo.UpsertDocument(ctx, &Document{
 		OwnerID: ownerOID, VehicleID: vehicleOID, Kind: req.Kind,
-		FileURL: req.FileURL, ExpiresAt: req.ExpiresAt,
+		FileURL: fileURL, ExpiresAt: req.ExpiresAt,
 	})
 	if err != nil {
 		return nil, err
@@ -377,7 +384,7 @@ func (s *Service) SubmitDocument(ctx context.Context, userID string, req SubmitD
 	if s.watch != nil {
 		s.watch.DocumentSubmitted(ctx, driverID, userID, doc.Kind, req.VehicleID)
 	}
-	out := toDocumentResponse(doc, time.Now().UTC())
+	out := s.respond(ctx, doc, time.Now().UTC())
 	return &out, nil
 }
 
@@ -439,7 +446,7 @@ func (s *Service) complianceOf(ctx context.Context, driverID string) (*Complianc
 	covered := make(map[string]bool, len(docs))
 	for i := range docs {
 		d := &docs[i]
-		out.Documents = append(out.Documents, toDocumentResponse(d, now))
+		out.Documents = append(out.Documents, s.respond(ctx, d, now))
 		if d.Compliant(now) {
 			covered[docKey(d.Kind, d.VehicleID)] = true
 		}
@@ -561,12 +568,16 @@ func (s *Service) SubmitFleetDocument(ctx context.Context, fleetID string, req S
 			"kind": req.Kind, "fields": []string{"expires_at"},
 		})
 	}
+	fileURL, err := s.keep(ctx, req.FileURL, fleetID)
+	if err != nil {
+		return nil, err
+	}
 	doc, err := s.repo.UpsertDocument(ctx, &Document{
 		// ⚠️ LA FLOTTE EST L'OWNER : c'est elle qui répond de cette pièce, et
 		// la clé d'unicité (`owner_id`, `kind`, `vehicle_id`) la distingue
 		// ainsi du dépôt d'un conducteur sur la même voiture.
 		OwnerID: fleetOID, FleetID: &fleetOID, VehicleID: &vid, Kind: req.Kind,
-		FileURL: req.FileURL, ExpiresAt: req.ExpiresAt,
+		FileURL: fileURL, ExpiresAt: req.ExpiresAt,
 	})
 	if err != nil {
 		return nil, err
@@ -580,7 +591,7 @@ func (s *Service) SubmitFleetDocument(ctx context.Context, fleetID string, req S
 	if s.watch != nil {
 		s.watch.DocumentSubmitted(ctx, fleetID, "", doc.Kind, req.VehicleID)
 	}
-	out := toDocumentResponse(doc, time.Now().UTC())
+	out := s.respond(ctx, doc, time.Now().UTC())
 	return &out, nil
 }
 
@@ -616,7 +627,7 @@ func (s *Service) FleetCompliance(ctx context.Context, fleetID string) (*FleetCo
 			continue
 		}
 		key := d.VehicleID.Hex()
-		byVehicle[key] = append(byVehicle[key], toDocumentResponse(d, now))
+		byVehicle[key] = append(byVehicle[key], s.respond(ctx, d, now))
 		if d.Compliant(now) {
 			covered[docKey(d.Kind, d.VehicleID)] = true
 		}
@@ -689,7 +700,7 @@ func (s *Service) ReviewDocument(ctx context.Context, adminID, documentID string
 	}
 	s.record(ctx, "delivery.document.review", documentID, nil,
 		map[string]any{"status": req.Status, "reason": req.Reason})
-	out := toDocumentResponse(doc, time.Now().UTC())
+	out := s.respond(ctx, doc, time.Now().UTC())
 	return &out, nil
 }
 
@@ -724,7 +735,7 @@ func (s *Service) ComplianceQueue(ctx context.Context, limit int) ([]ComplianceQ
 		// On nomme la flotte, et le champ du chauffeur reste VIDE.
 		if d.FleetID != nil {
 			out = append(out, ComplianceQueueItem{
-				DocumentResponse: toDocumentResponse(d, now),
+				DocumentResponse: s.respond(ctx, d, now),
 				FleetID:          d.FleetID.Hex(),
 			})
 			continue
@@ -740,7 +751,7 @@ func (s *Service) ComplianceQueue(ctx context.Context, limit int) ([]ComplianceQ
 			accounts[driverID] = userID
 		}
 		out = append(out, ComplianceQueueItem{
-			DocumentResponse: toDocumentResponse(d, now),
+			DocumentResponse: s.respond(ctx, d, now),
 			DriverID:         driverID,
 			UserID:           userID,
 		})
