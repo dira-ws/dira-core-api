@@ -1,6 +1,6 @@
 # App CLIENT UNIFIÉE — LIVRAISON **et** COURSES — contrat d'API
 
-> **Version 4.105.0** · 30 octobre 2026
+> **Version 4.106.0** · 30 octobre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Livraison : `…/api/v1/food` · Courses : `…/api/v1/vtc` · Combiné : `…/api/v1/analytics` · Suivi : `wss://tracking-staging.dira.llc`
 
 ---
@@ -1343,19 +1343,27 @@ faut ? » sinon. C'est un **filet**, pas une source : la règle ne change pas,
 `action.say` dit le prix. ⚠️ Ne comparez jamais `reply` à une phrase connue —
 sa formulation n'est pas un contrat.
 
-### ⚠️⚠️ UNE COMMANDE DE REPAS N'ANNONCE AUCUN PRIX, ET C'EST VOULU
+### ⚠️⚠️ LE PRIX D'UN REPAS VIENT DU DEVIS DE LA LIVRAISON — ET SEULEMENT DE LUI
 
-Sur `type: "food_confirmation_required"`, **`summary.price_xof` est absent** et
-`say` ne cite aucun montant.
+🆕 (v4.106.0) Sur `type: "food_confirmation_required"`, **`summary.price_xof`
+est désormais le TOTAL du devis** de la livraison — frais de livraison et
+remises compris —, et `say` le cite. C'est **le montant qui sera débité** : la
+confirmation commande par ce devis, et la livraison refuse plutôt que de débiter
+un autre montant.
 
-Le total d'une commande vaut `sous-total + frais de livraison − remises`, et les
-frais ne sont calculés **qu'à la création**. Annoncer le sous-total du plan
-dirait un prix **inférieur** à celui qu'on débite — la pire des deux directions,
-et exactement ce que cette confirmation existe pour empêcher.
+⚠️ **Il peut encore être ABSENT** : quand le serveur n'a pas pu chiffrer — pas
+d'adresse par défaut sur le compte, une boutique fermée, un service muet. La
+proposition reste alors, **sans prix**, comme avant : n'en inventez pas un.
 
-⚠️ **N'additionnez donc pas `items[].price × qty` pour l'afficher comme un
-total.** Vous afficheriez un montant que personne ne paie. La commande née de
-l'assistant est **en espèces** : la personne paie à la porte et peut refuser.
+⚠️ **N'additionnez jamais `items[].price × qty` pour l'afficher comme un
+total.** Le total vaut `sous-total + frais de livraison − remises` ; le
+sous-total dirait un prix **inférieur** à celui qu'on débite — la pire des deux
+directions. La commande née de l'assistant est **en espèces** : la personne paie
+à la porte et peut refuser.
+
+⚠️ **L'échéance de la proposition est celle du devis** (dix minutes) : passé
+ce délai, le prix n'est plus promis, et la confirmation est refusée — demandez
+à nouveau.
 
 ### ⚠️⚠️ « OUI » MARCHE AUSSI, SANS JETON — ET C'EST LE CHEMIN DES GENS QUI NE LISENT PAS
 
@@ -2507,6 +2515,13 @@ du métier.
 ---
 
 ## 15. Journal
+
+### 4.106.0 — 30 octobre 2026
+
+🟠 **UN REPAS PROPOSÉ PAR L'ASSISTANT ANNONCE SON PRIX** (§8 bis bis) :
+`summary.price_xof` = le total du **devis** de la livraison, frais compris —
+le montant débité. Encore absent quand le serveur n'a pas pu chiffrer (pas
+d'adresse par défaut) : ne l'inventez pas, et n'additionnez jamais les lignes.
 
 ### 4.105.0 — 30 octobre 2026
 
