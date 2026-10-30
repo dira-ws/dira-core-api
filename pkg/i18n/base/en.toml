@@ -34,6 +34,9 @@ other = "Driver not found"
 [errors.vehicle_not_found]
 other = "Vehicle not found"
 
+[errors.file_url_foreign]
+other = "This file must be uploaded through Dira before it is attached to a document"
+
 [errors.document_not_found]
 other = "Document not found"
 

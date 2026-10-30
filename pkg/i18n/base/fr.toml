@@ -47,6 +47,11 @@ other = "Chauffeur introuvable"
 [errors.vehicle_not_found]
 other = "Véhicule introuvable"
 
+# Une pièce se dépose par `POST /uploads` : son adresse doit être une de celles
+# que cette route a rendues.
+[errors.file_url_foreign]
+other = "Ce fichier doit être envoyé par Dira avant d'être joint à une pièce"
+
 [errors.document_not_found]
 other = "Document introuvable"
 
