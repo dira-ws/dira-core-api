@@ -1,6 +1,6 @@
 # App CLIENT UNIFIÉE — LIVRAISON **et** COURSES — contrat d'API
 
-> **Version 4.103.0** · 29 octobre 2026
+> **Version 4.103.1** · 30 octobre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Livraison : `…/api/v1/food` · Courses : `…/api/v1/vtc` · Combiné : `…/api/v1/analytics` · Suivi : `wss://tracking-staging.dira.llc`
 
 ---
@@ -1905,10 +1905,10 @@ l'historique en lecture seule — c'est de toute façon la bonne règle.
 
 ⚠️⚠️ **NE LA GARDEZ PAS, NE LA RECOPIEZ PAS — RELISEZ-LA DU FIL.** Une
 application qui met `audio_url` en cache, la range dans sa base ou la met dans
-un lien **est cassée maintenant**. **Relisez `GET /ai/thread` au moment d'ouvrir
-la conversation**, et jouez l'adresse qu'il vient de rendre. La même règle vaut
-pour `POST /ai/voice` : l'adresse de sa réponse est bonne tout de suite, pas
-demain.
+un lien **est cassée maintenant**. **Relisez `GET /analytics/ai/thread` au
+moment d'ouvrir la conversation**, et jouez l'adresse qu'il vient de rendre. La
+même règle vaut pour `POST /analytics/ai/voice` : l'adresse de sa réponse est
+bonne tout de suite, pas demain.
 
 ⚠️ **Et traitez-la comme la voix de quelqu'un** : pas dans vos journaux, pas
 dans un partage, pas hors de la conversation.
@@ -2485,6 +2485,14 @@ du métier.
 ---
 
 ## 15. Journal
+
+### 4.103.1 — 30 octobre 2026
+
+🟡 **Deux adresses sans leur préfixe, au §8 (`audio_url` signée).** Le
+paragraphe « ne la gardez pas » disait `GET /ai/thread` et `POST /ai/voice` :
+ce sont `GET /analytics/ai/thread` et `POST /analytics/ai/voice`, comme partout
+ailleurs dans ce document. Appelées telles qu'écrites, la première répond `404`
+et la seconde atterrit chez la livraison. Rien ne change côté serveur.
 
 ### 4.103.0 — 29 octobre 2026
 
