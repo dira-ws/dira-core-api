@@ -1,6 +1,6 @@
 # App CLIENT UNIFIÉE — LIVRAISON **et** COURSES — contrat d'API
 
-> **Version 4.104.0** · 30 octobre 2026
+> **Version 4.105.0** · 30 octobre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Livraison : `…/api/v1/food` · Courses : `…/api/v1/vtc` · Combiné : `…/api/v1/analytics` · Suivi : `wss://tracking-staging.dira.llc`
 
 ---
@@ -1130,6 +1130,20 @@ application :
   exactement ce qu'elle lui appliquerait s'il avait appuyé lui-même : son
   solde, les bornes de son pays, le nombre de courses qu'il a déjà en cours.
   Un refus du métier ramène donc `state: "needs_support"`, jamais `ordered`.
+- 🆕 ⚠️⚠️ **Et même au-dessus du seuil, le serveur ne commande PAS seul**
+  (v4.105.0) :
+  - quand `assistant_auto_order` vaut `false` pour **ce pays et cette
+    édition** (`GET /app/config`, §4 ter). Le drapeau était affiché sans être
+    appliqué : le décocher pour Lite ne coupait rien. Il est désormais lu par le
+    serveur à chaque vocal — votre `X-Dira-Edition` suffit à le faire jouer ;
+  - quand le modèle n'a pas répondu : la lecture de secours, qui ne regarde que
+    la forme de la phrase, ne commande **jamais** ;
+  - quand plusieurs modes sont proposés et que la personne n'en a nommé aucun,
+    ou que le mode nommé n'est pas celui du **premier** devis — « en confort »
+    ne part pas en moto.
+
+  Dans ces trois cas vous recevez `understood` avec son `action` : l'écran de
+  confirmation de toujours.
 
 #### La langue parlée
 
@@ -1320,6 +1334,14 @@ qui n'existe pas, et découvrirait le vrai à l'arrivée.
 `action.say` et `action.summary` sont composés d'un **gabarit déterministe sur
 les champs du devis**, dans la langue de la personne. Ce sont eux qui disent la
 vérité du prix — et `summary.price_xof` est **le prix qui sera débité**.
+
+🆕 **`reply` est désormais VÉRIFIÉ contre le plan** (v4.105.0) : une phrase qui
+cite un chiffre absent du plan — ou de ce que la personne a dit — est remplacée
+par une phrase neutre, dans sa langue : « Voici ce que je peux vous proposer. »
+quand il y a un plan, « Pouvez-vous m'en dire un peu plus sur ce qu'il vous
+faut ? » sinon. C'est un **filet**, pas une source : la règle ne change pas,
+`action.say` dit le prix. ⚠️ Ne comparez jamais `reply` à une phrase connue —
+sa formulation n'est pas un contrat.
 
 ### ⚠️⚠️ UNE COMMANDE DE REPAS N'ANNONCE AUCUN PRIX, ET C'EST VOULU
 
@@ -2485,6 +2507,20 @@ du métier.
 ---
 
 ## 15. Journal
+
+### 4.105.0 — 30 octobre 2026
+
+🟠 **UN VOCAL NE COMMANDE PLUS SEUL SANS TROIS GARDES** (§8, « le
+renversement »). Même au-dessus du seuil du pays, `ordered` n'arrive pas quand
+`assistant_auto_order` est coupé pour le pays **ou l'édition** (il était
+affiché sans être appliqué), quand la lecture vient du secours (modèle muet),
+ou quand le mode de la course n'a pas été choisi par la personne. Vous recevez
+`understood` et son `action`. Rien à changer si vous traitez déjà les quatre
+`state`.
+
+🟡 **`reply` est vérifié contre le plan** (§8 bis bis) : une phrase qui chiffre
+autre chose que le plan est remplacée par une phrase neutre. `action.say` reste
+la seule phrase qui dit un prix.
 
 ### 4.103.1 — 30 octobre 2026
 

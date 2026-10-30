@@ -1,6 +1,6 @@
 # Specs frontend — par rôle
 
-> **Version 4.104.0** · 30 octobre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics`
+> **Version 4.105.0** · 30 octobre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics`
 
 **Cinq** documents, un par application. Chacun est **autonome** : tout ce qu'un frontend doit savoir pour son rôle, sans avoir à ouvrir les vingt specs de modules.
 
@@ -356,6 +356,19 @@ Chaque document porte la même version en en-tête, et son propre journal des ch
 
 ## Journal
 
+### 4.105.0 — 30 octobre 2026
+
+🟠 **LA COMMANDE AUTOMATIQUE D'UN VOCAL SOUS GARDE** — `DIRA-CLIENT.md` §8.
+Même au-dessus du seuil du pays, un vocal ne commande pas seul quand
+`assistant_auto_order` est coupé pour le pays ou l'**édition** (le drapeau
+n'était pas appliqué par le serveur), quand le modèle n'a pas répondu, ou quand
+le mode de la course n'a pas été choisi par la personne : `understood` et son
+`action`, comme avant le seuil.
+
+🟡 **`reply` vérifié contre le plan** — `DIRA-CLIENT.md` §8 bis bis : une
+phrase qui chiffre autre chose que le plan est remplacée par une phrase neutre.
+`action.say` reste la seule phrase qui dit un prix.
+
 ### 4.104.0 — 30 octobre 2026
 
 🟠 **LES PIÈCES SONT SERVIES PAR UNE ADRESSE À DURÉE LIMITÉE** — `VTC-DRIVER.md`,
@@ -506,7 +519,9 @@ serveur décide.
 ⚠️⚠️ **LISEZ `action.say`, JAMAIS `reply`, SI VOUS DITES UN PRIX À VOIX HAUTE.**
 `reply` est écrit par un modèle **qui n'a jamais vu le plan** : il peut énoncer
 un prix qui n'y est pas, et la personne dirait « oui » à ce prix-là.
-`action.summary.price_xof` est **le prix qui sera débité**.
+`action.summary.price_xof` est **le prix qui sera débité**. 🆕 Depuis la
+v4.105.0, le serveur **vérifie** `reply` contre le plan et remplace une phrase
+qui chiffre autre chose par une phrase neutre — un filet, pas une source.
 
 ⚠️⚠️ **UNE COMMANDE DE REPAS N'ANNONCE AUCUN PRIX**, et c'est voulu : son total
 vaut `sous-total + frais de livraison − remises` et n'existe qu'à la création.
