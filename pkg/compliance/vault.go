@@ -85,6 +85,11 @@ func (s *Service) respond(ctx context.Context, d *Document, now time.Time) Docum
 	if s.vault == nil || out.FileURL == "" {
 		return out
 	}
+	// Une adresse hors de notre dépôt (une pièce de démonstration, une donnée
+	// d'avant) ne se signe pas : elle est servie telle quelle, sans bruit.
+	if _, ours := s.vault.Key(out.FileURL); !ours {
+		return out
+	}
 	signed, err := s.vault.SignedURL(ctx, out.FileURL, SignedFor)
 	if err != nil {
 		slog.WarnContext(ctx, "compliance: document address not signed — it may not display",

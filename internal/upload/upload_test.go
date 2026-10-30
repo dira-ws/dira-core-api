@@ -9,8 +9,11 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
+	"time"
 
+	"github.com/kgtech-org/dira-core-api/pkg/auth"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -22,15 +25,22 @@ import (
 // fakeStore records what actually reached storage: la question la plus
 // importante d'un contrôle d'entrée est « qu'est-ce qui est passé ? ».
 type fakeStore struct {
-	puts int
-	body []byte
+	puts   int
+	body   []byte
+	kind   string
+	entity string
 }
 
-func (f *fakeStore) Put(_ context.Context, _, _, _ string, _ int64, r io.Reader) (string, error) {
+func (f *fakeStore) Put(_ context.Context, kind, entity, _ string, _ int64, r io.Reader) (string, error) {
 	f.puts++
+	f.kind, f.entity = kind, entity
 	b, err := io.ReadAll(r)
 	f.body = b
-	return "https://cdn.example.com/feed/x.mp4", err
+	return "https://cdn.example.com/" + kind + "/x", err
+}
+
+func (f *fakeStore) SignedURL(_ context.Context, raw string, ttl time.Duration) (string, error) {
+	return raw + "?sig=" + ttl.String(), nil
 }
 
 // --- fabrication d'un mp4 minimal de durée choisie -------------------------
@@ -229,4 +239,37 @@ func TestTheCeilingIsServedAsANumberOfMiB(t *testing.T) {
 	err := errTooLarge("document")
 	assert.Equal(t, "upload_too_large", err.Code)
 	assert.Equal(t, "15", err.Meta["max_mib"], "le gabarit de la phrase lit `max_mib`")
+}
+
+// ⚠️⚠️ UN GENRE PRIVÉ : rangé sous le COMPTE qui l'envoie (jamais sous
+// l'entité demandée), et rendu par une adresse SIGNÉE pour l'aperçu.
+func TestAPrivateKindIsFiledUnderTheSenderAndServedSigned(t *testing.T) {
+	store := &fakeStore{}
+	png := []byte("\x89PNG\r\n\x1a\n" + strings.Repeat("x", 64))
+	var buf bytes.Buffer
+	mw := multipart.NewWriter(&buf)
+	part, err := mw.CreatePart(map[string][]string{
+		"Content-Disposition": {`form-data; name="file"; filename="permis.png"`},
+		"Content-Type":        {"image/png"},
+	})
+	require.NoError(t, err)
+	_, _ = part.Write(png)
+	require.NoError(t, mw.Close())
+	req := httptest.NewRequest(http.MethodPost, "/uploads?kind=document&entity=un-autre-compte", &buf)
+	req.Header.Set("Content-Type", mw.FormDataContentType())
+	req = req.WithContext(auth.WithUser(req.Context(), "6aa3550382777a391c0d917d", auth.RoleDriver))
+	rec := httptest.NewRecorder()
+	(&Handler{store: store}).upload(rec, req)
+
+	require.Equal(t, http.StatusCreated, rec.Code, rec.Body.String())
+	assert.Equal(t, "6aa3550382777a391c0d917d", store.entity, "la pièce a été rangée sous l'entité demandée par l'appelant")
+	var body map[string]any
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
+	assert.Equal(t, "https://cdn.example.com/document/x?sig=30m0s", body["url"], "l'aperçu d'un genre privé doit être signé")
+
+	// Un genre PUBLIC garde son entité et son adresse nue.
+	store2 := &fakeStore{}
+	rec2 := upload(t, &Handler{store: store2}, "feed", "short.mp4", "video/mp4", mp4OfSeconds(10))
+	require.Equal(t, http.StatusCreated, rec2.Code)
+	assert.NotContains(t, rec2.Body.String(), "sig=")
 }
