@@ -1,6 +1,6 @@
 # App CLIENT UNIFIÉE — LIVRAISON **et** COURSES — contrat d'API
 
-> **Version 4.110.0** · 30 octobre 2026
+> **Version 4.111.0** · 30 octobre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Livraison : `…/api/v1/food` · Courses : `…/api/v1/vtc` · Combiné : `…/api/v1/analytics` · Suivi : `wss://tracking-staging.dira.llc`
 
 ---
@@ -1413,6 +1413,39 @@ Facultatif : absent, la réponse n'en porte pas et rien ne casse.
 > ⚠️ **Un tour écrit ne se lit jamais tout seul.** C'est une règle de produit,
 > pas une limite technique : quelqu'un qui tape a choisi de ne pas parler.
 
+### 🆕 CE QUE VOUS SEULS MESUREZ D'UN TOUR (v4.111.0)
+
+```
+POST /analytics/ai/turns/{turn_id}/experience            rôle client
+{ "turn_input_type": "voice",        // "text" | "voice" — obligatoire
+  "turn_output_type": "audio",       // "text" | "audio"
+  "audio_duration_s": 7.2,
+  "time_to_playable_ms": 2350,       // de l'envoi au PREMIER son jouable
+  "play_error": "network",           // decode | network | expired | unsupported | interrupted | other
+  "confirmation_step": 2,
+  "repeated_question": false,
+  "completed_booking": true }
+→ 204
+```
+
+Le serveur sait ce qu'ont pris la transcription et le modèle. Il ne sait pas
+quand la personne a **entendu** la réponse, si le son a refusé de jouer, si
+elle a dû répéter sa question, ni si la course s'est finalement réservée. Vous
+le savez : envoyez-le ici.
+
+- **`turn_id`** : celui du tour — le `voice_id` rendu pour un vocal, votre
+  `turn_id` pour un message écrit (voir plus haut). Un identifiant LOCAL que le
+  serveur n'a jamais vu est refusé : `404 turn_not_found`.
+- ⚠️ **AUCUN CONTENU** : ni texte, ni audio, ni lieu. Des nombres, des
+  drapeaux, un code de lecture pris dans la liste ci-dessus — tout autre code
+  est refusé (`422`).
+- ⚠️ **RENVOYEZ LE MÊME TOUR** quand la réservation aboutit : un rapport
+  **complète** le précédent. Un champ absent garde sa valeur, un `true` ne
+  redevient pas `false`, et chaque fait n'est compté qu'une fois — renvoyer
+  ne fausse rien.
+- **Au mieux** : un échec de cet envoi ne se montre jamais à la personne, et
+  ne se réessaie pas en boucle. C'est une mesure, pas une étape du tour.
+
 ---
 
 ## 8 bis bis. 🆕 ⚠️⚠️ CONFIRMER UNE PROPOSITION PRÉCISE (v4.100.0)
@@ -2642,6 +2675,14 @@ du métier.
 ---
 
 ## 15. Journal
+
+### 4.111.0 — 30 octobre 2026
+
+🟢 **CE QUE VOUS SEULS MESUREZ D'UN TOUR** (§8 bis).
+`POST /analytics/ai/turns/{turn_id}/experience` → `204` : temps jusqu'au son,
+lecture ratée, question répétée, étape de confirmation, réservation aboutie —
+sans aucun contenu. Un rapport complète le précédent ; un tour inconnu est
+refusé (`404 turn_not_found`).
 
 ### 4.110.0 — 30 octobre 2026
 
