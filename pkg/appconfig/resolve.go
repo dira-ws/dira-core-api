@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/kgtech-org/dira-core-api/pkg/edition"
+	"github.com/kgtech-org/dira-core-api/pkg/voice"
 )
 
 // Rule restreint UNE fonction ou UNE liste.
@@ -210,6 +211,14 @@ type Resolved struct {
 	// réponse dont l'absence retire quelque chose. Voir `live.go` : le direct
 	// s'allume, il ne se coupe pas.
 	Live *LiveBlock `json:"live,omitempty"`
+	// Voice : ce qu'un message vocal peut être — durée, poids, formats
+	// (core#265). Servi pour que l'application affiche la VRAIE limite et
+	// arrête l'enregistrement avant elle, plutôt que de faire parler
+	// quelqu'un pour un refus.
+	//
+	// ⚠️ LES MÊMES PARTOUT : ce sont les bornes de la plateforme
+	// (`pkg/voice`), pas un réglage de pays.
+	Voice voice.Limits `json:"voice"`
 }
 
 // Resolve rend ce que cette édition voit dans ce pays.
@@ -218,6 +227,7 @@ func (r *Registry) Resolve(countryCode, ed string) Resolved {
 		Edition:  edition.Normalize(ed),
 		Country:  strings.ToUpper(strings.TrimSpace(countryCode)),
 		Features: make(map[string]bool, len(Features)),
+		Voice:    voice.Served(),
 	}
 	for _, f := range Features {
 		out.Features[f.Key] = r.Allows(f.Key, countryCode, ed)

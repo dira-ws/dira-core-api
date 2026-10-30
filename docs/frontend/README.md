@@ -1,6 +1,6 @@
 # Specs frontend — par rôle
 
-> **Version 4.106.0** · 30 octobre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics`
+> **Version 4.107.0** · 30 octobre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics`
 
 **Cinq** documents, un par application. Chacun est **autonome** : tout ce qu'un frontend doit savoir pour son rôle, sans avoir à ouvrir les vingt specs de modules.
 
@@ -355,6 +355,15 @@ Chaque document porte la même version en en-tête, et son propre journal des ch
 - [ ] ⚠️ **`TRACKING_JWT_SECRET` renseigné dans chaque environnement déployé.** Vide, l'authentification du service de suivi est **désactivée** : n'importe qui connaissant un `delivery_id` suit la course. Le secret doit valoir **exactement** le `JWT_SECRET` de `dira-food-api`.
 
 ## Journal
+
+### 4.107.0 — 30 octobre 2026
+
+🟡 **LES LIMITES D'UN VOCAL** — `DIRA-CLIENT.md` §4 ter et §8. `GET
+/app/config` sert `voice` : `max_audio_seconds` (60), `max_audio_bytes`
+(2 Mio), `formats`. `POST /analytics/ai/voice` refuse au-delà de 60 secondes
+annoncées : `413 audio_too_long`, avant toute transcription. Une seule source
+pour ces bornes au socle (`pkg/voice`) : le stockage, `/app/config` et la
+transcription lisent les mêmes.
 
 ### 4.106.0 — 30 octobre 2026
 
