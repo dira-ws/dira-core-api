@@ -2489,10 +2489,10 @@ du métier.
 ### 4.103.1 — 30 octobre 2026
 
 🟡 **Deux adresses sans leur préfixe, au §8 (`audio_url` signée).** Le
-paragraphe « ne la gardez pas » disait `GET /ai/thread` et `POST /ai/voice` :
+paragraphe « ne la gardez pas » citait le fil et le vocal sans `/analytics` :
 ce sont `GET /analytics/ai/thread` et `POST /analytics/ai/voice`, comme partout
-ailleurs dans ce document. Appelées telles qu'écrites, la première répond `404`
-et la seconde atterrit chez la livraison. Rien ne change côté serveur.
+ailleurs dans ce document. Sans le préfixe, la lecture du fil répond `404` et le
+vocal atterrit chez la livraison. Rien ne change côté serveur.
 
 ### 4.103.0 — 29 octobre 2026
 

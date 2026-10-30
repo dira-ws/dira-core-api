@@ -358,8 +358,8 @@ Chaque document porte la même version en en-tête, et son propre journal des ch
 
 ### 4.103.1 — 30 octobre 2026
 
-🟡 **`DIRA-CLIENT.md` §8 : deux adresses sans leur préfixe** — `GET /ai/thread`
-et `POST /ai/voice` sont `GET /analytics/ai/thread` et `POST /analytics/ai/voice`.
+🟡 **`DIRA-CLIENT.md` §8 : deux adresses sans leur préfixe `/analytics`** — ce
+sont `GET /analytics/ai/thread` et `POST /analytics/ai/voice`.
 Trouvé par l'épreuve de contrat de la livraison, qui lit ces documents : elle a
 vu une route de « livraison » que la livraison ne sert pas. Correction de texte
 seulement.
