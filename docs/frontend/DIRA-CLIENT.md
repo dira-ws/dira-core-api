@@ -1,6 +1,6 @@
 # App CLIENT UNIFIÉE — LIVRAISON **et** COURSES — contrat d'API
 
-> **Version 4.113.0** · 30 octobre 2026
+> **Version 4.114.0** · 30 octobre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Livraison : `…/api/v1/food` · Courses : `…/api/v1/vtc` · Combiné : `…/api/v1/analytics` · Suivi : `wss://tracking-staging.dira.llc`
 
 ---
@@ -1063,6 +1063,7 @@ quand le pays a posé un seuil et que la commande n'est pas partie :
 | `no_plan` | rien de commandable tel quel (lieu introuvable, métier indécis) |
 | `switched_off` | la commande automatique est coupée pour ce pays ou cette édition |
 | `cancellation` | 🆕 une **annulation** — elle attend toujours son « oui » ou son appui (v4.113.0) |
+| `topup` | 🆕 une **recharge** — elle attend toujours son « oui » ou son appui (v4.114.0) |
 
 C'est une information, pas un écran : **l'écran se choisit sur `state`**.
 Journalisez-la, et affichez-la en développement — une confiance basse ne dit
@@ -1159,6 +1160,7 @@ pannes, ce qui noyait les vraies.
 | `understood` | transcrit, un `plan` proposé, **la main vous reste** — 🆕 y compris **sous le seuil** (v4.109.0) | le plan à **confirmer** (`action`) — c'est le comportement de toujours |
 | `ordered` | **la commande est PARTIE** — au-dessus du seuil, rien ne la retenant | « c'est parti », et `ordered.kind` / `ordered.id` ouvrent le suivi |
 | `cancelled` | 🆕 un « oui » dicté vient d'**annuler** ce que la proposition nommait (v4.113.0) | « c'est annulé » — `ordered.kind` / `ordered.id` nomment ce qui est annulé ; **n'ouvrez pas le suivi** |
+| `payment_started` | 🆕 un « oui » dicté vient de **demander une recharge** (v4.114.0) | « validez sur votre téléphone » — suivez `GET /payments/{ordered.id}` ; **rien n'est crédité** avant `succeeded` |
 | `needs_support` | 🆕 **rien de commandable tel quel** (pays avec seuil), ou le métier a refusé la commande | « **nous vous rappelons** » — un humain va écouter |
 | `failed` | la transcription a échoué, **ou personne n'a parlé** (v4.102.0) | « nous n'avons pas entendu, réessayez » — l'audio est **conservé** |
 
@@ -1685,6 +1687,50 @@ Ce que le serveur répond **sans** proposer :
 automatique : le vocal est `understood` avec `held: "cancellation"`, jamais
 `ordered`, jamais `needs_support`.
 
+### 🆕 ⚠️⚠️ RECHARGER LE PORTEFEUILLE À LA VOIX (v4.114.0)
+
+« recharge 5 000 », « recharge mon portefeuille de cinq mille »,
+« اشحن محفظتي ٥٠٠٠ » — écrit, dicté ou en direct : le serveur **propose** la
+recharge. La personne confirme par un « oui » ou un appui, et la confirmation
+**DEMANDE** la recharge à l'opérateur. Elle la valide ensuite **sur son
+téléphone**, par son code mobile money.
+
+```jsonc
+"action": {
+  "type": "topup_confirmation_required",
+  "confirmation_token": "Rk2…",
+  "say": "Recharger votre portefeuille de 5 000 par T-Money ? Vous validerez sur votre téléphone. Confirmez-vous ?",
+  "summary": { "amount": 5000, "currency": "XOF", "decimals": 0,
+               "provider": "tmoney", "provider_label": "T-Money" }
+}
+```
+
+Confirmer (`POST /analytics/ai/confirm`, ou un « oui ») rend :
+
+```jsonc
+{ "state": "payment_started", "vertical": "core",
+  "ordered": { "kind": "payment", "id": "6ae4…" },
+  "reply": "J'ai demandé la recharge. Validez-la sur votre téléphone : rien n'est encore crédité." }
+```
+
+⚠️⚠️ **`payment_started` N'EST PAS « RECHARGÉ ».** Suivez
+`GET /payments/{id}` jusqu'à `succeeded` avant d'afficher le crédit, comme
+pour une recharge faite à l'écran. Un « oui » rejoué rend **le même**
+paiement : la demande porte sa propre clé d'idempotence.
+
+- **Le montant se lit sans modèle** : en chiffres, ou en toutes lettres
+  françaises. Il est dit en entier dans `say`, et `summary.amount` est dans la
+  plus petite unité de la monnaie (`decimals`).
+- **Les bornes du pays** (`GET /wallet`) se disent **avant** de proposer :
+  sans montant, `reply` propose les montants du pays (« Par exemple : 1000,
+  2000, 5000 ») ; hors bornes, il dit le minimum ou le maximum.
+- **L'opérateur nommé est l'habituel** de la personne (`preferences.payment_provider`).
+  Absent, aucun n'est nommé, et le socle prend son défaut.
+- **« Recharge mes unités »** (le crédit téléphonique) n'est pas une recharge
+  du portefeuille : Dira n'en vend pas.
+- **Jamais seule** : un vocal de recharge est `understood` avec
+  `held: "topup"`, même dans un pays à commande automatique.
+
 ⚠️ **Votre propre bouton « Annuler la course » ne change pas** :
 `POST /vtc/rides/{id}/cancel`. Envoyez-y désormais `max_fee_xof`, le
 `cancellation.fee_xof` que vous avez affiché — c'est le même plafond. Une course
@@ -1826,6 +1872,7 @@ une session payante ouverte.
 | `ordered` | `kind`, `id` | menez au suivi |
 | `cancelled` | `kind`, `id` | 🆕 une **annulation** vient d'être faite (v4.113.0) — **n'ouvrez pas le suivi** |
 | `declined` | — | 🆕 la proposition est retirée — un « non » ou votre `ui.cancel` (v4.113.0) : fermez la carte |
+| `payment_started` | `kind: "payment"`, `id` | 🆕 une **recharge** est demandée (v4.114.0) : la personne la valide sur son téléphone ; suivez `GET /payments/{id}` |
 | `error` | `code`, `message`, `retryable` | voir le tableau des codes |
 | `session.ending` | `reason`, `seconds_left` | « le direct s'arrête bientôt » |
 | `session.end` | `reason` | fermez proprement |
@@ -1882,6 +1929,11 @@ qu'on annule, et `summary.cancel_fee_xof` ses frais — **zéro compris**, à
 afficher (« gratuit »). Même bouton **Confirmer**, même `ui.confirm` ; le
 résultat est `{"type":"cancelled"}`. Ajoutez un bouton **Non** → `ui.cancel`
 avec le jeton de la carte.
+
+🆕 (v4.114.0) **`wallet_topup`** : une RECHARGE proposée — `summary.amount`
+(plus petite unité, `decimals`), `summary.provider_label`. Le résultat est
+`{"type":"payment_started","kind":"payment","id":"…"}` : **ce n'est pas un
+crédit**, suivez `GET /payments/{id}`.
 
 Deux chemins, et **un seul** crée quelque chose :
 
@@ -2807,6 +2859,15 @@ du métier.
 ---
 
 ## 15. Journal
+
+### 4.114.0 — 30 octobre 2026
+
+🟢 **RECHARGER LE PORTEFEUILLE À LA VOIX** (§8 bis bis, §8 quater.5).
+« recharge 5 000 » propose la recharge (`topup_confirmation_required`, montant
+dans la monnaie et aux bornes du pays, opérateur habituel) ; un « oui » ou un
+appui la DEMANDE à l'opérateur (`state` et événement `payment_started`,
+carte `wallet_topup`). ⚠️ Rien n'est crédité avant `GET /payments/{id}` →
+`succeeded`. `held: "topup"`.
 
 ### 4.113.0 — 30 octobre 2026
 
