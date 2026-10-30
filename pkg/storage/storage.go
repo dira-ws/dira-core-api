@@ -174,6 +174,19 @@ const (
 // pense.
 var privateKinds = map[string]bool{KindVoice: true, KindSpeech: true}
 
+// expiringKinds : les genres dont les OBJETS s'effacent d'eux-mêmes, au bout
+// de `Config.PrivateRetention`.
+//
+// ⚠️⚠️ PRIVÉ N'EST PAS ÉPHÉMÈRE, et les deux tables sont séparées pour cela.
+// Le cycle de vie du seau était posé sur TOUS les genres privés : rendre
+// privées les pièces de conformité les aurait aussi fait EFFACER au bout de
+// quatre-vingt-dix jours — un permis, un casier judiciaire, une carte grise
+// disparus du seau pendant que leur ligne disait « validé ». Une voix est un
+// confort qu'on purge ; une pièce est une PREUVE, dont la durée de garde est
+// une décision d'exploitation (le temps d'une habilitation, d'une obligation
+// comptable) et non une constante de ce paquet.
+var expiringKinds = map[string]bool{KindVoice: true, KindSpeech: true}
+
 // Les genres nommés. ⚠️ EN CONSTANTES PARCE QU'ILS VOYAGENT : un service qui
 // dépose un son écrit `storage.KindSpeech`, et une faute de frappe devient
 // alors une erreur de compilation plutôt qu'un objet rangé sous un préfixe que
@@ -343,6 +356,15 @@ type Config struct {
 	// PublicBaseURL is what browsers use to fetch objects
 	// (e.g. http://localhost:9000). Defaults to the endpoint scheme+host.
 	PublicBaseURL string
+	// OwnsPolicy : CE service pose la politique de lecture du seau et son
+	// cycle de vie. Un seul doit le faire — le socle.
+	//
+	// ⚠️⚠️ LE SEAU EST PARTAGÉ, ET LE DERNIER SERVICE DÉMARRÉ GAGNAIT. Chaque
+	// service qui ouvrait le dépôt reposait SA politique, celle de la version
+	// du socle qu'il embarquait : un service en retard d'une version défaisait
+	// au redémarrage ce qu'un autre venait de poser. Une règle de vie privée ne
+	// peut pas dépendre de l'ordre dans lequel des conteneurs redémarrent.
+	OwnsPolicy bool
 	// PrivateRetention : au bout de combien de temps les objets des genres
 	// PRIVÉS s'effacent d'eux-mêmes. Zéro = aucun cycle de vie posé.
 	//
@@ -397,15 +419,17 @@ func New(ctx context.Context, cfg Config) (*Store, error) {
 			return nil, fmt.Errorf("storage: make bucket: %w", err)
 		}
 	}
-	if err := client.SetBucketPolicy(ctx, cfg.Bucket, bucketPolicy(cfg.Bucket)); err != nil {
-		return nil, fmt.Errorf("storage: bucket policy: %w", err)
+	if cfg.OwnsPolicy {
+		if err := client.SetBucketPolicy(ctx, cfg.Bucket, bucketPolicy(cfg.Bucket)); err != nil {
+			return nil, fmt.Errorf("storage: bucket policy: %w", err)
+		}
 	}
 
-	// LE CYCLE DE VIE DES GENRES PRIVÉS — au mieux : un dépôt qui ne sait pas
-	// le poser (une version ancienne, une permission manquante) ne doit pas
-	// empêcher le service de démarrer. On le dit, et la purge se fera à la
-	// main.
-	if cfg.PrivateRetention > 0 {
+	// LE CYCLE DE VIE DES GENRES QUI EXPIRENT — au mieux : un dépôt qui ne
+	// sait pas le poser (une version ancienne, une permission manquante) ne
+	// doit pas empêcher le service de démarrer. On le dit, et la purge se fera
+	// à la main. ⚠️ Par le PROPRIÉTAIRE seulement, comme la politique.
+	if cfg.OwnsPolicy && cfg.PrivateRetention > 0 {
 		if err := setPrivateLifecycle(ctx, client, cfg.Bucket, cfg.PrivateRetention); err != nil {
 			slog.WarnContext(ctx, "storage: PRIVATE OBJECTS WILL NOT EXPIRE BY THEMSELVES",
 				"bucket", cfg.Bucket, "retention", cfg.PrivateRetention, "error", err)
@@ -478,15 +502,106 @@ func (s *Store) Put(ctx context.Context, kind, entity, contentType string, size 
 // for a URL that does not belong to this bucket — un worker ne doit pas suivre
 // une URL arbitraire fournie par un appelant.
 func (s *Store) Key(publicURL string) (string, bool) {
-	prefix := s.public + "/" + s.bucket + "/"
-	if !strings.HasPrefix(publicURL, prefix) {
+	return keyOf(s.public, s.bucket, publicURL)
+}
+
+// keyOf : la clé d'un objet de CE seau, désigné par son adresse — nue ou
+// SIGNÉE. PURE.
+//
+// ⚠️ UNE ADRESSE SIGNÉE EST UNE ADRESSE DE CE SEAU : la signature est une
+// requête ajoutée (`?X-Amz-…`), qui ne fait pas partie de la clé. Sans cette
+// lecture, une application qui renvoie l'adresse qu'on lui a servie — signée —
+// se ferait refuser comme « étrangère », ou ferait ranger la signature dans la
+// base, où elle expirerait.
+func keyOf(public, bucket, rawURL string) (string, bool) {
+	bare := Bare(rawURL)
+	prefix := public + "/" + bucket + "/"
+	if !strings.HasPrefix(bare, prefix) {
 		return "", false
 	}
-	key := strings.TrimPrefix(publicURL, prefix)
+	key := strings.TrimPrefix(bare, prefix)
 	if key == "" || strings.Contains(key, "..") {
 		return "", false
 	}
 	return key, true
+}
+
+// Bare rend une adresse SANS sa signature ni son fragment — celle qu'on range.
+//
+// ⚠️ ON RANGE L'ADRESSE NUE, JAMAIS LA SIGNÉE : une adresse signée expire, et
+// une ligne relue trois jours plus tard porterait un lien mort que plus rien
+// ne saurait refaire. On signe à la LECTURE.
+func Bare(rawURL string) string {
+	if i := strings.IndexAny(rawURL, "?#"); i >= 0 {
+		return rawURL[:i]
+	}
+	return rawURL
+}
+
+// KindOf : le genre d'un objet de ce seau — le premier segment de sa clé.
+func (s *Store) KindOf(rawURL string) string {
+	key, ok := s.Key(rawURL)
+	if !ok {
+		return ""
+	}
+	kind, _, _ := strings.Cut(key, "/")
+	return kind
+}
+
+// Adopt range un objet de ce seau SOUS UN GENRE, et rend sa nouvelle adresse
+// NUE.
+//
+// ⚠️⚠️ ELLE EXISTE PARCE QUE LES APPLICATIONS NE DÉPOSENT PAS FORCÉMENT SOUS
+// LE BON GENRE. Le genre décide de ce qu'un objet EST pour le dépôt — sa
+// politique, sa durée de vie, son effacement — et le serveur est le seul à
+// pouvoir corriger un dépôt mal rangé sans attendre une nouvelle version de
+// chaque application.
+//
+// ⚠️ COPIER D'ABORD, RETIRER ENSUITE, et l'original n'est retiré que si la
+// copie a réussi : l'inverse perdrait la pièce sur une coupure. Un original
+// qui résiste au retrait est journalisé — la pièce est rangée, mais son ancien
+// lien public vit encore, et il faut pouvoir le savoir.
+//
+// Un objet déjà sous ce genre est rendu tel quel (nu) : le geste se rejoue.
+func (s *Store) Adopt(ctx context.Context, rawURL, kind, entity string) (string, error) {
+	key, ok := s.Key(rawURL)
+	if !ok {
+		return "", fmt.Errorf("storage: %q n'appartient pas à ce dépôt", rawURL)
+	}
+	dst, moved := adoptKey(key, kind, entity)
+	if !moved {
+		return s.public + "/" + s.bucket + "/" + key, nil
+	}
+	if _, err := s.client.CopyObject(ctx,
+		minio.CopyDestOptions{Bucket: s.bucket, Object: dst},
+		minio.CopySrcOptions{Bucket: s.bucket, Object: key}); err != nil {
+		return "", fmt.Errorf("storage: ranger %s sous %s: %w", key, kind, err)
+	}
+	if err := s.client.RemoveObject(ctx, s.bucket, key, minio.RemoveObjectOptions{}); err != nil {
+		slog.WarnContext(ctx, "storage: the original stays — its old public link still works",
+			"key", key, "adopted_as", dst, "error", err)
+	}
+	return s.public + "/" + s.bucket + "/" + dst, nil
+}
+
+// adoptKey : la clé d'un objet rangé sous un genre — PURE. `moved` est faux
+// quand l'objet y est déjà.
+//
+// ⚠️ L'EXTENSION SUIT L'OBJET (une photo reste `.jpg`, un PDF `.pdf`), et le
+// nom est NEUF : la nouvelle adresse ne dit rien de l'ancienne.
+func adoptKey(key, kind, entity string) (string, bool) {
+	if strings.HasPrefix(key, kind+"/") {
+		return key, false
+	}
+	ext := ""
+	if i := strings.LastIndex(key, "."); i > strings.LastIndex(key, "/") {
+		ext = key[i:]
+	}
+	dst := kind + "/"
+	if entity = strings.Trim(entity, "/"); entity != "" && !strings.Contains(entity, "/") && !strings.Contains(entity, "..") {
+		dst += entity + "/"
+	}
+	return dst + uuid.NewString() + ext, true
 }
 
 // Exists dit si l'URL désigne un objet DE CE BUCKET qui existe encore. Un
@@ -624,9 +739,15 @@ func setPrivateLifecycle(ctx context.Context, client *minio.Client, bucket strin
 	if days < 1 {
 		days = 1
 	}
+	return client.SetBucketLifecycle(ctx, bucket, expiryRules(days))
+}
+
+// expiryRules : les règles du cycle de vie — PURE, pour que l'épreuve voie
+// exactement ce qui sera posé.
+func expiryRules(days int) *lifecycle.Configuration {
 	cfg := lifecycle.NewConfiguration()
-	kinds := make([]string, 0, len(privateKinds))
-	for kind := range privateKinds {
+	kinds := make([]string, 0, len(expiringKinds))
+	for kind := range expiringKinds {
 		kinds = append(kinds, kind)
 	}
 	sort.Strings(kinds)
@@ -638,7 +759,7 @@ func setPrivateLifecycle(ctx context.Context, client *minio.Client, bucket strin
 			Expiration: lifecycle.Expiration{Days: lifecycle.ExpirationDays(days)},
 		})
 	}
-	return client.SetBucketLifecycle(ctx, bucket, cfg)
+	return cfg
 }
 
 // namedPrefix normalise un préfixe et dit s'il nomme bien UN GENRE ET UNE
