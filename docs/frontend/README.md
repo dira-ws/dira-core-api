@@ -1,6 +1,6 @@
 # Specs frontend — par rôle
 
-> **Version 4.111.0** · 30 octobre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics`
+> **Version 4.112.0** · 30 octobre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics`
 
 **Cinq** documents, un par application. Chacun est **autonome** : tout ce qu'un frontend doit savoir pour son rôle, sans avoir à ouvrir les vingt specs de modules.
 
@@ -355,6 +355,17 @@ Chaque document porte la même version en en-tête, et son propre journal des ch
 - [ ] ⚠️ **`TRACKING_JWT_SECRET` renseigné dans chaque environnement déployé.** Vide, l'authentification du service de suivi est **désactivée** : n'importe qui connaissant un `delivery_id` suit la course. Le secret doit valoir **exactement** le `JWT_SECRET` de `dira-food-api`.
 
 ## Journal
+
+### 4.112.0 — 30 octobre 2026
+
+🟢 **CHERCHER UN LIEU, UN PLAT, PAR SES MOTS** — `VTC-CLIENT.md`
+(`GET /places/search?q=&near=`), `FOOD-CLIENT.md` (`GET /dishes/search?q=&near=`,
+`near` obligatoire), `DIRA-CLIENT.md` (dira-core-api#268). La recherche de la
+saisie vocale d'un champ (#258), pour ce qui s'écrit : la carte de la ville du
+pays ; les plats disponibles des boutiques proches, un candidat par plat.
+L'assistant en direct les appelle (`search_place`, `search_dishes`).
+🟠 Le direct **lit enfin `origin`** de `session.start` — documenté, il était
+ignoré.
 
 ### 4.111.0 — 30 octobre 2026
 

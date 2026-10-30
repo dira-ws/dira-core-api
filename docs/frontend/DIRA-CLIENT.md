@@ -1,6 +1,6 @@
 # App CLIENT UNIFIÉE — LIVRAISON **et** COURSES — contrat d'API
 
-> **Version 4.111.0** · 30 octobre 2026
+> **Version 4.112.0** · 30 octobre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Livraison : `…/api/v1/food` · Courses : `…/api/v1/vtc` · Combiné : `…/api/v1/analytics` · Suivi : `wss://tracking-staging.dira.llc`
 
 ---
@@ -1666,6 +1666,11 @@ Les trames **binaires** portent l'audio. Les trames **texte** portent des
   "input": { "encoding": "pcm16", "sample_rate": 16000 } }
 ```
 
+🆕 **`origin` EST DÉSORMAIS LU** (v4.112.0) — envoyez-le. Il était
+documenté et ignoré : « un taxi pour l'aéroport », sans départ nommé, n'avait
+pas de départ en direct, et la recherche d'un lieu ou d'un plat ne savait pas
+où chercher. Une position illisible est ignorée, pas refusée.
+
 **⚠️⚠️ `session.start` d'abord, et `language` est OBLIGATOIRE.** Vous avez
 **15 secondes** pour l'envoyer ; de l'audio envoyé avant est signalé
 (`live_bad_event`, réessayable) et **jeté** — la session ne se ferme pas, vous
@@ -2675,6 +2680,15 @@ du métier.
 ---
 
 ## 15. Journal
+
+### 4.112.0 — 30 octobre 2026
+
+🟢 **CHERCHER UN LIEU, UN PLAT, PAR SES MOTS** — `GET /vtc/places/search?q=&near=`
+et `GET /food/dishes/search?q=&near=` (`near` obligatoire pour un plat). Les
+mêmes recherches que la saisie vocale d'un champ, pour ce qui s'écrit ;
+l'assistant en direct s'en sert aussi. 🟠 Le direct **lit enfin `origin`** de
+`session.start` (§8 quater) : sans lui, « un taxi pour l'aéroport » n'avait pas
+de départ.
 
 ### 4.111.0 — 30 octobre 2026
 
