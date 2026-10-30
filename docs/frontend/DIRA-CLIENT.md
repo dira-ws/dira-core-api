@@ -1,6 +1,6 @@
 # App CLIENT UNIFIÉE — LIVRAISON **et** COURSES — contrat d'API
 
-> **Version 4.108.0** · 30 octobre 2026
+> **Version 4.109.0** · 30 octobre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Livraison : `…/api/v1/food` · Courses : `…/api/v1/vtc` · Combiné : `…/api/v1/analytics` · Suivi : `wss://tracking-staging.dira.llc`
 
 ---
@@ -1040,11 +1040,38 @@ POST /analytics/ai/voice
   "vertical": "vtc",
   "reply": "Voici deux options depuis votre position.",
   "plan": { … },                  // la même forme qu'au chat, verbatim
-  "confidence": 0.91,
+  "confidence": 0.91,             // 🆕 v4.109.0 — null quand rien n'a été mesuré
   "threshold": 0.85,              // 🆕 v4.89.0 — le seuil DE CE PAYS
+  "held": "mode_not_named",       // 🆕 v4.109.0 — pourquoi ce n'est pas parti seul
   "routed_by": "lexical",
   "state": "understood" }         // ⚠️ CE QUI A ÉTÉ FAIT — voir le tableau
 ```
+
+⚠️⚠️ **🆕 `confidence` PEUT ÊTRE `null`** (v4.109.0) : rien n'a été mesuré —
+pas de plan commandable, ou le modèle n'a pas lu le vocal. **Ce n'est pas
+« sûr à 0 % »**, et il n'est jamais comparé au seuil. Avant, une demande
+parfaitement comprise dont seul le mode n'était pas nommé revenait à `0`.
+
+🆕 **`held` — POURQUOI LE VOCAL N'A PAS COMMANDÉ TOUT SEUL** (v4.109.0), servi
+quand le pays a posé un seuil et que la commande n'est pas partie :
+
+| `held` | Ce que ça veut dire |
+|---|---|
+| `below_threshold` | compris et commandable, pas assez sûr pour décider seul |
+| `mode_not_named` | plusieurs modes proposés (moto, voiture…), la personne n'en a nommé aucun |
+| `model_unavailable` | le modèle n'a pas lu ce vocal — la confiance n'est pas mesurée |
+| `no_plan` | rien de commandable tel quel (lieu introuvable, métier indécis) |
+| `switched_off` | la commande automatique est coupée pour ce pays ou cette édition |
+
+C'est une information, pas un écran : **l'écran se choisit sur `state`**.
+Journalisez-la, et affichez-la en développement — une confiance basse ne dit
+pas si c'est l'accent, la langue, le modèle ou un mode jamais nommé.
+
+🆕 **`language` EST LA LANGUE ENTENDUE** (v4.109.0). Une transcription en
+écriture arabe, alors qu'une langue latine était demandée, revient avec la
+langue à écriture arabe du pays (`shu`) — et l'assistant répond dans celle-là.
+Envoyez quand même la langue que la personne **parle**, pas celle de
+l'interface : une translittération latine, elle, ne se devine pas.
 
 ⚠️ **🆕 `threshold` SE LIT AVEC `confidence`, JAMAIS SEUL** (v4.89.0). Il était
 annoncé et jamais servi. « J'ai compris à 72 % » ne veut rien dire sans « il en
@@ -1098,9 +1125,9 @@ pannes, ce qui noyait les vraies.
 
 | `state` | Ce qui s'est passé | Ce que vous montrez |
 |---|---|---|
-| `understood` | transcrit, un `plan` proposé, **la main vous reste** | le plan à **confirmer** — c'est le comportement de toujours |
-| `ordered` | **la commande est PARTIE** | « c'est parti », et `ordered.kind` / `ordered.id` ouvrent le suivi |
-| `needs_support` | l'IA n'a pas été assez sûre pour décider | « **nous vous rappelons** » — un humain va écouter |
+| `understood` | transcrit, un `plan` proposé, **la main vous reste** — 🆕 y compris **sous le seuil** (v4.109.0) | le plan à **confirmer** (`action`) — c'est le comportement de toujours |
+| `ordered` | **la commande est PARTIE** — au-dessus du seuil, rien ne la retenant | « c'est parti », et `ordered.kind` / `ordered.id` ouvrent le suivi |
+| `needs_support` | 🆕 **rien de commandable tel quel** (pays avec seuil), ou le métier a refusé la commande | « **nous vous rappelons** » — un humain va écouter |
 | `failed` | la transcription a échoué, **ou personne n'a parlé** (v4.102.0) | « nous n'avons pas entendu, réessayez » — l'audio est **conservé** |
 
 ```jsonc
@@ -1108,6 +1135,24 @@ pannes, ce qui noyait les vraies.
 { "state": "ordered", "ordered": { "kind": "ride", "id": "68f0aa…" } }
 // kind = "ride" → suivez la course ; kind = "order" → suivez la commande
 ```
+
+⚠️⚠️ **🆕 LA RÈGLE, DANS UN PAYS QUI A POSÉ UN SEUIL** (v4.109.0) :
+
+1. au-dessus du seuil, **et** rien ne retient (`held` absent) → `ordered` ;
+2. **un plan commandable, sous le seuil ou retenu → `understood`**, avec sa
+   proposition (`action`) : la personne confirme d'un appui ou d'un « oui » ;
+3. **sans plan commandable → `needs_support`** : personne ne peut confirmer un
+   plan qui n'existe pas, un humain écoute ;
+4. un refus du métier au moment de commander → `needs_support`.
+
+Sans seuil, c'est `understood`, comme toujours. ⚠️ Avant la v4.109.0, tout ce
+qui était sous le seuil partait au support : dans un pays à 85 %, une demande
+parfaitement comprise finissait « nous vous rappelons », et la personne ne
+pouvait jamais confirmer elle-même.
+
+🆕 **ET QUAND LA PERSONNE COMMANDE ELLE-MÊME, PASSEZ `voice_id`** sur
+`POST /vtc/rides` (ou `POST /food/orders`) : son vocal **quitte alors la file
+du support** — sans quoi un opérateur pouvait commander une seconde course.
 
 ⚠️ **NE DÉDUISEZ JAMAIS « c'est commandé » DE LA PRÉSENCE D'UN `plan`.** Un
 `plan` arrive dans **les quatre** cas. Seul `state` tranche, et seul `ordered`
@@ -2567,6 +2612,16 @@ du métier.
 ---
 
 ## 15. Journal
+
+### 4.109.0 — 30 octobre 2026
+
+🟠 **SOUS LE SEUIL, LA PERSONNE CONFIRME** (§8). Dans un pays qui a posé un
+seuil, un plan commandable sous le seuil revient `understood` avec sa
+proposition, et non plus `needs_support` ; le support ne reçoit que ce qui
+n'est pas commandable. `confidence` peut être `null` (non mesurée) ; `held` dit
+pourquoi un vocal n'a pas commandé seul ; `language` est la langue entendue.
+Un vocal dont la personne commande elle-même (`voice_id`) quitte la file du
+support.
 
 ### 4.108.0 — 30 octobre 2026
 
