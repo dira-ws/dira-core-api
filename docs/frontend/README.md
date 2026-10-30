@@ -1,6 +1,6 @@
 # Specs frontend — par rôle
 
-> **Version 4.112.0** · 30 octobre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics`
+> **Version 4.113.0** · 30 octobre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics`
 
 **Cinq** documents, un par application. Chacun est **autonome** : tout ce qu'un frontend doit savoir pour son rôle, sans avoir à ouvrir les vingt specs de modules.
 
@@ -355,6 +355,22 @@ Chaque document porte la même version en en-tête, et son propre journal des ch
 - [ ] ⚠️ **`TRACKING_JWT_SECRET` renseigné dans chaque environnement déployé.** Vide, l'authentification du service de suivi est **désactivée** : n'importe qui connaissant un `delivery_id` suit la course. Le secret doit valoir **exactement** le `JWT_SECRET` de `dira-food-api`.
 
 ## Journal
+
+### 4.113.0 — 30 octobre 2026
+
+🟢 **ANNULER ET REFUSER, À LA VOIX ET AU BOUTON** — `DIRA-CLIENT.md`
+(dira-core-api#268 §3). « annule ma course » propose l'annulation
+(`ride_cancellation_required`, `order_cancellation_required`, `summary.target`,
+`summary.cancel_fee_xof` — zéro servi), confirmée par un « oui » ou un appui
+(`state: "cancelled"`, événement direct `cancelled`). `POST /analytics/ai/decline`,
+le « non » et `ui.cancel` **retirent** une proposition (`declined`) — avant,
+rien ne la retirait, et un « oui » dit plus tard la confirmait. 🟠 La
+proposition courante est la DERNIÈRE : un « ok » ne confirme plus une
+proposition remplacée (seconde voiture). 🟠 `held: "cancellation"`.
+🟢 `VTC-CLIENT.md` : `max_fee_xof` à l'annulation (`409 cancel_fee_changed`),
+et `cancellation` absent à bord. 🟢 `FOOD-CLIENT.md` : `cancellable` sur la
+commande. 🟠 Direct : un « oui » en arabe tchadien est reconnu, le premier
+« oui » confirme, la session se ferme en `1000`.
 
 ### 4.112.0 — 30 octobre 2026
 

@@ -1,6 +1,6 @@
 # App CLIENT — COURSES (VTC) — contrat d'API
 
-> **Version 4.112.0** · 30 octobre 2026
+> **Version 4.113.0** · 30 octobre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Courses : `https://api-staging.dira.llc/api/v1/vtc` · Suivi : `wss://tracking-staging.dira.llc`
 
 ---
@@ -2897,6 +2897,26 @@ course**, dans `cancellation` :
 INDÉFENDABLE**, et c'est la réclamation qu'on ne peut pas gagner. L'écran de
 confirmation doit dire le montant — ou dire que c'est gratuit, **et jusqu'à
 quand**. Ne montrez jamais un bouton « Annuler » nu quand `fee_xof > 0`.
+
+🆕 ⚠️⚠️ **LE MONTANT LU EST UN PLAFOND — ENVOYEZ-LE** (v4.113.0) :
+
+```
+POST /rides/{id}/cancel
+{ "max_fee_xof": 0, "reason_code": "…", "reason": "…" }
+```
+
+`max_fee_xof` = le `cancellation.fee_xof` que la personne a **lu**. Entre
+l'écran et l'appui, le chauffeur a pu arriver : le barème passe alors à « il
+vous attendait ». Sans plafond, l'annulation retenait un montant que personne
+n'avait vu ; avec lui, **rien n'est annulé** —
+`409 cancel_fee_changed`, la phrase dit le nouveau montant. Relisez la course
+(`GET /rides/{id}`) et remontrez-le. Sans le champ : comme avant.
+Négatif : `422`, `fields: ["max_fee_xof"]`.
+
+🆕 **`cancellation` N'EST SERVI QUE TANT QUE LA COURSE S'ANNULE** (v4.113.0) :
+à bord (`in_transit`), plus d'annulation, donc plus de montant. Sa
+**présence** dit « cette course s'annule encore » — pas de bouton « Annuler »
+sans lui.
 
 ⚠️ **`grace_left_s` EST LE CHAMP QUI ÉVITE LA RÉCLAMATION.** Annoncer
 « gratuit » sans dire jusqu'à quand fait découvrir les frais **après** le
