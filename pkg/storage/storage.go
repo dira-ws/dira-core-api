@@ -20,6 +20,8 @@ import (
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
 	"github.com/minio/minio-go/v7/pkg/lifecycle"
+
+	"github.com/kgtech-org/dira-core-api/pkg/voice"
 )
 
 // CE QUE CHAQUE GENRE DE TÉLÉVERSEMENT ACCEPTE, ET JUSQU'À QUELLE TAILLE.
@@ -114,11 +116,10 @@ var (
 		"audio/aac": ".aac", "audio/ogg": ".ogg", "audio/opus": ".opus",
 		"audio/webm": ".webm",
 	}
-	voiceTypes = map[string]string{
-		"audio/mp4": ".m4a", "audio/m4a": ".m4a", "audio/x-m4a": ".m4a",
-		"audio/aac": ".aac", "audio/mpeg": ".mp3", "audio/ogg": ".ogg",
-		"audio/opus": ".opus", "audio/webm": ".webm", "audio/3gpp": ".3gp",
-	}
+	//
+	// ⚠️ LA LISTE DE `pkg/voice`, la seule (core#265) : la transcription et
+	// `/app/config` lisent la même.
+	voiceTypes = voice.Types
 )
 
 // Les plafonds, nommés par ce qu'ils bornent.
@@ -137,11 +138,10 @@ const (
 	MaxVideoBytes = 60 << 20 // 60 Mio
 	// MaxVoiceBytes borne un message vocal.
 	//
-	// ⚠️ LE MÊME PLAFOND QUE LA TRANSCRIPTION (`llm.MaxAudioBytes`), et il le
-	// faut : un vocal qu'on accepterait de garder mais que le transcripteur
-	// refuse serait un fichier stocké dont personne ne saura jamais ce qu'il
-	// dit. Deux mégaoctets, c'est une minute large en opus ou en AAC mono.
-	MaxVoiceBytes = 2 << 20 // 2 Mio
+	// ⚠️ LE PLAFOND DE `pkg/voice`, celui de la transcription, et il le faut :
+	// un vocal qu'on accepterait de garder mais que le transcripteur refuse
+	// serait un fichier stocké dont personne ne saura jamais ce qu'il dit.
+	MaxVoiceBytes = voice.MaxBytes
 	// MaxSpeechBytes borne une phrase DITE PAR LE SERVEUR.
 	//
 	// ⚠️ LE MÊME PLAFOND QU'UN VOCAL, et il est très large pour l'usage : une

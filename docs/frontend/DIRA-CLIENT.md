@@ -1,6 +1,6 @@
 # App CLIENT UNIFIÉE — LIVRAISON **et** COURSES — contrat d'API
 
-> **Version 4.106.0** · 30 octobre 2026
+> **Version 4.107.0** · 30 octobre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Livraison : `…/api/v1/food` · Courses : `…/api/v1/vtc` · Combiné : `…/api/v1/analytics` · Suivi : `wss://tracking-staging.dira.llc`
 
 ---
@@ -242,8 +242,20 @@ GET /app/config          # SANS jeton — lu AVANT l'écran de connexion
     "max_session_seconds": 300, "idle_timeout_seconds": 20,
     "languages": ["fr"],
     "input": { "encodings": ["pcm16"], "sample_rate": 16000 }
+  },
+  "voice": {                                              // 🆕 v4.107.0
+    "max_audio_seconds": 60, "max_audio_bytes": 2097152,
+    "formats": ["audio/3gpp", "audio/aac", "audio/m4a", "audio/mp4", "audio/mpeg",
+                "audio/ogg", "audio/opus", "audio/webm", "audio/x-m4a"]
   } }
 ```
+
+> 🆕 **`voice` : CE QU'UN MESSAGE VOCAL PEUT ÊTRE** (v4.107.0) — durée, poids,
+> formats acceptés par `POST /analytics/ai/voice`. **Arrêtez l'enregistrement à
+> `max_audio_seconds`** (affichez le compte à rebours) plutôt que de laisser
+> parler quelqu'un pour un refus. Les mêmes valeurs partout : ce sont les bornes
+> de la plateforme, pas un réglage de pays. Absent (serveur plus ancien) :
+> tenez-vous-en à 60 s et 2 Mio.
 
 > 🆕 ⚠️⚠️ **`assistant_live` est le SEUL drapeau de ce catalogue dont le défaut
 > est `false`** (v4.103.0). Tous les autres partent de « disponible partout » et
@@ -1169,6 +1181,7 @@ wolof. Douze codes sont admis, tout autre est refusé (`422 unknown_language`) :
 | | |
 |---|---|
 | Plafond | **2 Mio** — une minute large en opus ou en AAC mono |
+| Durée | 🆕 **60 secondes** au plus (v4.107.0) — lue sur `seconds` ; `/app/config` → `voice` la sert |
 | Types acceptés | `audio/mp4`, `audio/m4a`, `audio/x-m4a`, `audio/aac`, `audio/mpeg`, `audio/ogg`, `audio/opus`, `audio/webm`, `audio/3gpp` |
 | Refusé | **le WAV** — trente secondes pèsent cinq mégaoctets |
 
@@ -1201,6 +1214,7 @@ c'est l'estimation, et elle est fausse par construction.
 | Refus | Ce que ça veut dire | Ce que vous affichez |
 |---|---|---|
 | `413 audio_too_large` | plus de 2 Mio | « message trop long », et proposez de recommencer plus court |
+| `413 audio_too_long` 🆕 | `seconds` annonce plus de 60 s — refusé **avant** toute transcription | le même écran : « message trop long, recommencez plus court ». Mieux : arrêtez l'enregistrement à 60 s |
 | `422 unknown_language` | code de langue inconnu | un bogue d'application : corrigez le code envoyé |
 | `429 ai_quota_reached` | quota du jour épuisé | « réessayez demain », **et laissez écrire** |
 | `429 ai_budget_reached` | plafond de la plateforme | idem, sans accuser la personne |
@@ -2444,6 +2458,7 @@ commande ou une course. Ne devinez pas le métier d'après la clé ; lisez
 | `503 verticals_unavailable` | aucun métier joignable — réessayer |
 | `502 vertical_unreachable` | ce métier ne répond pas — réessayer |
 | `413 audio_too_large` | **le vocal** dépasse 2 Mio — recommencer plus court |
+| `413 audio_too_long` 🆕 | **le vocal** dépasse 60 s (`seconds`) — recommencer plus court ; arrêtez l'enregistrement à `voice.max_audio_seconds` |
 | `422 unknown_language` | code de langue inconnu : un bogue d'application |
 | ~~`502 transcription_failed`~~ | 🆕 v4.89.0 — n'est plus émis : un échec d'écoute arrive en `200` avec `state: "failed"` et l'`audio_url` |
 | `503 transcription_unavailable` | masquer le **bouton micro** (le texte marche) |
@@ -2515,6 +2530,16 @@ du métier.
 ---
 
 ## 15. Journal
+
+### 4.107.0 — 30 octobre 2026
+
+🟡 **LES LIMITES D'UN VOCAL SONT SERVIES, ET LA DURÉE MORD** (§4 ter, §8).
+`/app/config` porte un bloc `voice` (`max_audio_seconds`, `max_audio_bytes`,
+`formats`) : arrêtez l'enregistrement à 60 s. Au-delà, `POST
+/analytics/ai/voice` répond `413 audio_too_long` **avant** toute transcription
+— le statut d'`audio_too_large`, que vous traitez déjà par « recommencez plus
+court ». Jusqu'ici, seul notre service local bornait la durée ; le nuage
+transcrivait tout.
 
 ### 4.106.0 — 30 octobre 2026
 
