@@ -1,6 +1,6 @@
 # App CLIENT — LIVRAISON — contrat d'API
 
-> **Version 4.112.0** · 30 octobre 2026
+> **Version 4.113.0** · 30 octobre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Livraison : `https://api-staging.dira.llc/api/v1/food` · Suivi : `wss://tracking-staging.dira.llc`
 
 
@@ -1290,6 +1290,14 @@ GET /orders?before=2026-10-05T00:00:00Z   # bornée à ce qui est né AVANT (v4.
 GET /orders/{id}
 POST /orders/{id}/cancel
 ```
+
+🆕 **`cancellable` — LE CLIENT PEUT-IL ENCORE ANNULER ?** (v4.113.0) Chaque
+commande servie le dit, tiré de la même règle que `POST /orders/{id}/cancel`.
+**Ne montrez le bouton « Annuler » que s'il vaut `true`**, et ne recopiez pas
+la liste des statuts annulables : elle changera, et votre copie dirait
+« annulable » à une commande déjà en route — le refus `409 cannot_cancel`
+tomberait après le geste. L'assistant s'en sert pour ne proposer d'annuler que
+ce qui s'annule.
 
 ⏳ **`before` BORNE L'HISTORIQUE À UNE FENÊTRE DE DATE (v4.43.0)** — un instant
 RFC 3339, **strictement** avant. Il se combine avec `?status=` et `?cursor=`

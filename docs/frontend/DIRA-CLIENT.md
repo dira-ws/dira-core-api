@@ -1,6 +1,6 @@
 # App CLIENT UNIFIÉE — LIVRAISON **et** COURSES — contrat d'API
 
-> **Version 4.112.0** · 30 octobre 2026
+> **Version 4.113.0** · 30 octobre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Livraison : `…/api/v1/food` · Courses : `…/api/v1/vtc` · Combiné : `…/api/v1/analytics` · Suivi : `wss://tracking-staging.dira.llc`
 
 ---
@@ -1062,6 +1062,7 @@ quand le pays a posé un seuil et que la commande n'est pas partie :
 | `model_unavailable` | le modèle n'a pas lu ce vocal — la confiance n'est pas mesurée |
 | `no_plan` | rien de commandable tel quel (lieu introuvable, métier indécis) |
 | `switched_off` | la commande automatique est coupée pour ce pays ou cette édition |
+| `cancellation` | 🆕 une **annulation** — elle attend toujours son « oui » ou son appui (v4.113.0) |
 
 C'est une information, pas un écran : **l'écran se choisit sur `state`**.
 Journalisez-la, et affichez-la en développement — une confiance basse ne dit
@@ -1157,6 +1158,7 @@ pannes, ce qui noyait les vraies.
 |---|---|---|
 | `understood` | transcrit, un `plan` proposé, **la main vous reste** — 🆕 y compris **sous le seuil** (v4.109.0) | le plan à **confirmer** (`action`) — c'est le comportement de toujours |
 | `ordered` | **la commande est PARTIE** — au-dessus du seuil, rien ne la retenant | « c'est parti », et `ordered.kind` / `ordered.id` ouvrent le suivi |
+| `cancelled` | 🆕 un « oui » dicté vient d'**annuler** ce que la proposition nommait (v4.113.0) | « c'est annulé » — `ordered.kind` / `ordered.id` nomment ce qui est annulé ; **n'ouvrez pas le suivi** |
 | `needs_support` | 🆕 **rien de commandable tel quel** (pays avec seuil), ou le métier a refusé la commande | « **nous vous rappelons** » — un humain va écouter |
 | `failed` | la transcription a échoué, **ou personne n'a parlé** (v4.102.0) | « nous n'avons pas entendu, réessayez » — l'audio est **conservé** |
 
@@ -1580,6 +1582,115 @@ Vous continuez d'appeler la verticale vous-même avec le `quote_id` du plan,
 comme aujourd'hui. `action` est un **chemin de plus**, pas un remplacement — et
 c'est pour cela qu'il est livrable sans nouvelle version d'application.
 
+### 🆕 ⚠️⚠️ REFUSER — « non », ou le bouton « Non » (v4.113.0)
+
+Avant, refuser une proposition **ne la retirait pas** : elle restait en attente
+jusqu'à son échéance (dix minutes pour un devis), et un « oui » dit ensuite à
+**autre chose** la confirmait. La personne recevait la voiture qu'elle venait de
+refuser.
+
+Deux chemins, comme pour confirmer :
+
+```
+POST /analytics/ai/decline
+{ "confirmation_token": "N3pQ…", "how": "tap" }     // tap | voice | text
+  →
+{ "state": "declined", "reply": "D'accord, je ne commande rien." }
+```
+
+- **Le bouton « Non » de votre carte** → cette route, avec le jeton de la carte.
+  Un second appui rend la même phrase.
+- **Un message écrit ou dicté qui est un refus** — « non », « non merci »,
+  « laisse tomber », « لا », « ما داير » — retire la proposition courante. La
+  réponse de `/ai/chat` porte `state: "declined"` ; un vocal reste
+  `understood`, et `reply` dit le refus.
+
+⚠️ **« Non, plutôt une moto » n'est PAS un refus** : c'est une correction. Elle
+repart dans la conversation, qui proposera autre chose. N'interprétez rien
+vous-même : envoyez le message, le serveur décide.
+
+| Réponse | Ce qui s'est passé | Ce que vous montrez |
+|---|---|---|
+| `200` + `state: "declined"` | la proposition est retirée | fermez la carte, `reply` |
+| `409 no_pending_action` | rien à refuser — **ou c'est déjà confirmé** | la course existe : c'est une **annulation** qu'il faut demander (ci-dessous) |
+
+Après un refus, le jeton ne confirme plus : `POST /ai/confirm` répond
+`409 no_pending_action`.
+
+### 🆕 ⚠️ LA PROPOSITION COURANTE EST LA DERNIÈRE (v4.113.0)
+
+Un « oui » sans jeton vise la **dernière** proposition de ce fil, et elle seule.
+Si elle a déjà servi ou a été refusée, il n'y a plus rien de courant : le
+« oui » repart dans la conversation.
+
+C'était un défaut : le serveur prenait « la plus récente non consommée ». Une
+moto proposée, puis remplacée par un confort ; le confort confirmé — et le
+« ok » suivant commandait **la moto**. Une seconde voiture.
+
+⚠️ **Un appui reste explicite** : le bouton d'une carte ANCIENNE, encore
+valable, confirme ce qu'elle montre. Grisez les cartes remplacées si vous ne
+voulez pas l'offrir.
+
+### 🆕 ⚠️⚠️ ANNULER UNE COURSE OU UNE COMMANDE EN COURS — à la voix ET au bouton (v4.113.0)
+
+« annule ma course », « cancel my order », « ألغي المشوار » — écrit, dicté ou
+en direct : le serveur **propose** l'annulation, comme il propose une commande.
+**Rien ne s'annule sans confirmation**, par un « oui » ou par un appui.
+
+```jsonc
+"action": {
+  "type": "ride_cancellation_required",        // ou order_cancellation_required
+  "confirmation_token": "Qx7…",
+  "expires_at": "2026-10-30T15:02:10Z",
+  "say": "Annuler votre course vers Chagoua ? C'est gratuit. Confirmez-vous l'annulation ?",
+  "summary": { "target": { "kind": "ride", "id": "6ae4…" },
+               "cancel_fee_xof": 0,             // ⚠️ ZÉRO EST SERVI : « c'est gratuit »
+               "pickup": "Moursal", "dropoff": "Chagoua",
+               "class": "confort", "payment": "cash" }
+}
+```
+
+- **Confirmer**, c'est la même route : `POST /analytics/ai/confirm` →
+  `{ "state": "cancelled", "ordered": { "kind": "ride", "id": "6ae4…" },
+  "reply": "Votre course est annulée." }`. Un « oui » écrit ou dicté donne
+  `state: "cancelled"`.
+- **Refuser**, c'est `POST /analytics/ai/decline` → « D'accord, votre course
+  continue. », ou un « non ».
+
+⚠️⚠️ **LES FRAIS SE DISENT, ZÉRO COMPRIS, ET C'EST UN PLAFOND.**
+`summary.cancel_fee_xof` est lu sur la course au moment de proposer. Si le
+barème a monté entre la question et le « oui » (le chauffeur est arrivé, la
+grâce est finie), **rien n'est annulé** : `409 cancel_fee_changed`. Un vocal
+reste `understood` et `reply` le dit. Le jeton est rendu : redemandez
+l'annulation pour entendre le nouveau montant. « Gratuit » a une fin :
+`expires_at` est alors la fin de la grâce.
+
+| `summary` | Course | Commande |
+|---|---|---|
+| `target` | `{ "kind": "ride", "id" }` | `{ "kind": "order", "id" }` |
+| `cancel_fee_xof` | les frais, `0` = gratuit | `0` — pas de frais |
+| `pickup` · `dropoff` · `class` | l'itinéraire | — |
+| `label` · `items` | — | les plats en clair, et leur nombre |
+| `payment` | celui de la course : en espèces, les frais deviennent une dette | `wallet` / `online` : le montant payé revient sur le portefeuille Dira |
+
+Ce que le serveur répond **sans** proposer :
+
+- plusieurs courses en cours, aucune nommée → `reply` les nomme et demande
+  laquelle (« Nommez la destination ») ; « annule la course vers l'aéroport »
+  propose ensuite ;
+- à bord → « la course ne s'annule plus » ; une commande déjà en route, de même ;
+- rien en cours → « Vous n'avez aucune course en cours à annuler. »
+
+⚠️ **UNE ANNULATION NE PART JAMAIS SEULE**, même dans un pays à commande
+automatique : le vocal est `understood` avec `held: "cancellation"`, jamais
+`ordered`, jamais `needs_support`.
+
+⚠️ **Votre propre bouton « Annuler la course » ne change pas** :
+`POST /vtc/rides/{id}/cancel`. Envoyez-y désormais `max_fee_xof`, le
+`cancellation.fee_xof` que vous avez affiché — c'est le même plafond. Une course
+n'a plus de `cancellation` quand elle ne s'annule plus (à bord), et une commande
+dit `cancellable`.
+
 ---
 
 ## 8 quater. 🆕 🔴 L'ASSISTANT **EN DIRECT** — la personne parle, Dira répond de vive voix (v4.103.0)
@@ -1686,7 +1797,7 @@ Puis :
 | `{"type":"mic.mute"}` / `{"type":"mic.unmute"}` | la personne coupe son micro, ou un appel arrive |
 | `{"type":"text","message":"…"}` | elle tape pendant le direct |
 | `{"type":"ui.confirm","confirmation_token":"…"}` | elle appuie sur **Confirmer** |
-| `{"type":"ui.cancel"}` | elle referme la carte |
+| `{"type":"ui.cancel","confirmation_token":"…"}` | 🆕 elle appuie sur **Non** : la proposition de la carte est **retirée** (v4.113.0) — sans jeton, la proposition courante. Avant, cette trame ne faisait rien, et un « oui » dit plus tard confirmait la carte refermée |
 | `{"type":"session.end"}` | elle appuie sur **Terminer** |
 
 **⚠️ `mic.mute` arrête la facturation.** Pendant une coupure, votre audio n'est
@@ -1713,6 +1824,8 @@ une session payante ouverte.
 | `tool.status` | `name`, `phase` | « je cherche le prix… » |
 | `ui.state` | `goal`, `card` | dessinez l'étape (§8 ter) et la carte |
 | `ordered` | `kind`, `id` | menez au suivi |
+| `cancelled` | `kind`, `id` | 🆕 une **annulation** vient d'être faite (v4.113.0) — **n'ouvrez pas le suivi** |
+| `declined` | — | 🆕 la proposition est retirée — un « non » ou votre `ui.cancel` (v4.113.0) : fermez la carte |
 | `error` | `code`, `message`, `retryable` | voir le tableau des codes |
 | `session.ending` | `reason`, `seconds_left` | « le direct s'arrête bientôt » |
 | `session.end` | `reason` | fermez proprement |
@@ -1763,6 +1876,13 @@ recevez :
 `kind` vaut `ride_quote` ou `food_cart`. **Dessinez vos cartes existantes**
 (`RidePlanCard`, panier) et un bouton **Confirmer**.
 
+🆕 (v4.113.0) `kind` vaut aussi **`ride_cancellation`** ou
+**`order_cancellation`** : une ANNULATION proposée. `summary.target` nomme ce
+qu'on annule, et `summary.cancel_fee_xof` ses frais — **zéro compris**, à
+afficher (« gratuit »). Même bouton **Confirmer**, même `ui.confirm` ; le
+résultat est `{"type":"cancelled"}`. Ajoutez un bouton **Non** → `ui.cancel`
+avec le jeton de la carte.
+
 Deux chemins, et **un seul** crée quelque chose :
 
 1. **L'appui** : envoyez `ui.confirm` avec le `confirmation_token`. C'est la
@@ -1782,6 +1902,13 @@ affichez un prix, prenez `card.summary.price_xof` — jamais ce que le modèle a
 dit.
 
 Après exécution : `{"type":"ordered","kind":"ride","id":"…"}` → menez au suivi.
+🆕 Après une annulation : `{"type":"cancelled","kind":"ride","id":"…"}` — pas de
+suivi.
+
+🆕 **Refuser** (v4.113.0) : votre bouton **Non** envoie `ui.cancel` avec le
+jeton ; un « non » parlé, le modèle le transmet lui-même (outil
+`decline_pending` — refuser est le sens sans danger, il n'a pas besoin du
+serveur pour l'entendre). Dans les deux cas : `{"type":"declined"}`.
 
 ### 8 quater.6 Durée, silence, quota, reprise
 
@@ -2680,6 +2807,17 @@ du métier.
 ---
 
 ## 15. Journal
+
+### 4.113.0 — 30 octobre 2026
+
+🟢 **ANNULER ET REFUSER, À LA VOIX ET AU BOUTON** (§8 bis bis, §8 quater.5).
+« annule ma course » propose l'annulation (`ride_cancellation_required`,
+`order_cancellation_required`), frais compris — zéro dit « gratuit » —, et un
+« oui » ou un appui l'exécute (`state: "cancelled"`). `POST /analytics/ai/decline`
+et le « non » retirent une proposition ; `ui.cancel` aussi, en direct. 🟠 La
+proposition courante est la **dernière** : un « ok » ne confirme plus une
+proposition remplacée. 🟠 Un « oui » en arabe tchadien est reconnu, et le
+premier « oui » du direct confirme (il échouait toujours).
 
 ### 4.112.0 — 30 octobre 2026
 
