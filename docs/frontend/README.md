@@ -1,6 +1,6 @@
 # Specs frontend — par rôle
 
-> **Version 4.109.0** · 30 octobre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics`
+> **Version 4.110.0** · 30 octobre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics`
 
 **Cinq** documents, un par application. Chacun est **autonome** : tout ce qu'un frontend doit savoir pour son rôle, sans avoir à ouvrir les vingt specs de modules.
 
@@ -355,6 +355,17 @@ Chaque document porte la même version en en-tête, et son propre journal des ch
 - [ ] ⚠️ **`TRACKING_JWT_SECRET` renseigné dans chaque environnement déployé.** Vide, l'authentification du service de suivi est **désactivée** : n'importe qui connaissant un `delivery_id` suit la course. Le secret doit valoir **exactement** le `JWT_SECRET` de `dira-food-api`.
 
 ## Journal
+
+### 4.110.0 — 30 octobre 2026
+
+🟠 **UN LIEU INTROUVABLE SE DIT** — `VTC-CLIENT.md` §3 bis, `DIRA-CLIENT.md` §8
+(dira-core-api#313). `POST /vtc/ai/chat` et `POST /analytics/ai/voice` : une
+destination introuvable — ou un départ nommé introuvable sans `origin` — ne fait
+plus disparaître le plan ; il revient **sans devis** (`quotes: []`), avec
+`stops` (ce qui a été trouvé) et `unresolved` (ce qui ne l'a pas été), et
+`held: no_plan` sur le vocal. `reply` est écrit après la carte. En arabe
+tchadien, la transcription garde les noms propres en lettres latines, et un
+lieu dit en écriture arabe est translittéré avant d'être cherché.
 
 ### 4.109.0 — 30 octobre 2026
 
