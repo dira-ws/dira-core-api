@@ -1,6 +1,6 @@
 # App CLIENT UNIFIÉE — LIVRAISON **et** COURSES — contrat d'API
 
-> **Version 4.107.0** · 30 octobre 2026
+> **Version 4.108.0** · 30 octobre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Livraison : `…/api/v1/food` · Courses : `…/api/v1/vtc` · Combiné : `…/api/v1/analytics` · Suivi : `wss://tracking-staging.dira.llc`
 
 ---
@@ -1175,6 +1175,43 @@ wolof. Douze codes sont admis, tout autre est refusé (`422 unknown_language`) :
 | `man` · `sus` · `ff` | malinké · soussou · peul (pular) | Guinée |
 | `shu` · `sba` · `ff` | arabe tchadien · ngambay (sara) · peul (fulfulde) | Tchad |
 | `fan` | fang | Gabon |
+
+#### 🆕 🎯 REMPLIR UN CHAMP À LA VOIX — départ, destination, plat (v4.108.0)
+
+Pour **Dira Lite** : le départ, la destination et la recherche d'un plat se
+remplissent à la voix **par Dira**, plus par la reconnaissance du téléphone —
+qui ne connaît ni les quartiers d'ici, ni les plats d'ici, ni l'arabe tchadien.
+Ces champs passent par les routes vocales **des métiers**, avec deux champs de
+plus dans le multipart :
+
+```
+POST /vtc/ai/voice    file, language?, seconds?, context=pickup|dropoff,          near="lng,lat"
+POST /food/ai/voice   file, language?, seconds?, context=dish_search|store_search, near="lng,lat"
+```
+
+- **Les courses** cherchent ce qui a été dit dans la carte (sa base locale
+  d'abord ; « emmène-moi au marché de Bè » cherche « marché de Bè ») et rendent
+  `candidates: [{label, point, place_id, kind, distance_m, confidence}]` ;
+- **la livraison** souffle au modèle les noms des plats (ou boutiques) servis
+  autour de `near` — c'est ce qui lui fait entendre « poulet nyembwe » — et rend
+  `candidates: [{dish_id, store_id, name, store_name, price_from_xof,
+  distance_m, confidence}]` : boutiques proches et servables seulement, un plat
+  servi deux fois est un candidat (la boutique la plus proche, le prix le plus
+  bas « **à partir de** » — ⚠️ **pas un total**, les frais n'y sont pas).
+
+Ce que l'écran fait :
+
+1. il montre « J'ai entendu « … » » dans le champ, **corrigible** ;
+2. il **propose les candidats** — cinq au plus, le meilleur d'abord — et **lit
+   le premier à voix haute** ; un candidat touché remplit le champ ;
+3. ⚠️ **`candidates` absent ou vide n'est PAS une erreur** : il lance sa
+   recherche habituelle sur `text`.
+
+⚠️ **Rien n'est choisi ni commandé** : ces routes rendent une liste, jamais une
+course ni un panier. ⚠️ Elles **ne gardent pas l'audio** et n'écrivent dans
+aucun fil (seul `POST /analytics/ai/voice` le fait). **Envoyez `seconds`** :
+au-delà de 60, `413 audio_too_long` avant toute transcription. Sans `near`, pas
+de distance — et côté plats, pas de candidats.
 
 #### Le fichier
 
@@ -2530,6 +2567,15 @@ du métier.
 ---
 
 ## 15. Journal
+
+### 4.108.0 — 30 octobre 2026
+
+🟠 **REMPLIR UN CHAMP À LA VOIX, PAR DIRA** (§8). `POST /vtc/ai/voice`
+(`context=pickup|dropoff`) et `POST /food/ai/voice`
+(`context=dish_search|store_search`), avec `near` : la transcription est
+orientée par ce qui existe autour — la carte, les plats servis — et revient avec
+des `candidates` classés. Rien n'est choisi ; une liste vide renvoie à la
+recherche habituelle.
 
 ### 4.107.0 — 30 octobre 2026
 

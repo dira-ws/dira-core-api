@@ -1,6 +1,6 @@
 # Specs frontend — par rôle
 
-> **Version 4.107.0** · 30 octobre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics`
+> **Version 4.108.0** · 30 octobre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics`
 
 **Cinq** documents, un par application. Chacun est **autonome** : tout ce qu'un frontend doit savoir pour son rôle, sans avoir à ouvrir les vingt specs de modules.
 
@@ -355,6 +355,16 @@ Chaque document porte la même version en en-tête, et son propre journal des ch
 - [ ] ⚠️ **`TRACKING_JWT_SECRET` renseigné dans chaque environnement déployé.** Vide, l'authentification du service de suivi est **désactivée** : n'importe qui connaissant un `delivery_id` suit la course. Le secret doit valoir **exactement** le `JWT_SECRET` de `dira-food-api`.
 
 ## Journal
+
+### 4.108.0 — 30 octobre 2026
+
+🟠 **LA SAISIE VOCALE D'UN CHAMP** — `VTC-CLIENT.md`, `FOOD-CLIENT.md`,
+`DIRA-CLIENT.md` §8. Les routes vocales des métiers acceptent `context` et
+`near` : `pickup`/`dropoff` cherchent ce qui a été dit dans la carte ;
+`dish_search`/`store_search` soufflent au modèle les plats et boutiques servis
+autour, puis les proposent. Réponse : `candidates` classés (cinq au plus).
+`seconds` y est aussi lu : au-delà de 60, `413 audio_too_long`. Rien n'est
+choisi ni commandé ; une liste vide n'est pas une erreur.
 
 ### 4.107.0 — 30 octobre 2026
 
