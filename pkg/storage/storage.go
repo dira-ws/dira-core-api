@@ -5,6 +5,7 @@ package storage
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -172,7 +173,7 @@ const (
 // seau et le cycle de vie des objets savent tous deux appliquer. Le dire
 // ailleurs — sur l'appelant, sur le module — aurait demandé que chacun y
 // pense.
-var privateKinds = map[string]bool{KindVoice: true, KindSpeech: true}
+var privateKinds = map[string]bool{KindVoice: true, KindSpeech: true, KindDocument: true, KindReceipt: true}
 
 // expiringKinds : les genres dont les OBJETS s'effacent d'eux-mêmes, au bout
 // de `Config.PrivateRetention`.
@@ -206,6 +207,15 @@ const (
 	// ⚠️ ET LA CLÉ PORTE LE COMPTE (`speech/<compte>/…`) : c'est ce qui permet
 	// de l'effacer avec lui, comme sa voix.
 	KindSpeech = "speech"
+	// KindDocument : une pièce de conformité — identité, permis, assurance,
+	// carte grise, contrôle technique, casier judiciaire.
+	//
+	// ⚠️⚠️ PRIVÉE, SERVIE SIGNÉE, ET JAMAIS ÉPHÉMÈRE : c'est une PREUVE, dont la
+	// durée de garde est une décision d'exploitation (voir `expiringKinds`).
+	KindDocument = "document"
+	// KindReceipt : la pièce d'une déclaration d'argent — facture, reçu,
+	// quittance. Privée et jamais éphémère, pour la même raison.
+	KindReceipt = "receipt"
 )
 
 // Private dit si ce genre exige une URL signée.
@@ -274,8 +284,8 @@ var Kinds = map[string]Kind{
 	// elles : elles passaient par un genre prévu pour des photographies, donc
 	// sans PDF possible, et rangées sous un préfixe qui ne les désignait pas.
 	// Une attestation d'assurance est un PDF neuf fois sur dix.
-	"receipt":  {proofTypes, MaxProofBytes, "jpeg, png, webp, pdf"},
-	"document": {proofTypes, MaxProofBytes, "jpeg, png, webp, pdf"},
+	KindReceipt:  {proofTypes, MaxProofBytes, "jpeg, png, webp, pdf"},
+	KindDocument: {proofTypes, MaxProofBytes, "jpeg, png, webp, pdf"},
 }
 
 // merge réunit deux tables de formats. ⚠️ Une fonction plutôt qu'une table
@@ -526,6 +536,13 @@ func keyOf(public, bucket, rawURL string) (string, bool) {
 	return key, true
 }
 
+// errOutside : l'adresse ne désigne pas un objet de ce dépôt.
+//
+// ⚠️ L'ERREUR NE PORTE PAS L'ADRESSE. Elle remonte jusqu'aux journaux, qui se
+// gardent des mois et se lisent largement : l'adresse d'une pièce d'identité
+// n'a rien à y faire, même refusée.
+var errOutside = errors.New("storage: address outside this bucket")
+
 // Bare rend une adresse SANS sa signature ni son fragment — celle qu'on range.
 //
 // ⚠️ ON RANGE L'ADRESSE NUE, JAMAIS LA SIGNÉE : une adresse signée expire, et
@@ -566,7 +583,7 @@ func (s *Store) KindOf(rawURL string) string {
 func (s *Store) Adopt(ctx context.Context, rawURL, kind, entity string) (string, error) {
 	key, ok := s.Key(rawURL)
 	if !ok {
-		return "", fmt.Errorf("storage: %q n'appartient pas à ce dépôt", rawURL)
+		return "", errOutside
 	}
 	dst, moved := adoptKey(key, kind, entity)
 	if !moved {
@@ -622,7 +639,7 @@ func (s *Store) Exists(ctx context.Context, publicURL string) bool {
 func (s *Store) Get(ctx context.Context, publicURL string) (io.ReadCloser, error) {
 	key, ok := s.Key(publicURL)
 	if !ok {
-		return nil, fmt.Errorf("storage: %q is not an object of bucket %s", publicURL, s.bucket)
+		return nil, errOutside
 	}
 	obj, err := s.client.GetObject(ctx, s.bucket, key, minio.GetObjectOptions{})
 	if err != nil {
@@ -689,7 +706,7 @@ func bucketPolicy(bucket string) string {
 func (s *Store) SignedURL(ctx context.Context, publicURL string, ttl time.Duration) (string, error) {
 	key, ok := s.Key(publicURL)
 	if !ok {
-		return "", fmt.Errorf("storage: %q n'appartient pas à ce dépôt", publicURL)
+		return "", errOutside
 	}
 	// ⚠️⚠️ SIGNÉ PAR LE CLIENT DE L'HÔTE PUBLIC, et non par celui du réseau
 	// interne. La signature SigV4 couvre `Host` : une URL signée pour

@@ -1,6 +1,6 @@
 # App CLIENT — LIVRAISON — contrat d'API
 
-> **Version 4.103.1** · 30 octobre 2026
+> **Version 4.104.0** · 30 octobre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Livraison : `https://api-staging.dira.llc/api/v1/food` · Suivi : `wss://tracking-staging.dira.llc`
 
 
@@ -2720,6 +2720,12 @@ formats et son plafond**, et le refus nomme ceux **de ce genre-là**.
 | `feed` | jpeg, png, webp — vidéos : mp4, webm, mov (⚠️ **≤ 60 s**) | **60 Mio** |
 | `receipt` · `document` | jpeg, png, webp, **pdf** | **15 Mio** |
 | `class` · `marker` (pictogrammes, **exploitation seule**) | png, webp, **svg** | **512 Kio** |
+
+⚠️ **`receipt` et `document` sont des genres PRIVÉS (v4.104.0)** : l'adresse
+rendue par l'envoi est **signée et expire au bout de 30 minutes**. Elle sert à
+l'aperçu et se renvoie **telle quelle** à la route qui range la pièce ; le
+fichier est rangé sous le compte qui l'envoie (le paramètre `entity` est ignoré
+pour ces deux genres).
 
 **Ce que cette application envoie : `avatar`, et rien d'autre : la photo de profil.**
 

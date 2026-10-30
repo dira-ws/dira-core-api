@@ -1,6 +1,6 @@
 # App LIVREUR — LIVRAISON — contrat d'API
 
-> **Version 4.103.1** · 30 octobre 2026
+> **Version 4.104.0** · 30 octobre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Livraison : `https://api-staging.dira.llc/api/v1/food` · Suivi : `wss://tracking-staging.dira.llc` · SIG : `https://maps.dira.llc/api`
 
 
@@ -3559,6 +3559,22 @@ NOUVEAU.** Ce genre **n'existait pas** : les pièces partaient sous un genre
 prévu pour des **photographies**, donc **sans PDF possible** — alors qu'une
 attestation d'assurance ou un casier est un PDF neuf fois sur dix.
 
+🆕 ⚠️⚠️ **LES PIÈCES SONT SERVIES PAR UNE ADRESSE À DURÉE LIMITÉE (v4.104.0).**
+
+- **`file_url` dans les réponses est SIGNÉE et expire au bout de 30 minutes.**
+  Montrez-la directement (une image, un PDF : elle porte sa propre signature,
+  aucun en-tête à ajouter). Passé ce délai elle répond `403` : **relisez la
+  liste** au moment d'afficher la pièce. ⚠️ Ne la gardez pas en cache, ne la
+  rangez pas dans votre base.
+- **L'adresse rendue par `POST /uploads?kind=document` est signée aussi**, le
+  temps de montrer l'aperçu. **Renvoyez-la TELLE QUELLE** dans `file_url` : le
+  serveur la reconnaît, range la pièce et garde son adresse durable de son côté.
+- ⚠️ **Après le dépôt, affichez la `file_url` RENDUE PAR LE DÉPÔT**, pas celle de
+  l'envoi : le serveur range chaque pièce sous son genre, quel que soit celui
+  sous lequel elle a été envoyée, et l'adresse de l'envoi peut ne plus répondre.
+- Une adresse qui ne vient pas de `POST /uploads` est refusée :
+  `422 file_url_foreign`.
+
 ### 🆕 LES FORMATS DE TÉLÉVERSEMENT — un genre, ses formats, son plafond (v4.73.0)
 
 `POST /uploads?kind=…` n'accepte plus « des images » : **chaque genre a ses
@@ -3570,6 +3586,12 @@ formats et son plafond**, et le refus nomme ceux **de ce genre-là**.
 | `feed` | jpeg, png, webp — vidéos : mp4, webm, mov (⚠️ **≤ 60 s**) | **60 Mio** |
 | `receipt` · `document` | jpeg, png, webp, **pdf** | **15 Mio** |
 | `class` · `marker` (pictogrammes, **exploitation seule**) | png, webp, **svg** | **512 Kio** |
+
+⚠️ **`receipt` et `document` sont des genres PRIVÉS (v4.104.0)** : l'adresse
+rendue par l'envoi est **signée et expire au bout de 30 minutes**. Elle sert à
+l'aperçu et se renvoie **telle quelle** à la route qui range la pièce ; le
+fichier est rangé sous le compte qui l'envoie (le paramètre `entity` est ignoré
+pour ces deux genres).
 
 **Ce que cette application envoie : `avatar` (la photo de profil), `vehicle` (les photos d'un véhicule, 8 au plus), `document` (les pièces de conformité).**
 

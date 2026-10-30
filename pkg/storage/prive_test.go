@@ -94,7 +94,20 @@ func TestSigningAForeignURLIsRefused(t *testing.T) {
 
 	_, err := s.SignedURL(nil, "https://ailleurs.example/voice/x.m4a", 0) //nolint:staticcheck // refus avant tout appel réseau
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "n'appartient pas")
+	assert.ErrorIs(t, err, errOutside)
+	// ⚠️ ET LE REFUS NE PORTE PAS L'ADRESSE : il remonte jusqu'aux journaux,
+	// et l'adresse d'une pièce d'identité n'a rien à y faire.
+	assert.NotContains(t, err.Error(), "ailleurs.example")
+}
+
+// ⚠️⚠️ LES PREUVES SONT PRIVÉES — et nommées ici, une par une : un garde qui
+// découvrirait la liste dans le code ne verrait pas une preuve qui en sort.
+func TestProofsArePrivate(t *testing.T) {
+	raw := bucketPolicy("dira")
+	for _, proof := range []string{KindDocument, KindReceipt} {
+		assert.True(t, Private(proof), "%q n'est pas privé", proof)
+		assert.Contains(t, raw, "arn:aws:s3:::dira/"+proof+"/*", "%q n'est pas refusé par la politique", proof)
+	}
 }
 
 // ⚠️ ET UN PRÉFIXE QUI NOMME UNE ENTITÉ EST ACCEPTÉ : c'est le cas normal de
@@ -205,4 +218,20 @@ func TestTheEngineEncodesBeforeSending(t *testing.T) {
 		_, ok := Accepts(KindSpeech, mime)
 		assert.True(t, ok, "le moteur ne peut plus rendre %s", mime)
 	}
+}
+
+// ⚠️⚠️ AUCUNE ERREUR DU DÉPÔT NE PORTE L'ADRESSE — ni le rangement, ni la
+// lecture, ni la signature. Elles remontent jusqu'aux journaux.
+func TestNoStorageErrorCarriesTheAddress(t *testing.T) {
+	s := &Store{bucket: "dira", public: "https://files.dira.llc"}
+	const foreign = "https://ailleurs.example/document/casier.pdf"
+	_, err := s.Adopt(context.Background(), foreign, KindDocument, "u")
+	require.Error(t, err)
+	assert.NotContains(t, err.Error(), "ailleurs.example")
+	_, err = s.Get(context.Background(), foreign)
+	require.Error(t, err)
+	assert.NotContains(t, err.Error(), "ailleurs.example")
+	_, err = s.SignedURL(context.Background(), foreign, 0)
+	require.Error(t, err)
+	assert.NotContains(t, err.Error(), "ailleurs.example")
 }

@@ -1,6 +1,6 @@
 # Specs frontend — par rôle
 
-> **Version 4.103.1** · 30 octobre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics`
+> **Version 4.104.0** · 30 octobre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics`
 
 **Cinq** documents, un par application. Chacun est **autonome** : tout ce qu'un frontend doit savoir pour son rôle, sans avoir à ouvrir les vingt specs de modules.
 
@@ -355,6 +355,22 @@ Chaque document porte la même version en en-tête, et son propre journal des ch
 - [ ] ⚠️ **`TRACKING_JWT_SECRET` renseigné dans chaque environnement déployé.** Vide, l'authentification du service de suivi est **désactivée** : n'importe qui connaissant un `delivery_id` suit la course. Le secret doit valoir **exactement** le `JWT_SECRET` de `dira-food-api`.
 
 ## Journal
+
+### 4.104.0 — 30 octobre 2026
+
+🟠 **LES PIÈCES SONT SERVIES PAR UNE ADRESSE À DURÉE LIMITÉE** — `VTC-DRIVER.md`,
+`FOOD-DELIVERY.md`, `PARTNER-FLEET.md` (conformité), et le tableau des envois
+de chaque spec.
+
+- `file_url` des pièces de conformité est **signée, 30 minutes** : à montrer
+  telle quelle, à **relire** quand elle a expiré, jamais à garder.
+- `POST /uploads?kind=document|receipt` rend une adresse **signée** (aperçu) ;
+  elle se renvoie **telle quelle** dans `file_url`. Le fichier est rangé sous le
+  compte qui l'envoie (`entity` ignoré pour ces genres).
+- Le serveur range chaque pièce sous son genre au dépôt, quel que soit celui de
+  l'envoi : **après le dépôt, affichez la `file_url` rendue par le dépôt.**
+- Une adresse qui ne vient pas de `POST /uploads` est refusée :
+  `422 file_url_foreign`.
 
 ### 4.103.1 — 30 octobre 2026
 
@@ -1990,6 +2006,12 @@ seulement**, et contrôler les formats cas par cas.
 | `feed` | jpeg, png, webp + mp4, webm, mov (≤ 60 s) | 60 Mio |
 | `receipt` · `document` | jpeg, png, webp, **pdf** | 15 Mio |
 | `class` · `marker` (pictogrammes, exploitation) | png, webp, **svg** | 512 Kio |
+
+⚠️ **`receipt` et `document` sont des genres PRIVÉS (v4.104.0)** : l'adresse
+rendue par l'envoi est **signée et expire au bout de 30 minutes**. Elle sert à
+l'aperçu et se renvoie **telle quelle** à la route qui range la pièce ; le
+fichier est rangé sous le compte qui l'envoie (le paramètre `entity` est ignoré
+pour ces deux genres).
 
 - 🆕 ⚠️ **`kind=document` MANQUAIT.** Les pièces de conformité — identité,
   permis, assurance, carte grise, contrôle technique, casier — n'avaient aucun

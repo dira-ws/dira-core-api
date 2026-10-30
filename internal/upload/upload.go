@@ -17,6 +17,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
@@ -24,6 +25,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/kgtech-org/dira-core-api/pkg/apperr"
+	"github.com/kgtech-org/dira-core-api/pkg/auth"
 	"github.com/kgtech-org/dira-core-api/pkg/httpx"
 	"github.com/kgtech-org/dira-core-api/pkg/media"
 	"github.com/kgtech-org/dira-core-api/pkg/storage"
@@ -34,7 +36,12 @@ import (
 // sans MinIO : c'est elle qui protège le format, pas le stockage.
 type objectStore interface {
 	Put(ctx context.Context, kind, entity, contentType string, size int64, r io.Reader) (string, error)
+	SignedURL(ctx context.Context, rawURL string, ttl time.Duration) (string, error)
 }
+
+// privateFor : la durée de l'adresse rendue pour un genre PRIVÉ — le temps de
+// montrer un aperçu, puis de la renvoyer à la route qui la range.
+const privateFor = 30 * time.Minute
 
 type Handler struct {
 	store objectStore
@@ -167,10 +174,32 @@ func (h *Handler) upload(w http.ResponseWriter, r *http.Request) {
 		duration = d
 	}
 
-	url, err := h.store.Put(r.Context(), kind, r.URL.Query().Get("entity"), contentType, header.Size, file)
+	// ⚠️⚠️ UN GENRE PRIVÉ SE RANGE SOUS LE COMPTE QUI L'ENVOIE, jamais sous une
+	// entité choisie par l'appelant : c'est le préfixe qui permet d'effacer
+	// les pièces d'une personne avec elle, et un appelant ne doit pas pouvoir
+	// ranger un fichier sous le préfixe d'un autre.
+	entity := r.URL.Query().Get("entity")
+	private := storage.Private(kind)
+	if private {
+		entity, _ = auth.UserFromContext(r.Context())
+	}
+	url, err := h.store.Put(r.Context(), kind, entity, contentType, header.Size, file)
 	if err != nil {
 		httpx.Error(w, r, apperr.Internal(err))
 		return
+	}
+	// ⚠️ ET L'ADRESSE RENDUE EST SIGNÉE, à durée limitée : un genre privé ne se
+	// lit pas sans signature, et l'application doit pouvoir montrer l'aperçu.
+	// Elle la renvoie telle quelle à la route qui range la pièce, qui garde
+	// l'adresse NUE. Une signature ratée rend l'adresse nue — l'aperçu ne
+	// s'affichera pas, mais le dépôt de la pièce, lui, marchera.
+	if private {
+		if signed, err := h.store.SignedURL(r.Context(), url, privateFor); err == nil {
+			url = signed
+		} else {
+			slog.WarnContext(r.Context(), "upload: private object stored, its preview address could not be signed",
+				"kind", kind, "error", err)
+		}
 	}
 	// La durée revient à l'appelant : la console l'affiche et la repasse au
 	// feed sans avoir à re-sonder le fichier.

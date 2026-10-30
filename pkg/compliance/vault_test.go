@@ -23,6 +23,7 @@ type fakeVault struct {
 	adopted  map[string]string
 	signFail bool
 	adoptErr error
+	signed   int
 }
 
 func newVault() *fakeVault { return &fakeVault{adopted: map[string]string{}} }
@@ -52,6 +53,7 @@ func (v *fakeVault) Adopt(_ context.Context, raw, kind, entity string) (string, 
 }
 
 func (v *fakeVault) SignedURL(_ context.Context, raw string, ttl time.Duration) (string, error) {
+	v.signed++
 	if v.signFail {
 		return "", errors.New("signature impossible")
 	}
@@ -248,4 +250,21 @@ func TestAFleetDocumentIsAdoptedToo(t *testing.T) {
 	}
 	assert.True(t, strings.HasPrefix(stored, ours+"document/"+fleetID+"/"), "papier de société non rangé : %s", stored)
 	assert.Contains(t, doc.FileURL, "?sig=")
+}
+
+// ⚠️ UNE ADRESSE HORS DE NOTRE DÉPÔT (une pièce de démonstration) EST SERVIE
+// TELLE QUELLE, sans même être présentée au signataire : elle ne se signe pas,
+// et chaque lecture de la liste l'aurait redit dans le journal.
+func TestAForeignAddressIsServedAsIsWithoutNoise(t *testing.T) {
+	fx := newFixture()
+	driver, _ := fx.newDriver(t, 5)
+	// Déposée AVANT le coffre : rien ne l'a refusée à l'époque.
+	submit(t, fx, driver, SubmitDocumentRequest{Kind: DocLicence, FileURL: "https://files.dira.llc/demo/piece.jpg", ExpiresAt: inDays(400)})
+	vault := newVault()
+	fx.svc.SetVault(vault)
+	resp, err := fx.svc.Compliance(context.Background(), driver)
+	require.NoError(t, err)
+	require.NotEmpty(t, resp.Documents)
+	assert.Equal(t, "https://files.dira.llc/demo/piece.jpg", resp.Documents[0].FileURL)
+	assert.Zero(t, vault.signed, "une adresse étrangère a été présentée au signataire")
 }
