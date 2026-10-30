@@ -1,6 +1,6 @@
 # App CLIENT UNIFIÉE — LIVRAISON **et** COURSES — contrat d'API
 
-> **Version 4.109.0** · 30 octobre 2026
+> **Version 4.110.0** · 30 octobre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Livraison : `…/api/v1/food` · Courses : `…/api/v1/vtc` · Combiné : `…/api/v1/analytics` · Suivi : `wss://tracking-staging.dira.llc`
 
 ---
@@ -1072,6 +1072,36 @@ pas si c'est l'accent, la langue, le modèle ou un mode jamais nommé.
 langue à écriture arabe du pays (`shu`) — et l'assistant répond dans celle-là.
 Envoyez quand même la langue que la personne **parle**, pas celle de
 l'interface : une translittération latine, elle, ne se devine pas.
+
+🆕 **UN LIEU INTROUVABLE SE DIT, IL NE FAIT PLUS DISPARAÎTRE LE PLAN**
+(v4.110.0). Quand la carte ne trouve pas la destination — ou un départ nommé,
+sans `origin` —, le plan d'une course revient **sans devis** (`quotes: []`) :
+`stops` montre ce qui a été trouvé, **`plan.unresolved` ce qui ne l'a pas été**,
+sous le nom cherché, en lettres latines. `held` vaut `no_plan`, `state` suit la
+règle du tableau (`needs_support` dans un pays à seuil, `understood` ailleurs),
+et il n'y a **pas d'`action`** : rien à confirmer.
+
+```jsonc
+"plan": { "stops": [ { "kind": "dest", "label": "Aéroport International Gnassingbé Eyadéma, Lomé",
+                       "geo": [1.2545, 6.1656] } ],
+          "quotes": [],
+          "unresolved": ["Marché Agoè Nyivé"], "when": "" },
+"held": "no_plan",
+"state": "needs_support"
+```
+
+Dites le lieu — « je n'ai pas trouvé *Marché Agoè Nyivé* » — et proposez la
+recherche d'adresse, plutôt que « une personne va vous appeler » seul. `reply`
+le dit aussi : la phrase est désormais écrite **après** la recherche sur la
+carte, et elle ne promet plus de course quand aucun lieu n'a été trouvé.
+
+🆕 **LES NOMS PROPRES RESTENT EN LETTRES LATINES** (v4.110.0). Dans une langue
+qui s'écrit dans un autre alphabet (`shu`), `text` garde les quartiers, les
+lieux et les modes en lettres latines : « انا داير تكسي من سوق Agoè-Nyivé… ».
+C'est ainsi qu'on les écrit ici, et c'est ainsi que la carte les cherche — un
+lieu resté en écriture arabe est de toute façon translittéré avant d'être
+cherché. Affichez `text` **tel quel** : il mêle deux écritures, c'est voulu,
+et le sens de lecture se gère par le texte bidirectionnel du système.
 
 ⚠️ **🆕 `threshold` SE LIT AVEC `confidence`, JAMAIS SEUL** (v4.89.0). Il était
 annoncé et jamais servi. « J'ai compris à 72 % » ne veut rien dire sans « il en
@@ -2612,6 +2642,15 @@ du métier.
 ---
 
 ## 15. Journal
+
+### 4.110.0 — 30 octobre 2026
+
+🟠 **UN LIEU INTROUVABLE SE DIT** (§8). Une destination introuvable — ou un
+départ nommé introuvable sans `origin` — ne fait plus disparaître le plan
+d'une course : il revient sans devis (`quotes: []`), avec `plan.unresolved`,
+`held: no_plan` et pas d'`action`. En `shu`, `text` garde les noms propres en
+lettres latines ; un lieu dit en écriture arabe est translittéré avant d'être
+cherché. `reply` est écrit après la carte.
 
 ### 4.109.0 — 30 octobre 2026
 

@@ -1,6 +1,6 @@
 # App CLIENT — COURSES (VTC) — contrat d'API
 
-> **Version 4.109.0** · 30 octobre 2026
+> **Version 4.110.0** · 30 octobre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Courses : `https://api-staging.dira.llc/api/v1/vtc` · Suivi : `wss://tracking-staging.dira.llc`
 
 ---
@@ -1161,13 +1161,20 @@ Ce qu'il faut envoyer et afficher :
   périmé.
 - **`plan.unresolved`** nomme ce que la carte ne connaît pas (« chez Tantie
   Adjo ») : dites-le et proposez la recherche d'adresse. Un **arrêt**
-  introuvable ne fait pas échouer la course ; une **destination**
-  introuvable, si — il n'y a alors pas de plan.
+  introuvable ne fait pas échouer la course. Une **destination**
+  introuvable — ou un départ nommé introuvable sans `origin` — la fait
+  échouer : 🆕 (v4.110.0) **le plan revient quand même, SANS DEVIS**
+  (`quotes: []`), `stops` avec ce qui a été trouvé et `unresolved` avec ce
+  qui ne l'a pas été. Rien à commander : pas de bouton, dites ce qui manque.
+  Avant, ce plan disparaissait, et avec lui le nom du lieu à dire.
+- 🆕 **`reply` connaît la carte** (v4.110.0) : la phrase est écrite après la
+  recherche des lieux, et ne promet plus une course qu'aucun lieu ne permet.
 - **`plan.when`** (« dans 20 minutes ») est rendu **tel quel** :
   l'assistant ne programme pas. Si c'est une course à l'avance, envoyez le
   passager sur l'écran de programmation (§4 bis).
 - `plan` **absent** = ce n'était pas une demande de course (un bonjour, une
-  question de prix). Affichez la phrase, rien d'autre.
+  question de prix), ou ni départ ni position. Affichez la phrase, rien
+  d'autre.
 
 `502`/`503 assistant_unavailable` : l'assistant est indisponible — dites-le
 et **laissez la composition manuelle**, qui ne dépend d'aucun modèle.
