@@ -1,6 +1,6 @@
 # Specs frontend — par rôle
 
-> **Version 4.108.0** · 30 octobre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics`
+> **Version 4.109.0** · 30 octobre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics`
 
 **Cinq** documents, un par application. Chacun est **autonome** : tout ce qu'un frontend doit savoir pour son rôle, sans avoir à ouvrir les vingt specs de modules.
 
@@ -355,6 +355,17 @@ Chaque document porte la même version en en-tête, et son propre journal des ch
 - [ ] ⚠️ **`TRACKING_JWT_SECRET` renseigné dans chaque environnement déployé.** Vide, l'authentification du service de suivi est **désactivée** : n'importe qui connaissant un `delivery_id` suit la course. Le secret doit valoir **exactement** le `JWT_SECRET` de `dira-food-api`.
 
 ## Journal
+
+### 4.109.0 — 30 octobre 2026
+
+🟠 **SOUS LE SEUIL, LA PERSONNE CONFIRME** — `DIRA-CLIENT.md` §8
+(dira-core-api#310). `POST /analytics/ai/voice` : un plan commandable sous le
+seuil du pays revient `understood` avec sa proposition ; `needs_support` est
+réservé à ce qui n'est pas commandable (ou refusé par le métier). Nouveaux :
+`confidence: null` quand rien n'a été mesuré, `held` (`below_threshold`,
+`mode_not_named`, `model_unavailable`, `no_plan`, `switched_off`), et
+`language` = la langue entendue (écriture arabe → `shu`). Un `voice_id` passé à
+la création d'une course ou d'une commande sort le vocal de la file du support.
 
 ### 4.108.0 — 30 octobre 2026
 
