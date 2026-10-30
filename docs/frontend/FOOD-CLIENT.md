@@ -1,6 +1,6 @@
 # App CLIENT — LIVRAISON — contrat d'API
 
-> **Version 4.105.0** · 30 octobre 2026
+> **Version 4.106.0** · 30 octobre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Livraison : `https://api-staging.dira.llc/api/v1/food` · Suivi : `wss://tracking-staging.dira.llc`
 
 
@@ -1087,6 +1087,66 @@ paiement se rouvre dix fois. Le total définitif est celui de `POST /orders`.
 
 ⚠️ **Si la route répond `404` sur votre déploiement**, elle n'y est pas encore :
 repliez-vous **silencieusement** sur les refus de `POST /orders`, comme avant.
+
+### 🆕 💰 LE DEVIS — LE TOTAL QUI SERA DÉBITÉ, AVANT DE COMMANDER (v4.106.0)
+
+```
+POST /orders/quote
+{ "items": [ … les mêmes lignes que POST /orders … ],
+  "delivery": { "address": "Louis, Libreville", "geo": [9.45, 0.41] },
+  "code": "DIRA2000" }                        // facultatif
+→ 201
+{ "quote_id": "6b0f3c…",
+  "lines": [ { "dish_id": "…", "store_id": "…", "name": "Poulet nyembwe",
+               "unit_price": 4500, "qty": 1 } ],
+  "subtotal": 4500, "delivery_fee": 1100,
+  "promo_code": "DIRA2000", "promo_code_xof": 500,
+  "total": 5100, "currency": "XAF",
+  "expires_at": "2026-10-30T10:42:00Z" }
+
+POST /orders
+{ "quote_id": "6b0f3c…", "payment_method": "cash" }
+```
+
+**`/orders/check` dit si c'est livrable ; le devis dit COMBIEN.** Le premier
+reste « avant remises » ; le devis chiffre **tout** — promotions, frais de
+livraison, crédit de tombola, code — exactement comme la commande.
+
+⚠️⚠️ **`total` EST CE QUI SERA DÉBITÉ, AU FRANC PRÈS.** C'est le montant à
+afficher en « Total à payer », et le seul à dire à voix haute. Le serveur ne le
+recopie pas : la commande le **recalcule** et **refuse** s'il a changé
+(`409 quote_stale`) — jamais elle ne débite un autre montant que celui que le
+client a vu.
+
+⚠️ **ENVOYEZ `quote_id` SEUL**, avec `payment_method` (et `scheduled_for`,
+`voice_id` si vous les utilisez). Le devis porte déjà le panier, l'adresse et le
+code : les renvoyer à côté est refusé — `422 quote_replaces_cart`.
+
+⚠️ **RIEN N'EST ENGAGÉ PAR UN DEVIS** — ni offre, ni code, ni crédit. **Redemandez
+un devis à chaque changement** de panier, d'adresse ou de code.
+
+⚠️ **UN PANIER QUI NE SE COMMANDERAIT PAS N'A PAS DE DEVIS** : le devis refuse
+avec **les mêmes codes que la commande** (`dish_unavailable`, `store_closed`,
+`store_too_far`, refus du code…) — à l'inverse de `/orders/check`, qui répond
+`200`.
+
+⚠️ **`lines[].store_id` EST ÉPINGLÉ** : la commande ne rechoisira pas la boutique,
+même si une plus proche ouvre entre-temps. C'est la cuisine annoncée qui cuisine.
+
+**Valable dix minutes, une seule fois.** Les refus à la commande :
+
+| Code | Ce que l'écran fait |
+|---|---|
+| `quote_expired` · `quote_not_found` | redemander un devis **en silence** et afficher le nouveau total |
+| `quote_stale` | le prix a changé : **redemander un devis et le MONTRER** — ne jamais commander en silence au nouveau prix |
+| `quote_spent` | ⚠️ **la commande EXISTE** : ouvrez-la (`GET /orders`) au lieu de reproposer « Commander » |
+| `forbidden` | le devis d'un autre compte — un défaut de votre côté |
+
+⚠️ **Gardez l'`Idempotency-Key`** : un renvoi après coupure, avec la même clé et le
+même devis, rend **la même commande**.
+
+⚠️ **Si `POST /orders/quote` répond `404`**, la route n'est pas encore déployée :
+commandez comme avant, avec le panier.
 
 ### 🎟️ LE CODE PROMO — celui qu'on TAPE (v4.51.0)
 
@@ -3141,6 +3201,11 @@ L'écran de portefeuille dérive ce chiffre du **panier moyen réel** du client.
 | `validation_failed` | 422 | **`fields`** nomme les clés JSON fautives ; `reason: unknown_field` = bug de l'app |
 | `payload_too_large` | **413** | la passerelle : corps > 64 MiB — vérifier le poids **avant** d'envoyer |
 | `storage_unavailable` | 503 | le stockage de fichiers n'a pas démarré → réessayer plus tard, ne pas perdre la saisie |
+| `quote_stale` 🆕 | 409 | le prix a changé depuis le devis (rien n'est débité) → **redemander un devis et MONTRER le nouveau total** |
+| `quote_spent` 🆕 | 409 | ⚠️ la commande née de ce devis **EXISTE** → l'ouvrir, ne pas reproposer « Commander » |
+| `quote_expired` · `quote_not_found` 🆕 | 409 · 404 | devis périmé (dix minutes) ou purgé → en redemander un, en silence |
+| `quote_replaces_cart` 🆕 | 422 | `quote_id` envoyé avec un panier, une adresse ou un code → envoyer le devis **seul** |
+| `quotes_unavailable` 🆕 | 503 | le devis n'est pas branché sur ce déploiement → commander avec le panier, comme avant |
 
 > ⚠️ **`no_store_nearby` et `dish_unavailable_nearby` ne se traitent pas pareil.** Le premier dit que l'enseigne entière est hors de portée : proposer un autre plat de cette enseigne enverrait le client réessayer indéfiniment. Le second dit que l'enseigne livre bien ici — c'est ce plat-ci qui manque, et le reste de la carte est commandable.
 >

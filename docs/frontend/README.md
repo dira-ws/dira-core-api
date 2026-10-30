@@ -1,6 +1,6 @@
 # Specs frontend — par rôle
 
-> **Version 4.105.0** · 30 octobre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics`
+> **Version 4.106.0** · 30 octobre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics`
 
 **Cinq** documents, un par application. Chacun est **autonome** : tout ce qu'un frontend doit savoir pour son rôle, sans avoir à ouvrir les vingt specs de modules.
 
@@ -356,6 +356,20 @@ Chaque document porte la même version en en-tête, et son propre journal des ch
 
 ## Journal
 
+### 4.106.0 — 30 octobre 2026
+
+🟠 **LE DEVIS D'UNE COMMANDE DE REPAS** — `FOOD-CLIENT.md` §4.
+`POST /food/orders/quote` chiffre le panier **exactement comme la commande** —
+promotions, frais, crédit de tombola, code — sans rien engager ; `total` est ce
+qui sera débité, au franc près. `POST /food/orders {quote_id, payment_method}`
+l'engage une fois : `409 quote_stale` si le prix a changé (jamais débité),
+`409 quote_spent` si la commande existe déjà, `409 quote_expired` après dix
+minutes, `422 quote_replaces_cart` si le panier accompagne le devis.
+
+🟠 **L'ASSISTANT ANNONCE LE PRIX D'UN REPAS** — `DIRA-CLIENT.md` §8 bis bis :
+`summary.price_xof` d'une proposition de repas est le total de ce devis.
+Absent quand le serveur n'a pas pu chiffrer.
+
 ### 4.105.0 — 30 octobre 2026
 
 🟠 **LA COMMANDE AUTOMATIQUE D'UN VOCAL SOUS GARDE** — `DIRA-CLIENT.md` §8.
@@ -523,10 +537,10 @@ un prix qui n'y est pas, et la personne dirait « oui » à ce prix-là.
 v4.105.0, le serveur **vérifie** `reply` contre le plan et remplace une phrase
 qui chiffre autre chose par une phrase neutre — un filet, pas une source.
 
-⚠️⚠️ **UNE COMMANDE DE REPAS N'ANNONCE AUCUN PRIX**, et c'est voulu : son total
-vaut `sous-total + frais de livraison − remises` et n'existe qu'à la création.
-Dire le sous-total annoncerait **moins** que ce qu'on débite. N'additionnez pas
-`items[].price × qty` comme un total.
+⚠️⚠️ **LE PRIX D'UN REPAS VIENT DU DEVIS DE LA LIVRAISON** (🆕 v4.106.0) :
+`summary.price_xof` est le total de `POST /food/orders/quote` — frais et
+remises compris, le montant débité. Il reste absent quand le serveur n'a pas pu
+chiffrer : n'additionnez jamais `items[].price × qty` comme un total.
 
 ⚠️ **Deux confirmations du même jeton font au plus une opération**, et la
 seconde reçoit **le même résultat** — pas une erreur. `409 pending_expired` ne
