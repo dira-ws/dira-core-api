@@ -1,6 +1,6 @@
 # App CLIENT UNIFIÉE — LIVRAISON **et** COURSES — contrat d'API
 
-> **Version 4.115.0** · 2 novembre 2026
+> **Version 4.116.0** · 2 novembre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Livraison : `…/api/v1/food` · Courses : `…/api/v1/vtc` · Combiné : `…/api/v1/analytics` · Suivi : `wss://tracking-staging.dira.llc`
 
 ---
@@ -1064,6 +1064,8 @@ quand le pays a posé un seuil et que la commande n'est pas partie :
 | `switched_off` | la commande automatique est coupée pour ce pays ou cette édition |
 | `cancellation` | 🆕 une **annulation** — elle attend toujours son « oui » ou son appui (v4.113.0) |
 | `topup` | 🆕 une **recharge** — elle attend toujours son « oui » ou son appui (v4.114.0) |
+| `change` | 🆕 un **changement de trajet** d'une course en cours — il attend toujours son « oui » ou son appui (v4.116.0) |
+| `second_ride` | 🆕 une course NEUVE alors qu'une autre roule déjà (`summary.also_live`) — une **seconde voiture** ne part jamais seule (v4.116.0) |
 
 C'est une information, pas un écran : **l'écran se choisit sur `state`**.
 Journalisez-la, et affichez-la en développement — une confiance basse ne dit
@@ -1161,6 +1163,7 @@ pannes, ce qui noyait les vraies.
 | `ordered` | **la commande est PARTIE** — au-dessus du seuil, rien ne la retenant | « c'est parti », et `ordered.kind` / `ordered.id` ouvrent le suivi |
 | `cancelled` | 🆕 un « oui » dicté vient d'**annuler** ce que la proposition nommait (v4.113.0) | « c'est annulé » — `ordered.kind` / `ordered.id` nomment ce qui est annulé ; **n'ouvrez pas le suivi** |
 | `payment_started` | 🆕 un « oui » dicté vient de **demander une recharge** (v4.114.0) | « validez sur votre téléphone » — suivez `GET /payments/{ordered.id}` ; **rien n'est crédité** avant `succeeded` |
+| `changed` | 🆕 un « oui » dicté vient de **changer le trajet** de la course en cours (v4.116.0) | « c'est changé » — **la même course** : relisez `GET /vtc/rides/{ordered.id}`, **n'ouvrez pas un second suivi** |
 | `needs_support` | 🆕 **rien de commandable tel quel** (pays avec seuil), ou le métier a refusé la commande | « **nous vous rappelons** » — un humain va écouter |
 | `failed` | la transcription a échoué, **ou personne n'a parlé** (v4.102.0) | « nous n'avons pas entendu, réessayez » — l'audio est **conservé** |
 
@@ -1720,6 +1723,58 @@ Ce que le serveur répond **sans** proposer :
 automatique : le vocal est `understood` avec `held: "cancellation"`, jamais
 `ordered`, jamais `needs_support`.
 
+### 🆕 ⚠️⚠️ CHANGER UNE COURSE EN COURS — au lieu d'en commander une SECONDE (v4.116.0)
+
+Avant, une fois la course commandée, « change la destination pour l'aéroport »
+ouvrait une demande **neuve** : un devis, une proposition — et un « oui »
+commandait une **seconde voiture**, sans qu'un mot le dise.
+
+Désormais, quand une course roule déjà (un chauffeur l'a acceptée), écrit, dicté
+ou en direct :
+
+| La personne dit | Le serveur propose |
+|---|---|
+| « change la destination pour l'aéroport », « plutôt à Bè », ou **une destination seule** | de changer la **destination** de CETTE course |
+| « ajoute un arrêt à la pharmacie », « passe par la boulangerie » | d'ajouter un **arrêt avant** la destination |
+| « un taxi de Bè à Tokoin pour ma sœur » — **un autre départ** nommé | une course **neuve**, avec `summary.also_live` : c'est une **seconde voiture**, et `say` le dit |
+
+```jsonc
+"action": {
+  "type": "ride_change_required",
+  "confirmation_token": "Mv3…",
+  "say": "Je change votre course : vers Aéroport, 2 600 francs au lieu de 2 150 francs. Confirmez-vous ?",
+  "summary": { "changes": { "kind": "ride", "id": "6ae4…" },   // ⚠️ PAS `target` (= annuler)
+               "price_xof": 2600, "previous_price_xof": 2150,
+               "pickup": "Moursal", "dropoff": "Aéroport",
+               "added_stop": "Pharmacie du Centre",           // absent : la destination change
+               "class": "eco", "payment": "cash" }
+}
+```
+
+- **Confirmer** : `POST /analytics/ai/confirm`, un « oui » ou un appui →
+  `{ "state": "changed", "ordered": { "kind": "ride", "id": "6ae4…" },
+  "reply": "C'est changé : le chauffeur a le nouveau trajet." }`. ⚠️ **La même
+  course** : relisez-la, n'ouvrez pas un second suivi.
+- **Refuser** : `POST /analytics/ai/decline` ou « non » → « D'accord, votre
+  course garde son trajet. »
+
+⚠️⚠️ **LE PRIX ENTENDU EST UN PLAFOND.** Il vient de l'aperçu de la verticale ;
+si l'itinéraire recalculé coûte plus au moment du « oui », **rien ne change** —
+`409 fare_changed` (un vocal reste `understood`, `reply` le dit). Redemandez le
+changement pour entendre le nouveau prix. En espèces, le chauffeur encaisse le
+nouveau prix ; sinon la différence passe sur le solde Dira.
+
+Ce que le serveur répond **sans** proposer : la course cherche encore un
+chauffeur (« je pourrai changer le trajet dès qu'un chauffeur l'aura
+acceptée »), plusieurs courses en cours (« changez le trajet depuis l'écran de
+la course »), un lieu introuvable (nommé), un trajet qui ne peut pas changer
+ainsi (départ et arrêts déjà passés figés).
+
+⚠️ **NI UN CHANGEMENT NI UNE SECONDE VOITURE NE PARTENT SEULS**, même dans un
+pays à commande automatique : `held: "change"` / `"second_ride"`. Et
+**montrez `also_live`** sur la carte d'une course neuve : « vous avez déjà une
+course en cours ».
+
 ### 🆕 ⚠️⚠️ RECHARGER LE PORTEFEUILLE À LA VOIX (v4.114.0)
 
 « recharge 5 000 », « recharge mon portefeuille de cinq mille »,
@@ -1906,6 +1961,7 @@ une session payante ouverte.
 | `cancelled` | `kind`, `id` | 🆕 une **annulation** vient d'être faite (v4.113.0) — **n'ouvrez pas le suivi** |
 | `declined` | — | 🆕 la proposition est retirée — un « non » ou votre `ui.cancel` (v4.113.0) : fermez la carte |
 | `payment_started` | `kind: "payment"`, `id` | 🆕 une **recharge** est demandée (v4.114.0) : la personne la valide sur son téléphone ; suivez `GET /payments/{id}` |
+| `changed` | `kind: "ride"`, `id` | 🆕 le **trajet** de la course en cours a changé (v4.116.0) — la **même** course : relisez-la, n'ouvrez pas un second suivi |
 | `error` | `code`, `message`, `retryable` | voir le tableau des codes |
 | `session.ending` | `reason`, `seconds_left` | « le direct s'arrête bientôt » |
 | `session.end` | `reason` | fermez proprement |
@@ -1967,6 +2023,12 @@ avec le jeton de la carte.
 (plus petite unité, `decimals`), `summary.provider_label`. Le résultat est
 `{"type":"payment_started","kind":"payment","id":"…"}` : **ce n'est pas un
 crédit**, suivez `GET /payments/{id}`.
+
+🆕 (v4.116.0) **`ride_change`** : CHANGER le trajet de la course en cours —
+`summary.changes` (la course), `summary.price_xof` (le prix d'après),
+`summary.previous_price_xof` (celui d'avant), `summary.dropoff`,
+`summary.added_stop`. Le résultat est `{"type":"changed","kind":"ride","id":"…"}` :
+la **même** course, relisez-la.
 
 Deux chemins, et **un seul** crée quelque chose :
 
@@ -2898,6 +2960,19 @@ du métier.
 ---
 
 ## 15. Journal
+
+### 4.116.0 — 2 novembre 2026
+
+🟢 **CHANGER UNE COURSE EN COURS AU LIEU D'EN COMMANDER UNE SECONDE**
+(§8 bis bis, §8 quater.5). Quand une course roule déjà, « change la
+destination pour… », « plutôt à… », une destination seule ou « ajoute un arrêt
+à… » proposent `ride_change_required` pour CETTE course — prix d'après et
+d'avant (`previous_price_xof`), arrêt ajouté (`added_stop`). « Oui » →
+`state`/événement `changed` (la même course), carte `ride_change` en direct ;
+le prix entendu est un plafond (`409 fare_changed`). Une course neuve depuis un
+autre départ porte `summary.also_live` et `say` dit « seconde voiture » ; ni
+l'une ni l'autre ne partent par la commande automatique (`held: change`,
+`second_ride`).
 
 ### 4.115.0 — 2 novembre 2026
 
