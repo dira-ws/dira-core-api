@@ -1,6 +1,6 @@
 # App CLIENT UNIFIÉE — LIVRAISON **et** COURSES — contrat d'API
 
-> **Version 4.116.0** · 2 novembre 2026
+> **Version 4.117.0** · 2 novembre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Livraison : `…/api/v1/food` · Courses : `…/api/v1/vtc` · Combiné : `…/api/v1/analytics` · Suivi : `wss://tracking-staging.dira.llc`
 
 ---
@@ -2411,15 +2411,42 @@ pas compris —, la personne doit le **voir**. Lui laisser croire que « l'IA »
 commandé pour elle rendrait inexplicable le jour où l'IA ne le fait pas, et
 transformerait un service rendu en comportement erratique.
 
-### ⚠️ UNE FENÊTRE, PAS UN HISTORIQUE
+### 🆕 ⚠️⚠️ PAR PAGES, EN REMONTANT — et l'historique au-delà de 200 (v4.117.0)
 
-La route rend les **200 derniers** messages ; `message_count` dit combien il y
-en a eu **en tout**. Quand les deux diffèrent, écrivez-le (« les 200 derniers
-messages ») plutôt que de laisser croire que c'est tout.
+Sans paramètre, la route rend ce qu'elle a toujours rendu : les **200 derniers**
+messages, du plus ancien au plus récent. Elle dit désormais s'il en reste
+**avant**, et comment les demander :
 
-> La borne n'est pas une économie : un document de base de données plafonne, et
-> un fil sans limite finit par refuser l'écriture qui l'aurait sauvé — la
-> personne perdrait alors **tout**, au lieu de perdre le plus ancien.
+```
+GET /analytics/ai/thread?limit=50                        → les 50 derniers
+GET /analytics/ai/thread?before=<next_before>&limit=50   → les 50 d'avant
+  →
+{ "country": "TG", "message_count": 342,
+  "messages": [ … du plus ancien au plus récent … ],
+  "has_more": true,
+  "next_before": "MTc2MTY0MjcyMTEyMy42YWU0…" }   // OPAQUE
+```
+
+| Champ | Contrat |
+|---|---|
+| `before` | Facultatif. **Strictement avant** ce curseur. Renvoyez `next_before` **TEL QUEL** — ne le décodez pas, ne le fabriquez pas. Illisible → **`422`**, `meta.fields: ["before"]` — jamais ignoré. |
+| `limit` | Facultatif, 1 à 200, **plafonné en silence** au-delà ; absent = 200. Zéro, négatif ou illisible → `422`, `fields: ["limit"]`. |
+| `has_more` | **Toujours servi**, faux compris : il reste des messages avant cette page. |
+| `next_before` | Le curseur de la page d'avant ; **absent** quand `has_more` est faux. |
+
+- ⚠️ **Le même ordre dans chaque page** : du plus ancien au plus récent.
+  Recousez les pages **au-dessus** de ce qui est affiché, et dédoublonnez par
+  `id`.
+- ⚠️ **Stable sous les écritures** : un message écrit pendant qu'on remonte ne
+  décale aucune page — le curseur désigne un message, pas une position. Les
+  deux bulles d'un même tour (écrites au même instant) ne tombent jamais entre
+  deux pages.
+- ⚠️ **`message_count` peut dépasser ce que les pages rendent.** Le fil ne
+  gardait que ses 200 derniers messages ; ils sont désormais rangés un par un,
+  sans borne — mais ceux qui étaient déjà tombés de la fenêtre **avant la
+  4.117.0** n'existent plus. Quand `has_more` est faux et que
+  `message_count` est plus grand que ce que vous avez, écrivez « début de
+  l'historique conservé », pas « 342 messages ».
 
 ### ⚠️ UN FIL PAR PAYS
 
@@ -2933,7 +2960,8 @@ du métier.
 - [ ] **`seconds` envoyé** avec le vocal : la durée mesurée par votre enregistreur, sans quoi la bulle annonce « 0:01 » pour cinq secondes de parole.
 - [ ] **Le fil** (§8 bis) rechargé à l'ouverture de la boîte de dialogue, et **vidé au changement de pays**.
 - [ ] Une bulle `client` avec `audio_url` porte un **lecteur**, et une bulle `support` est **visiblement humaine**.
-- [ ] `message_count > messages.length` écrit « les 200 derniers messages », et ne laisse pas croire que c'est tout.
+- [ ] 🆕 Le fil se charge **par pages** (`limit`, puis `before` = `next_before` **tel quel**) tant que `has_more` est vrai ; chaque page se recoud au-dessus, dédoublonnée par `id`.
+- [ ] `has_more: false` avec `message_count` plus grand que ce qui est affiché dit « début de l'historique conservé », et ne laisse pas croire que c'est tout.
 - [ ] `X-Request-ID` affiché sur les écrans d'erreur et joint aux rapports.
 - [ ] Fond de carte : choix de la personne → pays où elle opère → `dira` ; la carte **renaît** au changement.
 - [ ] `vertical` envoyé depuis un onglet, **omis** depuis l'accueil.
@@ -2960,6 +2988,15 @@ du métier.
 ---
 
 ## 15. Journal
+
+### 4.117.0 — 2 novembre 2026
+
+🟢 **LE FIL PAR PAGES, ET L'HISTORIQUE AU-DELÀ DE 200** (§8 bis, core#321).
+`GET /analytics/ai/thread` (et la route du support) accepte `before` et `limit`
+et rend `has_more` (toujours) et `next_before` (opaque, à renvoyer tel quel).
+Sans paramètre, la même réponse qu'avant. Un curseur ou un `limit` illisible
+est refusé (`422`, `fields`). Les messages sont désormais gardés sans borne ;
+ceux tombés de la fenêtre avant cette version n'existent plus.
 
 ### 4.116.0 — 2 novembre 2026
 
@@ -3153,8 +3190,8 @@ POST /analytics/ai/voice    multipart : file, language?, origin?, vertical?
     → { voice_id, audio_url, seconds, text, language, vertical, reply, plan,
         confidence, routed_by, state, ordered? }
 
-GET  /analytics/ai/thread
-    → { country, message_count, updated_at, messages[] }
+GET  /analytics/ai/thread?before=&limit=
+    → { country, message_count, updated_at, messages[], has_more, next_before? }
 ```
 
 Trois choses qui n'en font qu'une :
