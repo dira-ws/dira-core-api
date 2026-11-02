@@ -1,6 +1,6 @@
 # Specs frontend — par rôle
 
-> **Version 4.114.0** · 30 octobre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics`
+> **Version 4.115.0** · 2 novembre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics`
 
 **Cinq** documents, un par application. Chacun est **autonome** : tout ce qu'un frontend doit savoir pour son rôle, sans avoir à ouvrir les vingt specs de modules.
 
@@ -356,6 +356,14 @@ Chaque document porte la même version en en-tête, et son propre journal des ch
 
 ## Journal
 
+### 4.115.0 — 2 novembre 2026
+
+🟢 **UN « OUI » TROP TARD REFAIT LE DEVIS** — `DIRA-CLIENT.md` (§8 bis bis,
+§8 quater.5). Un « oui » dit ou écrit après l'échéance d'un devis ne rend plus
+`409 pending_expired` : une `action` neuve (même trajet, même mode, nouveau
+prix) attend un second « oui ». 🟠 Modifier une demande en cours (« plutôt en
+moto ») la rechiffre au lieu d'en ouvrir une autre ; « un taxi » = une voiture.
+
 ### 4.114.0 — 30 octobre 2026
 
 🟢 **RECHARGER LE PORTEFEUILLE À LA VOIX** — `DIRA-CLIENT.md` (dira-core-api#268
@@ -632,6 +640,11 @@ chiffrer : n'additionnez jamais `items[].price × qty` comme un total.
 seconde reçoit **le même résultat** — pas une erreur. `409 pending_expired` ne
 se réessaie pas : nouveau devis, nouvelle confirmation. `409 no_pending_action`
 veut dire qu'il n'y a **rien** à confirmer.
+
+🆕 ⚠️⚠️ **UN « OUI » DIT OU ÉCRIT TROP TARD REFAIT LE DEVIS** (v4.115.0) : pas
+de `409`, mais une `action` **neuve** — même trajet, même mode, nouveau prix —
+à faire confirmer par un second « oui ». Remplacez la carte. Seul l'appui sur
+une carte périmée rend encore `pending_expired`.
 
 ⚠️ **`action` est absente sur `needs_support`** : un opérateur va commander à la
 main, et un bouton en plus ferait **deux** courses.

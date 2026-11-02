@@ -1,6 +1,6 @@
 # App CLIENT UNIFIÉE — LIVRAISON **et** COURSES — contrat d'API
 
-> **Version 4.114.0** · 30 octobre 2026
+> **Version 4.115.0** · 2 novembre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Livraison : `…/api/v1/food` · Courses : `…/api/v1/vtc` · Combiné : `…/api/v1/analytics` · Suivi : `wss://tracking-staging.dira.llc`
 
 ---
@@ -1553,7 +1553,8 @@ qu'elle a vu ; un mot transcrit peut se tromper.
 |---|---|---|
 | `200` + `state: "ordered"` | la course ou la commande existe | « c'est parti » → `ordered.kind` / `ordered.id` ouvrent le suivi |
 | `409 no_pending_action` | il n'y a **rien** à confirmer | **ne réessayez pas** : redemandez un devis |
-| `409 pending_expired` | la proposition a vécu | « le prix a changé » → **nouveau devis, nouvelle confirmation** |
+| `409 pending_expired` | **par le jeton** (`/ai/confirm`) : la proposition a vécu | « le prix a changé » → **nouveau devis, nouvelle confirmation** |
+| 🆕 `200` **sans** `state`, avec une `action` **neuve** | **un « oui » dit ou écrit TROP TARD** (v4.115.0) — le serveur a refait le devis | la **nouvelle** carte, et `reply` : « Le prix d'avant avait expiré ; voici le nouveau. … Confirmez-vous ? » |
 
 ⚠️⚠️ **DEUX CONFIRMATIONS DU MÊME JETON FONT AU PLUS UNE OPÉRATION**, et la
 seconde reçoit **le même résultat**, pas une erreur. C'est voulu : un refus sur
@@ -1564,6 +1565,38 @@ une seconde fois.
 réseau, un solde rechargé dans la minute). Vous pouvez réessayer la **même**
 confirmation. `pending_expired`, en revanche, ne se réessaie pas : le prix a pu
 changer.
+
+### 🆕 ⚠️⚠️ UN « OUI » TROP TARD REFAIT LE DEVIS (v4.115.0)
+
+Un devis de course vit **quelques minutes** — deux au Togo. La personne écoute
+la proposition, réfléchit, dit « oui » trop tard. Avant, l'écrit rendait
+`409 pending_expired` (Dira Lite affichait « Un problème est arrivé ») et la
+voix demandait de **tout redire**.
+
+Désormais, un « oui » **dit ou écrit** (`/ai/chat`, `/ai/voice`, le direct)
+après l'échéance :
+
+1. ne commande **RIEN** ;
+2. fait rechiffrer **le même trajet, dans le même mode** — mêmes arrêts, mêmes
+   coordonnées : aucune nouvelle recherche de lieu ;
+3. rend une proposition **NEUVE** dans `action` (nouveau jeton, nouvelle
+   échéance), sans `state`. À la voix, `state` reste `"understood"` ;
+4. et `reply` dit si le prix a changé : « … il n'a pas changé » ou « … voici le
+   nouveau ».
+
+**Ce que vous faites** : remplacez la carte affichée par la **nouvelle**
+`action` — l'ancien jeton est mort. C'est un **second** « oui » (ou un appui
+sur la nouvelle carte) qui commande, au nouveau prix.
+
+⚠️ **On ne refait pas** — et vous recevez l'ancien refus (`409 pending_expired`
+à l'écrit, « redites-moi votre demande » à la voix) — quand le mode accepté
+n'est plus proposé sur ce trajet (le serveur ne choisit pas un autre mode à la
+place de la personne), ou quand la proposition périmée était une
+**annulation** ou une **recharge**.
+
+⚠️ **L'appui sur une carte périmée** (`/ai/confirm`, `ui.confirm`) rend
+toujours `pending_expired` : affichez « le prix a expiré » — **jamais** « un
+problème est arrivé » — et laissez la personne redire « oui » ou redemander.
 
 ⚠️ **`expires_at` est une indication, pas l'autorité.** C'est la verticale qui
 refuse un devis périmé au moment de commander. Cette date existe pour que vous
@@ -1952,6 +1985,12 @@ seule parole du modèle.
 composée **des données du plan**, pas écrite par le modèle (§8 bis bis). Si vous
 affichez un prix, prenez `card.summary.price_xof` — jamais ce que le modèle a
 dit.
+
+🆕 (v4.115.0) **Un « oui » parlé TROP TARD** ne commande rien : le serveur
+refait le devis et vous envoie une **nouvelle** `ui.state` — nouveau
+`confirmation_token`, nouveau prix — que Dira annonce. **Remplacez la carte** :
+l'ancienne ne confirme plus rien. Ce « oui »-là est consommé ; c'est la
+personne qui redira oui, après avoir entendu le nouveau prix.
 
 Après exécution : `{"type":"ordered","kind":"ride","id":"…"}` → menez au suivi.
 🆕 Après une annulation : `{"type":"cancelled","kind":"ride","id":"…"}` — pas de
@@ -2859,6 +2898,24 @@ du métier.
 ---
 
 ## 15. Journal
+
+### 4.115.0 — 2 novembre 2026
+
+🟢 **UN « OUI » TROP TARD REFAIT LE DEVIS** (§8 bis bis, §8 quater.5). Un devis
+de course vit quelques minutes : un « oui » dit ou écrit après l'échéance ne
+rend plus `409 pending_expired` sur `/ai/chat` — ni « redites-moi » à la voix —
+mais une `action` **neuve** (même trajet, même mode, nouveau prix) et une
+phrase qui dit si le prix a changé. Rien n'est commandé avant un second « oui ».
+En direct : une nouvelle carte `ui.state` remplace l'ancienne. L'appui sur une
+carte périmée rend toujours `pending_expired`.
+
+🟠 **MODIFIER UNE DEMANDE EN COURS GARDE LE RESTE** — aucun changement de
+forme, mais à savoir pour vos essais : « plutôt en moto », « finalement je pars
+de Bè » rechiffrent la demande en cours au lieu d'en ouvrir une nouvelle. « Un
+taxi » demande une **voiture** (le premier mode à quatre places du pays), plus
+jamais une moto ; « une course » ne choisit aucun mode. Après une commande
+confirmée, la demande est close : « change la destination » ne propose plus une
+seconde voiture.
 
 ### 4.114.0 — 30 octobre 2026
 
