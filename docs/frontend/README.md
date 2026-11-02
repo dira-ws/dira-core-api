@@ -1,6 +1,6 @@
 # Specs frontend — par rôle
 
-> **Version 4.115.0** · 2 novembre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics`
+> **Version 4.116.0** · 2 novembre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics`
 
 **Cinq** documents, un par application. Chacun est **autonome** : tout ce qu'un frontend doit savoir pour son rôle, sans avoir à ouvrir les vingt specs de modules.
 
@@ -355,6 +355,14 @@ Chaque document porte la même version en en-tête, et son propre journal des ch
 - [ ] ⚠️ **`TRACKING_JWT_SECRET` renseigné dans chaque environnement déployé.** Vide, l'authentification du service de suivi est **désactivée** : n'importe qui connaissant un `delivery_id` suit la course. Le secret doit valoir **exactement** le `JWT_SECRET` de `dira-food-api`.
 
 ## Journal
+
+### 4.116.0 — 2 novembre 2026
+
+🟢 **CHANGER UNE COURSE EN COURS AU LIEU D'EN COMMANDER UNE SECONDE** —
+`DIRA-CLIENT.md` (§8 bis bis) : `ride_change_required`, `state`/événement
+`changed`, carte `ride_change`, `summary.also_live` pour une seconde voiture.
+`VTC-CLIENT.md` : `POST /vtc/rides/{id}/stops/quote` (aperçu exact du nouveau
+prix) et `max_fare_xof` au `PATCH /rides/{id}/stops` (`409 fare_changed`).
 
 ### 4.115.0 — 2 novembre 2026
 

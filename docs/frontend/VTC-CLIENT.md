@@ -1,6 +1,6 @@
 # App CLIENT — COURSES (VTC) — contrat d'API
 
-> **Version 4.115.0** · 2 novembre 2026
+> **Version 4.116.0** · 2 novembre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Courses : `https://api-staging.dira.llc/api/v1/vtc` · Suivi : `wss://tracking-staging.dira.llc`
 
 ---
@@ -3090,10 +3090,23 @@ dernier, tous dans la ville desservie.
 **Le prix suit le trajet.** Il est recalculé sur la grille du jour avec la
 **même majoration qu'au devis** — une majoration montée ou retombée
 entre-temps ne change pas une course qui roule. Montrez le nouveau prix
-**avant** de confirmer : demandez un devis avec le nouveau trajet
-(`POST /rides/quote`) pour l'afficher, puis envoyez le `PATCH`. (Le devis
-peut différer de quelques francs si une majoration s'est ajoutée depuis :
-c'est le `PATCH` qui fait foi.)
+**avant** de confirmer — 🆕 (v4.116.0) par **l'aperçu**, qui le calcule
+EXACTEMENT comme le `PATCH` (même grille, même majoration, mêmes refus) sans
+rien changer :
+
+```
+POST /api/v1/vtc/rides/{id}/stops/quote
+{ "stops": [ …le nouveau trajet, en entier… ] }
+→ 200 { "ride_id", "stops", "from_xof": 3900, "to_xof": 6240, "delta_xof": 2340,
+        "payment_method", "country", "distance_m", "duration_s" }
+```
+
+Puis envoyez le `PATCH` avec **`"max_fare_xof": to_xof`** : si le prix
+recalculé dépasse ce que le passager a accepté, **rien ne change** —
+`409 fare_changed` (`meta.fare_xof` = le nouveau prix), ni le trajet ni
+l'argent. Redemandez l'aperçu et montrez le nouveau prix. (`POST /rides/quote`
+ne convient pas : il appliquerait la majoration du MOMENT, pas celle de la
+course.)
 
 **L'argent suit le prix, tout de suite** — `fare_adjustments[].movement` :
 
