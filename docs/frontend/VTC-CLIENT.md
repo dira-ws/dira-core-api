@@ -1,6 +1,6 @@
 # App CLIENT — COURSES (VTC) — contrat d'API
 
-> **Version 4.118.0** · 5 novembre 2026
+> **Version 4.119.0** · 5 novembre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Courses : `https://api-staging.dira.llc/api/v1/vtc` · Suivi : `wss://tracking-staging.dira.llc`
 
 ---
@@ -1208,7 +1208,7 @@ la personne a choisi sa langue ; **n'envoyez rien** sinon — le serveur prend
 alors la **première langue du pays**, réglée par l'exploitation (au Sénégal
 ce peut être le wolof, au Togo le français). ⚠️ **Ce n'est PAS
 `Accept-Language`** : celui-ci dit la langue de l'interface, et un téléphone
-réglé en français n'empêche pas son propriétaire de parler wolof. Douze codes
+réglé en français n'empêche pas son propriétaire de parler wolof. Treize codes
 sont admis, tout autre est refusé (`422 unknown_language`) :
 
 | Code | Langue | Pays |
@@ -1219,6 +1219,7 @@ sont admis, tout autre est refusé (`422 unknown_language`) :
 | `man` · `sus` · `ff` | malinké · soussou · peul (pular) | Guinée |
 | `shu` · `sba` · `ff` | arabe tchadien · ngambay (sara) · peul (fulfulde) | Tchad |
 | `fan` | fang | Gabon |
+| `bm` | bamanan (bambara) | — |
 
 La réponse porte la langue retenue : `{ "text": "…", "language": "wo" }`.
 Deux refus de plus : `503 language_not_served` (`reason` = la langue) quand

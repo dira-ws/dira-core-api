@@ -47,39 +47,38 @@ func TestEveryStoredFieldOfTheRegistryIsActuallyWritten(t *testing.T) {
 	}
 }
 
-// ⚠️ UN PAYS SANS LANGUE EST UN RÉGLAGE MORT, et il se refuse par son nom.
-// Rangé, il aurait laissé la console montrer « le direct est ouvert au Tchad »
-// quand `LiveFor` le rend éteint — le défaut de #245, un an plus tard.
-func TestACountryWithoutALanguageIsRefused(t *testing.T) {
-	_, err := cleanLive(map[string]pkgconf.LiveRule{"TD": {MaxSessionSeconds: 300}})
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "language")
+// ⚠️ UN PAYS NE DIT PLUS SES LANGUES : le catalogue les tient. Un pays sans
+// langue était refusé quand elles vivaient ici ; le refuser encore bloquerait
+// l'allumage du direct depuis la console.
+func TestACountryNoLongerNamesItsLanguages(t *testing.T) {
+	got, err := cleanLive(map[string]pkgconf.LiveRule{"TD": {MaxSessionSeconds: 300}})
+	require.NoError(t, err)
+	assert.Equal(t, 300, got["TD"].MaxSessionSeconds)
 }
 
 // Les bornes mordent, et zéro veut dire « prends le défaut ».
 func TestTheLimitsAreBoundedAndZeroMeansDefault(t *testing.T) {
-	ok, err := cleanLive(map[string]pkgconf.LiveRule{"TD": {Languages: []string{"fr"}}})
+	ok, err := cleanLive(map[string]pkgconf.LiveRule{"TD": {}})
 	require.NoError(t, err, "zéro doit passer : la console envoie un champ vide pour « je ne règle pas »")
 	assert.Zero(t, ok["TD"].MaxSessionSeconds, "le défaut s'applique à la LECTURE, pas à l'écriture")
 
-	_, err = cleanLive(map[string]pkgconf.LiveRule{"TD": {Languages: []string{"fr"}, MaxSessionSeconds: 28800}})
+	_, err = cleanLive(map[string]pkgconf.LiveRule{"TD": {MaxSessionSeconds: 28800}})
 	require.Error(t, err, "huit heures de micro ouvert sont une facture, pas un réglage")
 
-	_, err = cleanLive(map[string]pkgconf.LiveRule{"TD": {Languages: []string{"fr"}, IdleTimeoutSeconds: 1}})
+	_, err = cleanLive(map[string]pkgconf.LiveRule{"TD": {IdleTimeoutSeconds: 1}})
 	require.Error(t, err, "couper après une seconde de silence rendrait le direct inutilisable")
 }
 
 // Le pays est normalisé — `td` et `TD` sont le même pays.
 func TestTheCountryKeyIsNormalised(t *testing.T) {
-	got, err := cleanLive(map[string]pkgconf.LiveRule{" td ": {Languages: []string{"FR"}}})
+	got, err := cleanLive(map[string]pkgconf.LiveRule{" td ": {}})
 	require.NoError(t, err)
 	require.Contains(t, got, "TD")
-	assert.Equal(t, []string{"fr"}, got["TD"].Languages)
 }
 
 // Un code de pays qui n'en est pas un est refusé.
 func TestAnImpossibleCountryIsRefused(t *testing.T) {
-	_, err := cleanLive(map[string]pkgconf.LiveRule{"TCHAD": {Languages: []string{"fr"}}})
+	_, err := cleanLive(map[string]pkgconf.LiveRule{"TCHAD": {}})
 	require.Error(t, err)
 }
 

@@ -17,11 +17,16 @@ package appconfig
 // Tchad, mais pas dans Lite ».
 
 import (
-	"sort"
 	"strings"
 )
 
 // LiveRule est ce que l'exploitation règle pour UN pays.
+//
+// ⚠️⚠️ ELLE NE DIT PLUS LES LANGUES. Un pays décide si le micro existe chez lui
+// et combien de temps il reste ouvert ; ce qu'un modèle sait faire d'une langue
+// ne dépend pas de l'endroit où on la parle, et se mesure donc UNE fois, dans
+// le catalogue (`Language.Live`). La liste par pays obligeait à ouvrir le wolof
+// pays par pays, et laissait quelqu'un qui le parle à Lomé devant un refus.
 //
 // ⚠️ ELLE NE DIT PAS LES FORMATS AUDIO. Les encodages et la fréquence
 // d'échantillonnage sont des CAPACITÉS DU RELAIS, pas des réglages : annoncer
@@ -43,16 +48,6 @@ type LiveRule struct {
 	// ⚠️ C'EST LE ROBINET QUI COMPTE VRAIMENT : un téléphone posé sur une
 	// table, micro ouvert, facture à la seconde sans que personne ne parle.
 	IdleTimeoutSeconds int `bson:"idle_timeout_seconds,omitempty" json:"idle_timeout_seconds,omitempty"`
-	// Languages : les langues OUVERTES au direct dans ce pays.
-	//
-	// ⚠️⚠️ VIDE VEUT DIRE « AUCUNE », ET DONC « LE DIRECT EST ÉTEINT ICI ».
-	// C'est le contraire de la convention de `listed` dans ce paquet, où une
-	// liste vide veut dire « tout est permis » — et c'est voulu : la prise en
-	// charge vocale d'une langue par le fournisseur SE MESURE (banc de #266)
-	// avant de s'ouvrir. « Vide = toutes » aurait ouvert l'arabe tchadien par
-	// omission, dans le pays où il est la langue principale, sans que personne
-	// n'ait écouté ce que le modèle en fait.
-	Languages []string `bson:"languages,omitempty" json:"languages,omitempty"`
 }
 
 // LiveBlock est ce qu'une application LIT dans `/app/config`.
@@ -126,10 +121,10 @@ func (r *Registry) LiveFor(countryCode, ed string) (LiveBlock, bool) {
 	if !ok {
 		return LiveBlock{}, false
 	}
-	langs := cleanLanguages(rule.Languages)
+	langs := r.LiveLanguages()
 	if len(langs) == 0 {
-		// ⚠️ PAS DE LANGUE, PAS DE DIRECT. Voir `LiveRule.Languages` : ici,
-		// vide veut dire « aucune ».
+		// ⚠️ PAS DE LANGUE, PAS DE DIRECT : un drapeau allumé sans langue
+		// ouvrirait un micro que le relais refuserait à la première phrase.
 		return LiveBlock{}, false
 	}
 	if !r.Allows(FeatureAssistantLive, countryCode, ed) {
@@ -151,24 +146,4 @@ func orDefault(v, def int) int {
 		return def
 	}
 	return v
-}
-
-// cleanLanguages normalise et TRIE les langues, en jetant les doublons.
-//
-// ⚠️ TRIÉES, parce que la réponse de `/app/config` est mise en cache par les
-// applications : un ordre qui change à chaque lecture invalide ce cache sans
-// qu'aucun réglage ait bougé.
-func cleanLanguages(in []string) []string {
-	seen := make(map[string]bool, len(in))
-	out := make([]string, 0, len(in))
-	for _, l := range in {
-		l = strings.ToLower(strings.TrimSpace(l))
-		if l == "" || seen[l] {
-			continue
-		}
-		seen[l] = true
-		out = append(out, l)
-	}
-	sort.Strings(out)
-	return out
 }

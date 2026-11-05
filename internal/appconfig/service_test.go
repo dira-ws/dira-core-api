@@ -20,7 +20,9 @@ type fakeStore struct {
 	err   error
 	loads int
 	saved *pkgconf.Registry
-	actor string
+	// languages : ce que `SaveLanguages` a reçu.
+	languages []pkgconf.Language
+	actor     string
 }
 
 func (f *fakeStore) Load(context.Context) (*pkgconf.Registry, error) {
@@ -36,6 +38,10 @@ func (f *fakeStore) Load(context.Context) (*pkgconf.Registry, error) {
 }
 func (f *fakeStore) Save(_ context.Context, reg pkgconf.Registry, actor string) error {
 	f.saved, f.actor = &reg, actor
+	return nil
+}
+func (f *fakeStore) SaveLanguages(_ context.Context, items []pkgconf.Language, actor string) error {
+	f.languages, f.actor = items, actor
 	return nil
 }
 func (f *fakeStore) Meta(context.Context) (*time.Time, string) { return nil, "" }
