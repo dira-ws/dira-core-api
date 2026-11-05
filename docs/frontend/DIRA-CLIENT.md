@@ -2503,7 +2503,7 @@ GET /analytics/ai/thread?before=<next_before>&limit=50   → les 50 d'avant
 
 | Champ | Contrat |
 |---|---|
-| `before` | Facultatif. **Strictement avant** ce curseur. Renvoyez `next_before` **TEL QUEL** — ne le décodez pas, ne le fabriquez pas. Illisible → **`422`**, `meta.fields: ["before"]` — jamais ignoré. |
+| `before` | Facultatif. **Strictement avant** ce curseur. Renvoyez `next_before` **TEL QUEL** — ne le décodez pas, ne le fabriquez pas. Illisible → **`422`**, `fields: ["before"]` — jamais ignoré. |
 | `limit` | Facultatif, 1 à 200, **plafonné en silence** au-delà ; absent = 200. Zéro, négatif ou illisible → `422`, `fields: ["limit"]`. |
 | `has_more` | **Toujours servi**, faux compris : il reste des messages avant cette page. |
 | `next_before` | Le curseur de la page d'avant ; **absent** quand `has_more` est faux. |
