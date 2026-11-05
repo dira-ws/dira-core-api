@@ -62,7 +62,7 @@ func categoryOf(key string) string {
 		return CategoryDriverCall
 	case KeyStaffDispatchFailed, KeyStaffDocumentSubmitted, KeyStaffDriverPending,
 		KeyStaffTicketOpened, KeyStaffLostItemAnswered, KeyStaffEquipOverdue, KeyStaffEquipRequested,
-		KeyStaffFinanceAlert, KeyPlatformAlert, KeyPlatformAlertResolved,
+		KeyStaffFinanceAlert, KeyPlatformAlert, KeyPlatformAlertResolved, KeyStaffSupportRequest,
 		// ⚠️ LE SOS EST RANGÉ AVEC LE STAFF, DONC NON COUPABLE (voir
 		// `Muteable`). C'est la raison d'être de cette catégorie : un poste de
 		// supervision qui peut se couper l'alarme d'urgence n'en est plus un.
@@ -78,7 +78,8 @@ func categoryOf(key string) string {
 		KeyEquipmentOverdue, KeyEquipmentBlocked, KeyEquipmentReturned:
 		// Ce qu'on doit et ce qu'on a payé : pas coupable, comme le support.
 		return CategorySupport
-	case KeyLostItemReported, KeyLostItemFound, KeyLostItemNotFound, KeyTicketReply, KeyTicketResolved:
+	case KeyLostItemReported, KeyLostItemFound, KeyLostItemNotFound, KeyTicketReply, KeyTicketResolved,
+		KeySupportReply:
 		return CategorySupport
 	case KeyVehicleAssigned, KeyVehicleTakenBack:
 		// ⚠️ RANGÉES DANS `support`, DONC NON COUPABLES. C'est l'OUTIL DE

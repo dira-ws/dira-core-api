@@ -78,6 +78,7 @@ var Features = []Feature{
 	{FeatureAssistant, "Assistant", "La boîte de dialogue de l'assistant disparaît.", OwnerAnalytics},
 	{FeatureAssistantLive, "Assistant en direct", "Le micro en continu disparaît : la personne garde l'assistant tour par tour (un vocal, une réponse).", OwnerAnalytics},
 	{FeatureAssistantAutoOrder, "Commande automatique de l'assistant", "Un message vocal ne déclenche plus de commande tout seul : le client confirme toujours.", OwnerAnalytics},
+	{FeatureAssistantSupport, "Joindre l'équipe depuis l'assistant", "Le geste « écrire à l'équipe » disparaît : à couper là où personne ne lit la file du support.", OwnerAnalytics},
 	{FeatureVoiceMessages, "Messages vocaux", "Le bouton micro disparaît : le client écrit.", OwnerAnalytics},
 	{FeatureWallet, "Portefeuille", "Le solde et la recharge disparaissent ; restent les espèces et le mobile money.", OwnerCore},
 }
@@ -101,8 +102,10 @@ const (
 	// d'une édition.
 	FeatureAssistantLive      = "assistant_live"
 	FeatureAssistantAutoOrder = "assistant_auto_order"
-	FeatureVoiceMessages      = "voice_messages"
-	FeatureWallet             = "wallet"
+	// FeatureAssistantSupport : joindre l'équipe depuis l'assistant (core#328).
+	FeatureAssistantSupport = "assistant_support_request"
+	FeatureVoiceMessages    = "voice_messages"
+	FeatureWallet           = "wallet"
 )
 
 // Known dit si cette clé nomme une fonction du catalogue.

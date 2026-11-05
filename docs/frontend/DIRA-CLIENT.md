@@ -1,6 +1,6 @@
 # App CLIENT UNIFIÉE — LIVRAISON **et** COURSES — contrat d'API
 
-> **Version 4.119.0** · 5 novembre 2026
+> **Version 4.120.0** · 5 novembre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Livraison : `…/api/v1/food` · Courses : `…/api/v1/vtc` · Combiné : `…/api/v1/analytics` · Suivi : `wss://tracking-staging.dira.llc`
 
 ---
@@ -232,7 +232,7 @@ GET /app/config          # SANS jeton — lu AVANT l'écran de connexion
     "promo_codes": false, "challenges": false, "raffle": false,
     "banners": false, "feed": true, "assistant": true,
     "assistant_auto_order": false, "voice_messages": true, "wallet": false,
-    "assistant_live": true
+    "assistant_live": true, "assistant_support_request": true
   },
   "lists": {
     "payment_methods": ["cash", "mobile_money"],
@@ -1065,6 +1065,47 @@ doit pas faire perdre le message : l'assistant demandera le départ.
 ⚠️ **UN QUOTA ATTEINT N'EST PAS UNE PANNE.** Le refus du métier est reporté
 **tel quel**, code et phrase déjà traduite : affichez la phrase, et laissez
 toujours un chemin manuel.
+
+### 🆕 🙋 JOINDRE L'ÉQUIPE — une demande qu'un humain voit (v4.120.0)
+
+Un message écrit dans le fil (« je veux parler à l'équipe ») passe par le modèle, et
+rien ne garantit qu'une personne le lise. Cette route, elle, entre dans la file du
+support et **prévient l'équipe**.
+
+```
+POST /analytics/ai/support
+Idempotency-Key: <une clé par appui>
+{ "reason": "refocus", "turn_id": "…", "language": "wo" }     // tout est facultatif
+  → 201
+{ "request_id": "…", "state": "queued",
+  "reply": "L'équipe Dira a votre demande. Elle vous répondra ici." }
+```
+
+- **Mettez-la derrière un bouton**, affiché seulement si
+  `features.assistant_support_request` vaut `true` dans `/app/config`. Absent :
+  n'affichez rien. Disponible par défaut, l'exploitation la coupe par pays et par
+  édition là où personne ne lit la file.
+- ⚠️⚠️ **`state: "already_queued"` N'EST PAS UNE ERREUR.** Une demande attend déjà :
+  vous recevez le même `request_id`, en `201`, avec la même phrase. Dites-la comme la
+  première : quelqu'un de coincé ne doit pas entendre un refus parce qu'il a appuyé
+  deux fois. Une seule demande reste ouverte par personne.
+- **`Idempotency-Key`** : la même clé rend la même réponse, sans nouvelle demande. Un
+  réessai après une coupure ne fait rien de plus.
+- ⚠️ **Elle ne dépend ni de l'assistant ni de son quota** : ni modèle, ni budget, ni
+  interrupteur de l'IA. Elle marche quand l'assistant est coupé, et c'est voulu.
+- **`reply` est déjà écrite dans le fil** (`role: "assistant"`), une seule fois : ne
+  l'ajoutez pas vous-même. Elle est dans `language` si vous l'envoyez et que le serveur
+  la sait dire, sinon dans la langue de `Accept-Language`.
+- **`reason`** dit d'où vient l'appui, pour le support : `refocus`, ou une courte
+  valeur à vous (40 caractères au plus). **`turn_id`** : le tour qui a mené là.
+- **La réponse de l'équipe** arrive dans `GET /analytics/ai/thread`, en bulle
+  `role: "support"`, avec une notification `assistant_support_reply` qui ne porte pas
+  le texte. La personne ne peut pas la couper : elle a posé la question.
+
+| Refus | Quand |
+|---|---|
+| `403 feature_unavailable` | `feature` = `assistant_support_request`, coupée ici |
+| `422` | champ trop long (`fields`) |
 
 ### 🎙️ 🆕 LE VOCAL COMBINÉ — gardé, réécoutable, parfois exécuté (v4.84.0)
 
@@ -3062,6 +3103,15 @@ du métier.
 ---
 
 ## 15. Journal
+
+### 4.120.0 — 5 novembre 2026
+
+🟢 **JOINDRE L'ÉQUIPE** (§8, core#328). `POST /analytics/ai/support` entre dans la file
+du support et prévient l'équipe ; sa réponse arrive dans le fil, en bulle `support`,
+avec la notification `assistant_support_reply`. Le bouton s'affiche selon
+`features.assistant_support_request`. 🟠 `already_queued` est un succès : ne le
+présentez pas comme une erreur. Rien d'obligatoire pour les applications qui n'offrent
+pas ce geste.
 
 ### 4.119.0 — 5 novembre 2026
 
