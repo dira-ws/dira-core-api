@@ -1,6 +1,6 @@
 # Specs frontend — par rôle
 
-> **Version 4.117.0** · 2 novembre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics`
+> **Version 4.118.0** · 5 novembre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics`
 
 **Cinq** documents, un par application. Chacun est **autonome** : tout ce qu'un frontend doit savoir pour son rôle, sans avoir à ouvrir les vingt specs de modules.
 
@@ -355,6 +355,13 @@ Chaque document porte la même version en en-tête, et son propre journal des ch
 - [ ] ⚠️ **`TRACKING_JWT_SECRET` renseigné dans chaque environnement déployé.** Vide, l'authentification du service de suivi est **désactivée** : n'importe qui connaissant un `delivery_id` suit la course. Le secret doit valoir **exactement** le `JWT_SECRET` de `dira-food-api`.
 
 ## Journal
+
+### 4.118.0 — 5 novembre 2026
+
+🟢 **LE DIRECT PEUT ÊTRE SERVI PAR OPENAI** — `DIRA-CLIENT.md` §8 quater.4 bis. Un
+seul protocole, rien d'obligatoire. Le rythme change (audio en rafale,
+`turn.complete` avant la fin de la lecture, transcription après la phrase) : à
+lire avant d'ouvrir un pays.
 
 ### 4.117.0 — 2 novembre 2026
 
