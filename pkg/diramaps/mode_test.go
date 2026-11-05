@@ -33,7 +33,7 @@ func sigEcho(t *testing.T, vu *map[string]any) *Client {
 		_, _ = w.Write([]byte(`{"routes":[{"duration_s":300,"geometry":{"type":"LineString","coordinates":[[1.2255,6.1319],[1.28,6.17]]}}]}`))
 	}))
 	t.Cleanup(srv.Close)
-	return New(srv.URL + "/api")
+	return New(srv.URL+"/api", "")
 }
 
 var deuxPoints = [][2]float64{{1.2255, 6.1319}, {1.2800, 6.1700}}
