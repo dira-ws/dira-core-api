@@ -1,6 +1,6 @@
 # App CLIENT UNIFIÉE — LIVRAISON **et** COURSES — contrat d'API
 
-> **Version 4.117.0** · 2 novembre 2026
+> **Version 4.118.0** · 5 novembre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Livraison : `…/api/v1/food` · Courses : `…/api/v1/vtc` · Combiné : `…/api/v1/analytics` · Suivi : `wss://tracking-staging.dira.llc`
 
 ---
@@ -1993,6 +1993,28 @@ chose à regarder.
 (Android) avec `AcousticEchoCanceler`, sinon la voix de Dira dans le haut-parleur
 déclenche son propre barge-in.
 
+### 8 quater.4 bis 🆕 Deux fournisseurs, UN SEUL protocole (v4.118.0)
+
+Le direct peut être servi par Gemini **ou** par OpenAI, pays par pays, et le
+choix se fait à la console. **Vous ne le voyez pas et vous n'avez rien à
+changer** : mêmes événements, 16 kHz en entrée, 24 kHz en sortie, et aucun champ
+ne nomme le fournisseur. N'écrivez aucun code qui en dépende.
+
+Le rythme, lui, change. Voici ce qui a été mesuré sur OpenAI, et ce qu'une
+application correcte doit déjà tenir :
+
+| Ce qui change | Mesuré | Ce que vous tenez |
+|---|---|---|
+| **L'audio arrive en rafale** | 5 s de parole livrées en 0,5 s (**10× le temps réel**) | une file de lecture qui prend une réponse entière ; ⚠️ `turn.complete` arrive **plusieurs secondes avant la fin de la lecture** : ne fermez ni le micro ni la session sur lui, regardez ce qui reste à jouer |
+| **`interrupted` peut suivre `turn.complete`** | la réponse est finie chez le fournisseur, votre téléphone joue encore | videz la lecture **à chaque** `interrupted`, tour fini ou non |
+| **Ce que dit la personne s'écrit après coup** | `transcript` (rôle `user`) 0,3 s à 0,8 s **après** la fin de sa phrase, jamais pendant | n'attendez pas ce texte pour montrer qu'on l'écoute : le niveau du micro le dit |
+| **Dira se tait pendant un outil** | 1 à 3 s sans un son | ⚠️ pour quelqu'un qui ne lit pas, le silence veut dire « ça ne marche pas » : jouez un **signal discret** sur `tool.status` `started` |
+| **Une coupure ne reprend pas la session du fournisseur** | la conversation repart du fil, sans la phrase en cours | `resume_token` marche à l'identique ; la personne n'a rien à redire, mais une réponse coupée ne reprend pas au mot près |
+
+⚠️ **Le refus d'un fournisseur ne vous arrive pas.** S'il n'a plus de crédit ou
+s'il refuse la session, le relais passe sur l'autre, et votre session reste
+ouverte : vous recevez `session.ready`, comme d'habitude.
+
 ### 8 quater.5 ⚠️⚠️ Confirmer : ce que le modèle NE PEUT PAS faire
 
 Le direct **propose**, il ne commande pas. Quand l'assistant a un devis, vous
@@ -2988,6 +3010,15 @@ du métier.
 ---
 
 ## 15. Journal
+
+### 4.118.0 — 5 novembre 2026
+
+🟢 **LE DIRECT PEUT ÊTRE SERVI PAR OPENAI** (§8 quater.4 bis), pays par pays, à la
+console. Le protocole ne change pas, et vous n'avez rien d'obligatoire à faire.
+🟠 Le rythme change : l'audio arrive 10× plus vite que le temps réel,
+`turn.complete` précède la fin de la lecture, `interrupted` peut le suivre, et ce
+que dit la personne s'écrit après sa phrase. 🟠 Recommandé : un signal discret
+sur `tool.status` `started`, parce que Dira se tait pendant un outil.
 
 ### 4.117.0 — 2 novembre 2026
 
