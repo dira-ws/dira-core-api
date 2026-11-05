@@ -1742,8 +1742,8 @@ vous-même : envoyez le message, le serveur décide.
 | `200` + `state: "declined"` | la proposition est retirée | fermez la carte, `reply` |
 | `409 no_pending_action` | rien à refuser — **ou c'est déjà confirmé** | la course existe : c'est une **annulation** qu'il faut demander (ci-dessous) |
 
-Après un refus, le jeton ne confirme plus : `POST /ai/confirm` répond
-`409 no_pending_action`.
+Après un refus, le jeton ne confirme plus : `POST /analytics/ai/confirm`
+répond `409 no_pending_action`.
 
 ### 🆕 ⚠️ LA PROPOSITION COURANTE EST LA DERNIÈRE (v4.113.0)
 
