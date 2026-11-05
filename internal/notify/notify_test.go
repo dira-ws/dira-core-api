@@ -574,3 +574,19 @@ func TestTheVoiceKeyNamesNobody(t *testing.T) {
 			"`%s` nommerait l'expéditeur sur l'écran verrouillé", v)
 	}
 }
+
+// JOINDRE L'ÉQUIPE (core#328) : l'appel prévient le staff, la réponse prévient la
+// personne, et ni l'un ni l'autre ne se coupe.
+func TestTheSupportRequestKeysCannotBeMuted(t *testing.T) {
+	assert.Equal(t, CategoryStaff, categoryOf(KeyStaffSupportRequest))
+	assert.Equal(t, CategorySupport, categoryOf(KeySupportReply))
+}
+
+// ⚠️ LA RÉPONSE NE S'AFFICHE PAS SUR UN ÉCRAN VERROUILLÉ : elle peut parler d'une
+// course ou d'un paiement. Le gabarit n'a donc aucune variable.
+func TestTheSupportReplyCarriesNoContent(t *testing.T) {
+	for _, text := range defaults[KeySupportReply].Locales {
+		assert.NotContains(t, text.Body, "[")
+		assert.NotContains(t, text.Title, "[")
+	}
+}

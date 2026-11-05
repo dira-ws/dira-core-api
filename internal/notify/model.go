@@ -387,6 +387,14 @@ const (
 	KeyPlatformAlert         = "staff_platform_alert"
 	KeyPlatformAlertResolved = "staff_platform_alert_resolved"
 
+	// JOINDRE L'ÉQUIPE DEPUIS L'ASSISTANT (core#328).
+	//
+	// ⚠️⚠️ LA PREMIÈRE PRÉVIENT L'ÉQUIPE, ET C'EST TOUT L'OBJET : une file que
+	// personne ne regarde ne vaut pas mieux qu'un message au modèle. La seconde dit à
+	// la personne qu'on lui a répondu : elle n'a aucune raison de rouvrir le fil.
+	KeyStaffSupportRequest = "staff_support_request"
+	KeySupportReply        = "assistant_support_reply"
+
 	// UN SEUL APPAREIL PAR CHAUFFEUR (v4.35.0) : le compte vient d'être ouvert
 	// ailleurs, et l'appareil précédent a perdu la session.
 	//
@@ -1039,6 +1047,28 @@ var defaults = map[string]Template{
 			LocaleEN: {Title: "Financial integrity: [kind]", Body: "[who] — [detail]. Check Finance › Integrity."},
 		},
 	},
+	KeyStaffSupportRequest: {
+		Key: KeyStaffSupportRequest,
+		// ⚠️ NI NOM NI NUMÉRO : l'analytique n'a pas d'identité à donner, et un écran
+		// verrouillé n'a pas à l'afficher. La fiche est dans la file.
+		Description: "STAFF — une personne demande à joindre l'équipe depuis l'assistant. À traiter dans Support, file des vocaux.",
+		Enabled:     true,
+		Locales: map[string]Text{
+			LocaleFR: {Title: "Demande à l'équipe · [country]", Body: "Une personne demande à vous joindre depuis l'assistant."},
+			LocaleEN: {Title: "Request to the team · [country]", Body: "Someone is asking to reach you from the assistant."},
+		},
+	},
+	KeySupportReply: {
+		Key: KeySupportReply,
+		// ⚠️ PAS LE TEXTE DE LA RÉPONSE : elle peut parler d'une course ou d'un
+		// paiement, et elle s'afficherait sur un écran verrouillé. Elle est dans le fil.
+		Description: "L'équipe a répondu à une demande faite depuis l'assistant. La réponse se lit dans le fil.",
+		Enabled:     true,
+		Locales: map[string]Text{
+			LocaleFR: {Title: "Équipe Dira", Body: "L'équipe vous a répondu."},
+			LocaleEN: {Title: "Dira team", Body: "The team has replied to you."},
+		},
+	},
 	KeyPlatformAlert: {
 		Key:         KeyPlatformAlert,
 		Description: "STAFF — la supervision signale une panne : service muet, disque plein, panique, courses hors radar.",
@@ -1293,6 +1323,8 @@ var provided = map[string][]string{
 	KeyPlatformAlert:         {"alert", "severity", "summary", "what", "service"},
 	KeyPlatformAlertResolved: {"alert", "severity", "summary", "what", "service"},
 	KeySessionSuperseded:     {"device"},
+	KeyStaffSupportRequest:   {"country"},
+	KeySupportReply:          {},
 	// La période et le NET versé — rien du détail : voir `KeyPayrollPaid`.
 	KeyPayrollPaid: {"period", "amount"},
 }
