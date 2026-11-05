@@ -98,18 +98,60 @@ func (c *Client) RouteDuration(ctx context.Context, city string, points [][2]flo
 	return r.DurationS, err
 }
 
-// Route interroge le SIG.
+// RouteDurationAs : la durée, pour un mode donné.
+func (c *Client) RouteDurationAs(ctx context.Context, city string, points [][2]float64, mode string) (int, error) {
+	r, err := c.RouteAs(ctx, city, points, mode)
+	return r.DurationS, err
+}
+
+// LES MODES DE DÉPLACEMENT que le SIG sait router.
+//
+// ⚠️⚠️ ILS NE SONT PAS DÉCORATIFS. Le SIG tient un GRAPHE PAR PROFIL : une
+// moto emprunte des passages qu'une voiture ne prend pas, un tricycle est trop
+// large pour ceux de la moto et interdit de voie rapide. Demander « voiture »
+// pour une moto, c'est annoncer un délai qu'elle battra et facturer une
+// distance qu'elle n'a pas parcourue — dans les deux sens, c'est de l'argent.
+//
+// ⚠️ ET CE DÉFAUT A VÉCU : ce client écrivait `"driving"` EN DUR. Le SIG sait
+// router une moto et un tricycle depuis le premier jour, il sait choisir
+// l'instance correspondante — et le seul appelant de la plateforme disait
+// toujours « voiture ». Toute la chaîne était en place sauf sa première ligne.
+const (
+	ModeDriving    = "driving"
+	ModeMotorcycle = "motorcycle"
+	ModeTricycle   = "tricycle"
+	ModeWalking    = "walking"
+	ModeCycling    = "cycling"
+)
+
+// Route interroge le SIG, en VOITURE.
+//
+// Conservée telle quelle pour les appelants qui routent un trajet sans
+// véhicule nommé — un devis d'adresse à adresse, une distance de contrôle.
+// Celui qui connaît le véhicule appelle `RouteAs`.
 func (c *Client) Route(ctx context.Context, city string, points [][2]float64) (Route, error) {
+	return c.RouteAs(ctx, city, points, ModeDriving)
+}
+
+// RouteAs interroge le SIG POUR UN MODE donné.
+//
+// ⚠️ UN MODE INCONNU N'EST PAS UNE ERREUR : le SIG retombe sur la voiture et
+// répond. Refuser ici aurait fait échouer un devis parce qu'une verticale a
+// ajouté une classe de véhicule — une course perdue pour un mot.
+func (c *Client) RouteAs(ctx context.Context, city string, points [][2]float64, mode string) (Route, error) {
 	if !c.Enabled() {
 		return Route{}, nil
 	}
 	if len(points) < 2 {
 		return Route{}, nil
 	}
+	if mode == "" {
+		mode = ModeDriving
+	}
 	body, err := json.Marshal(map[string]any{
 		"ville":       city,
 		"coordinates": points, // [[lon, lat], …]
-		"mode":        "driving",
+		"mode":        mode,
 	})
 	if err != nil {
 		return Route{}, err
