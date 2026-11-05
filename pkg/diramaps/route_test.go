@@ -20,7 +20,7 @@ func sig(t *testing.T, corps string) *Client {
 		_, _ = w.Write([]byte(corps))
 	}))
 	t.Cleanup(srv.Close)
-	return New(srv.URL)
+	return New(srv.URL, "")
 }
 
 var tournée = [][2]float64{{1.22, 6.13}, {1.25, 6.16}}
@@ -72,7 +72,7 @@ func TestASinglePointIsNotAPath(t *testing.T) {
 // Un SIG absent ou une tournée d'un point : rien, et pas d'erreur. La course
 // doit se créer sans tracé plutôt que pas du tout.
 func TestNoSIGMeansNoPathAndNoError(t *testing.T) {
-	r, err := New("").Route(context.Background(), "lome", tournée)
+	r, err := New("", "").Route(context.Background(), "lome", tournée)
 	require.NoError(t, err)
 	assert.Zero(t, r.DurationS)
 	assert.Empty(t, r.Geometry)
@@ -110,7 +110,7 @@ func TestTheRouteURLToleratesBothBaseConventions(t *testing.T) {
 		{"http://maps:8000/api", "http://maps:8000/api/calc/route"},
 		{"http://maps:8000/api/", "http://maps:8000/api/calc/route"},
 	} {
-		assert.Equal(t, c.attendu, New(c.base).routeURL(), "base %q", c.base)
+		assert.Equal(t, c.attendu, New(c.base, "").routeURL(), "base %q", c.base)
 	}
 }
 
@@ -123,7 +123,7 @@ func TestTheSIGIsCalledOnTheRightPathWhateverTheBase(t *testing.T) {
 			vu = r.URL.Path
 			_, _ = w.Write([]byte(`{"routes":[{"duration_s":60}]}`))
 		}))
-		c := New(srv.URL + suffixe)
+		c := New(srv.URL+suffixe, "")
 		_, err := c.Route(context.Background(), "lome", tournée)
 		srv.Close()
 		require.NoError(t, err, "suffixe %q", suffixe)

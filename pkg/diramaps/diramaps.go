@@ -17,19 +17,43 @@ import (
 	"github.com/kgtech-org/dira-core-api/pkg/obs"
 )
 
+// HeaderAPIKey est l'en-tête par lequel le SIG reconnaît son appelant. Le nom
+// est un contrat EXTERNE (dira-maps l'accepte aussi en `?key=`), donc il est
+// écrit tel quel dans les ponts des autres dépôts plutôt que partagé par un
+// import : une montée de `go.mod` pour une chaîne de dix caractères coûterait
+// plus que la duplication.
+const HeaderAPIKey = "X-Api-Key"
+
 // Client calls the SIG. Base d'URL DISTINCTE de l'API et du suivi : les trois
 // services se déplacent indépendamment.
 type Client struct {
 	baseURL string
+	apiKey  string
 	http    *http.Client
 }
 
 // New builds the client. Une base vide rend un client INERTE plutôt que nil :
 // l'appelant n'a pas à tester la présence à chaque usage, et l'absence de SIG
 // se traduit par une absence de durée, pas par une panne.
-func New(baseURL string) *Client {
+//
+// ⚠️⚠️ LA CLÉ EST UN ARGUMENT, PAS UNE OPTION, ET C'EST DÉLIBÉRÉ. Le SIG
+// identifie ses appelants par clé, avec un quota et un décompte par clé. Le
+// détail de l'exploitation est suivi dans le dépôt privé du SIG (dira-maps#67) ;
+// ce qui compte ici est la forme du constructeur.
+//
+// En faire un argument fait nommer chaque appelant PAR LE COMPILATEUR. Une
+// option, ou un `SetKey` facultatif, s'oublie — et un client qui ne porte pas
+// sa clé ne provoque aucune panne visible, parce que le SIG est AU MIEUX : les
+// distances retombent à vol d'oiseau, les durées disparaissent, et rien ne se
+// lève. C'est exactement le genre d'oubli qui dure des mois.
+//
+// Une clé vide reste acceptée, pour que la transition soit possible service par
+// service. Mais l'appelant doit le JOURNALISER au démarrage : c'est la seule
+// chose qui rend l'oubli visible avant qu'il coûte.
+func New(baseURL, apiKey string) *Client {
 	return &Client{
 		baseURL: baseURL,
+		apiKey:  strings.TrimSpace(apiKey),
 		// Court, et c'est délibéré : la durée est un CONFORT. Retenir la
 		// création d'une course pendant trente secondes parce qu'un service
 		// de cartographie rame serait un très mauvais échange.
@@ -161,11 +185,29 @@ func (c *Client) RouteAs(ctx context.Context, city string, points [][2]float64, 
 		return Route{}, err
 	}
 	req.Header.Set("Content-Type", "application/json")
+	// ⚠️ PAS D'EN-TÊTE VIDE. Côté SIG, l'ABSENCE d'en-tête et un en-tête VIDE
+	// ne suivent pas le même chemin : le second est traité comme une clé
+	// inconnue, et refusé en `401` quelle que soit la politique en vigueur.
+	// `X-Api-Key: ` nous rangerait donc parmi les clés révoquées, ce qui n'est
+	// pas ce qu'un service sans clé configurée veut dire.
+	if c.apiKey != "" {
+		req.Header.Set(HeaderAPIKey, c.apiKey)
+	}
 	resp, err := c.http.Do(req)
 	if err != nil {
 		return Route{}, fmt.Errorf("diramaps: route: %w", err)
 	}
 	defer resp.Body.Close()
+	// ⚠️ UN REFUS DE CLÉ SE DIT. « status 401 » dans un journal n'apprend rien à
+	// qui n'a pas le code sous les yeux, et c'est précisément le jour où le SIG
+	// fermera sa porte qu'il faudra comprendre vite. Les deux codes du portail
+	// sont donc nommés.
+	switch resp.StatusCode {
+	case http.StatusUnauthorized:
+		return Route{}, fmt.Errorf("diramaps: route: clé API refusée par le SIG (absente, inconnue ou révoquée) — voir MAPS_API_KEY")
+	case http.StatusForbidden:
+		return Route{}, fmt.Errorf("diramaps: route: service « itineraire » désactivé pour cette clé, ou quota du jour atteint")
+	}
 	if resp.StatusCode >= 300 {
 		return Route{}, fmt.Errorf("diramaps: route: status %d", resp.StatusCode)
 	}
