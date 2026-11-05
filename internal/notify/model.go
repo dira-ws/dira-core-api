@@ -1324,7 +1324,9 @@ var provided = map[string][]string{
 	KeyPlatformAlertResolved: {"alert", "severity", "summary", "what", "service"},
 	KeySessionSuperseded:     {"device"},
 	KeyStaffSupportRequest:   {"country"},
-	KeySupportReply:          {},
+	// ⚠️ LE PAYS SEUL, ET LE GABARIT DE DÉPART NE S'EN SERT PAS : la réponse ne doit
+	// pas s'afficher sur un écran verrouillé, et aucune variable ne la porte.
+	KeySupportReply: {"country"},
 	// La période et le NET versé — rien du détail : voir `KeyPayrollPaid`.
 	KeyPayrollPaid: {"period", "amount"},
 }
