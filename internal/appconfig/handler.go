@@ -1,6 +1,6 @@
 package appconfig
 
-// LES ROUTES — une pour les applications, trois pour la console.
+// LES ROUTES — une pour les applications, cinq pour la console.
 
 import (
 	"net/http"
@@ -57,6 +57,9 @@ func (h *Handler) Mount(r chi.Router, authMW, serviceMW func(http.Handler) http.
 		// La vue « ce que voit Lite au Tchad » : la résolution, pour un pays
 		// et une édition choisis dans l'écran.
 		g.Get("/admin/app-config/preview", h.preview)
+		// LE CATALOGUE DES LANGUES : à part de la grille, qui réécrit tout.
+		g.Get("/admin/languages", h.languages)
+		g.Put("/admin/languages", h.saveLanguages)
 	})
 }
 
@@ -107,6 +110,41 @@ func (h *Handler) saveConfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.adminConfig(w, r)
+}
+
+// LanguagesView est l'écran des langues.
+type LanguagesView struct {
+	Items []pkgconf.Language `json:"items"`
+	// Saved : quelqu'un a enregistré ce catalogue. Faux = la liste de départ,
+	// qui suit le code tant que personne ne se l'approprie.
+	Saved     bool       `json:"saved"`
+	UpdatedAt *time.Time `json:"updated_at,omitempty"`
+	UpdatedBy string     `json:"updated_by,omitempty"`
+}
+
+func (h *Handler) languages(w http.ResponseWriter, r *http.Request) {
+	reg := h.svc.Registry(r.Context())
+	at, by := h.repo.Meta(r.Context())
+	httpx.JSON(w, http.StatusOK, LanguagesView{
+		Items: reg.LanguageCatalogue(), Saved: len(reg.Languages) > 0,
+		UpdatedAt: at, UpdatedBy: by,
+	})
+}
+
+func (h *Handler) saveLanguages(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Items []pkgconf.Language `json:"items"`
+	}
+	if err := httpx.Decode(r, &req); err != nil {
+		httpx.Error(w, r, err)
+		return
+	}
+	actor, _ := auth.UserFromContext(r.Context())
+	if err := h.svc.SaveLanguages(r.Context(), req.Items, actor); err != nil {
+		httpx.Error(w, r, err)
+		return
+	}
+	h.languages(w, r)
 }
 
 // GET /admin/app-config/preview?country=TD&edition=lite

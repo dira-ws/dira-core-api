@@ -91,6 +91,25 @@ func (r *Repository) Save(ctx context.Context, reg appconfig.Registry, actor str
 	return nil
 }
 
+// SaveLanguages remplace le catalogue des langues, et rien d'autre.
+//
+// ⚠️ ÉCRIT À CÔTÉ DE `Save`, ET NON DEDANS : la grille des éditions renvoie tout
+// le registre, lu quand son écran s'est ouvert. Un catalogue passé par là aurait
+// été remis à son état d'il y a dix minutes par quelqu'un qui réglait autre chose.
+func (r *Repository) SaveLanguages(ctx context.Context, items []appconfig.Language, actor string) error {
+	_, err := r.col.UpdateOne(ctx, bson.M{"_id": docID}, bson.M{
+		"$set": bson.M{
+			"languages":  items,
+			"updated_at": time.Now().UTC(),
+			"updated_by": actor,
+		},
+	}, options.Update().SetUpsert(true))
+	if err != nil {
+		return fmt.Errorf("appconfig: save languages: %w", err)
+	}
+	return nil
+}
+
 // Meta rend qui a touché au registre, et quand — pour l'écran de la console.
 func (r *Repository) Meta(ctx context.Context) (at *time.Time, by string) {
 	var doc Document

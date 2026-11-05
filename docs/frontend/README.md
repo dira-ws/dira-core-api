@@ -1,6 +1,6 @@
 # Specs frontend — par rôle
 
-> **Version 4.118.0** · 5 novembre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics`
+> **Version 4.119.0** · 5 novembre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics`
 
 **Cinq** documents, un par application. Chacun est **autonome** : tout ce qu'un frontend doit savoir pour son rôle, sans avoir à ouvrir les vingt specs de modules.
 
@@ -355,6 +355,13 @@ Chaque document porte la même version en en-tête, et son propre journal des ch
 - [ ] ⚠️ **`TRACKING_JWT_SECRET` renseigné dans chaque environnement déployé.** Vide, l'authentification du service de suivi est **désactivée** : n'importe qui connaissant un `delivery_id` suit la course. Le secret doit valoir **exactement** le `JWT_SECRET` de `dira-food-api`.
 
 ## Journal
+
+### 4.119.0 — 5 novembre 2026
+
+🟢 **LES LANGUES SE RÈGLENT À LA CONSOLE** — `DIRA-CLIENT.md` §4 ter. `GET /app/config`
+sert `languages` : une liste unique, sans pays, qui remplace celle écrite dans
+l'application. Une langue d'écran ne s'offre que si sa traduction est embarquée.
+`live.languages` se règle désormais langue par langue. Nouveau code : `bm`.
 
 ### 4.118.0 — 5 novembre 2026
 

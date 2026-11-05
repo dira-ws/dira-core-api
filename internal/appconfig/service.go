@@ -17,6 +17,7 @@ import (
 type store interface {
 	Load(ctx context.Context) (*appconfig.Registry, error)
 	Save(ctx context.Context, reg appconfig.Registry, actor string) error
+	SaveLanguages(ctx context.Context, items []appconfig.Language, actor string) error
 	Meta(ctx context.Context) (*time.Time, string)
 }
 
@@ -162,6 +163,98 @@ func (s *Service) Save(ctx context.Context, reg appconfig.Registry, actor string
 	return nil
 }
 
+// SaveLanguages écrit le catalogue des langues, après l'avoir validé.
+func (s *Service) SaveLanguages(ctx context.Context, items []appconfig.Language, actor string) error {
+	clean, err := cleanCatalogue(items)
+	if err != nil {
+		return err
+	}
+	if err := s.repo.SaveLanguages(ctx, clean, actor); err != nil {
+		return err
+	}
+	// ⚠️ LE CACHE EST VIDÉ TOUT DE SUITE, comme pour la grille.
+	s.mu.Lock()
+	s.cached, s.at = nil, time.Time{}
+	s.mu.Unlock()
+	return nil
+}
+
+// cleanCatalogue normalise le catalogue et refuse ce qui ne marcherait pas.
+//
+// ⚠️⚠️ CHAQUE REFUS NOMME LA LANGUE (`reason`) : l'écran montre une liste, et
+// « ligne invalide » y serait à chercher.
+func cleanCatalogue(in []appconfig.Language) ([]appconfig.Language, error) {
+	refuse := func(msg, code string) ([]appconfig.Language, error) {
+		return nil, apperr.Validation(msg).WithMeta(map[string]any{"fields": []string{"items"}, "reason": code})
+	}
+	if len(in) > appconfig.LanguagesMax {
+		return refuse(fmt.Sprintf("at most %d languages", appconfig.LanguagesMax), "")
+	}
+	seen := make(map[string]bool, len(in))
+	out := make([]appconfig.Language, 0, len(in))
+	screens, spoken := false, false
+	for _, raw := range in {
+		l := raw
+		l.Code = strings.ToLower(strings.TrimSpace(l.Code))
+		l.Name, l.Native = strings.TrimSpace(l.Name), strings.TrimSpace(l.Native)
+		l.Hint, l.Whisper = strings.TrimSpace(l.Hint), strings.ToLower(strings.TrimSpace(l.Whisper))
+		if !languageCode(l.Code, 2, 8) {
+			return refuse("a language code is two to eight lowercase letters", l.Code)
+		}
+		if seen[l.Code] {
+			// ⚠️ DEUX LIGNES POUR UN CODE : l'application en montrerait deux, et
+			// la table d'attribution n'aurait qu'une case pour les deux.
+			return refuse("this language is listed twice", l.Code)
+		}
+		seen[l.Code] = true
+		if l.Name == "" {
+			return refuse("a language needs a name", l.Code)
+		}
+		if l.Native == "" {
+			l.Native = l.Name
+		}
+		if l.Script != "" && l.Script != appconfig.ScriptArabic {
+			return refuse("unknown script: "+l.Script, l.Code)
+		}
+		if len([]rune(l.Hint)) > appconfig.LanguageHintMax {
+			return refuse(fmt.Sprintf("the hint is limited to %d characters", appconfig.LanguageHintMax), l.Code)
+		}
+		if l.Whisper != "" && !languageCode(l.Whisper, 2, 3) {
+			return refuse("a Whisper code is two or three lowercase letters", l.Code)
+		}
+		if l.Live && !l.Spoken {
+			// ⚠️ UN RÉGLAGE MORT SE REFUSE PAR SON NOM : l'écran aurait montré
+			// le direct ouvert dans une langue qu'aucune application ne propose.
+			return refuse("a language opened to the live assistant must be spoken", l.Code)
+		}
+		screens, spoken = screens || l.App, spoken || l.Spoken
+		out = append(out, l)
+	}
+	// ⚠️ ET UN CATALOGUE SANS LANGUE D'ÉCRAN OU SANS LANGUE PARLÉE LAISSERAIT
+	// L'APPLICATION SANS CHOIX. Une liste vide n'est pas « revenir à la liste
+	// de départ » : ce serait la réponse silencieuse à un clic malheureux.
+	if !screens {
+		return refuse("at least one language must be offered to the screens", "")
+	}
+	if !spoken {
+		return refuse("at least one language must be spoken", "")
+	}
+	return out, nil
+}
+
+// languageCode : des minuscules latines, entre deux bornes.
+func languageCode(code string, floor, ceiling int) bool {
+	if len(code) < floor || len(code) > ceiling {
+		return false
+	}
+	for _, c := range code {
+		if c < 'a' || c > 'z' {
+			return false
+		}
+	}
+	return true
+}
+
 // cleanRule normalise une règle et refuse ce qui ne s'appliquerait jamais.
 //
 // ⚠️ UNE ÉDITION INVENTÉE EST REFUSÉE À L'ÉCRITURE, là où un APPEL la pardonne
@@ -173,17 +266,10 @@ func (s *Service) Save(ctx context.Context, reg appconfig.Registry, actor string
 //
 // ⚠️⚠️ UN PAYS NOMMÉ ICI ALLUME UN MICRO FACTURÉ À LA SECONDE. C'est le seul
 // réglage de ce registre qui AJOUTE quelque chose au lieu de le retirer, et
-// c'est pour cela qu'il se valide plus durement que les autres : un pays sans
-// langue, une borne à zéro ou une durée de huit heures sont toutes des
-// écritures qu'un opérateur peut faire de bonne foi, et dont la facture
-// arrive un mois plus tard.
-//
-// ⚠️ ET LA LANGUE N'EST PAS VÉRIFIÉE CONTRE UN CATALOGUE, parce que le socle
-// n'en a pas : c'est l'analytique qui détient les langues et c'est le
-// FOURNISSEUR qui décide s'il sait les parler. #267 §6 le dit : la prise en
-// charge vocale de l'arabe tchadien et du wolof SE MESURE avant de s'ouvrir.
-// On contrôle donc la forme, et le relais refuse à l'ouverture une langue qui
-// n'est pas dans cette liste.
+// c'est pour cela qu'il se valide plus durement que les autres : une durée de
+// huit heures est une écriture qu'un opérateur peut faire de bonne foi, et dont
+// la facture arrive un mois plus tard. Ses LANGUES ne sont plus ici : voir le
+// catalogue, `cleanCatalogue`.
 func cleanLive(in map[string]appconfig.LiveRule) (map[string]appconfig.LiveRule, error) {
 	if len(in) == 0 {
 		return nil, nil
@@ -196,25 +282,6 @@ func cleanLive(in map[string]appconfig.LiveRule) (map[string]appconfig.LiveRule,
 				WithMeta(map[string]any{"fields": []string{"live"}})
 		}
 		clean := appconfig.LiveRule{}
-		for _, l := range rule.Languages {
-			l = strings.ToLower(strings.TrimSpace(l))
-			if l == "" {
-				continue
-			}
-			if len(l) < 2 || len(l) > 8 {
-				return nil, apperr.Validation("a language code is two to eight letters: " + l).
-					WithMeta(map[string]any{"fields": []string{"live"}, "reason": code})
-			}
-			clean.Languages = append(clean.Languages, l)
-		}
-		if len(clean.Languages) == 0 {
-			// ⚠️ UN PAYS SANS LANGUE EST UN RÉGLAGE MORT, et il se refuse par
-			// son nom — comme une règle qui ne retire rien (#245). Rangé, il
-			// aurait laissé l'écran de la console montrer le direct « ouvert
-			// au Tchad » alors que `LiveFor` le rend éteint.
-			return nil, apperr.Validation("the live assistant needs at least one language — it is measured before it is opened").
-				WithMeta(map[string]any{"fields": []string{"live"}, "reason": code})
-		}
 		if err := inRange("max_session_seconds", rule.MaxSessionSeconds,
 			appconfig.LiveMaxSessionSecondsFloor, appconfig.LiveMaxSessionSecondsCeiling, code); err != nil {
 			return nil, err

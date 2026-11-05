@@ -1,6 +1,6 @@
 # App CLIENT UNIFIÉE — LIVRAISON **et** COURSES — contrat d'API
 
-> **Version 4.118.0** · 5 novembre 2026
+> **Version 4.119.0** · 5 novembre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Livraison : `…/api/v1/food` · Courses : `…/api/v1/vtc` · Combiné : `…/api/v1/analytics` · Suivi : `wss://tracking-staging.dira.llc`
 
 ---
@@ -247,6 +247,17 @@ GET /app/config          # SANS jeton — lu AVANT l'écran de connexion
     "max_audio_seconds": 60, "max_audio_bytes": 2097152,
     "formats": ["audio/3gpp", "audio/aac", "audio/m4a", "audio/mp4", "audio/mpeg",
                 "audio/ogg", "audio/opus", "audio/webm", "audio/x-m4a"]
+  },
+  "languages": {                                          // 🆕 v4.119.0
+    "default": "fr",
+    "items": [
+      { "code": "fr",  "name": "Français", "native": "Français",
+        "rtl": false, "app": true,  "spoken": true },
+      { "code": "shu", "name": "Arabe tchadien", "native": "عربي تشادي",
+        "rtl": true,  "app": true,  "spoken": true },
+      { "code": "wo",  "name": "Wolof", "native": "Wolof",
+        "rtl": false, "app": false, "spoken": true }
+    ]
   } }
 ```
 
@@ -342,6 +353,39 @@ que de reproposer un bouton qui échoue.
 d'édition ni de pays, délibérément — la personne n'a qu'une application, elle
 ne sait pas qu'il en existe deux, et elle ne peut rien faire de cette
 information.
+
+### 🆕 🌍 `languages` — ce qu'on propose aux écrans et à la voix (v4.119.0)
+
+La liste se règle **à la console**, plus dans votre code. Deux réglages de
+l'application s'en nourrissent : la **langue** (celle des écrans) et la **langue
+parlée** (celle qu'on parle à Dira). On peut lire en français et parler wolof.
+
+- ⚠️⚠️ **LA MÊME RÉPONSE DANS TOUS LES PAYS ET LES DEUX ÉDITIONS.** Quelqu'un qui
+  parle wolof à Lomé doit pouvoir le dire à Dira. Ne filtrez pas par pays.
+- **Toujours servi.** Tant que personne n'a rien enregistré, c'est la liste de
+  départ : français, anglais, arabe tchadien, éwé, wolof, peul, malinké, bamanan.
+- **`items` est dans l'ordre de la console : montrez-le tel quel.** `native` est
+  le nom à afficher, `name` le nom en français (sous-titre, recherche).
+- **`spoken: true`** : proposez-la dans « Langue parlée ». Le `code` est ce qui
+  part à `language` (vocal, champs dits à la voix, `session.start` du direct).
+- **`app: true`** : proposez-la dans « Langue » — ⚠️⚠️ **SEULEMENT SI VOTRE
+  VERSION EMBARQUE SA TRADUCTION.** Le drapeau dit que l'exploitation la propose,
+  pas que vos chaînes existent : sans elles, ignorez-la, sinon la personne choisit
+  le wolof et lit du français. `rtl: true` retourne l'interface entière.
+- **`default`** : la langue des écrans tant que la personne n'a rien choisi — si
+  votre version ne l'a pas, gardez votre défaut.
+- **Une langue qui sort de la liste** : un téléphone qui l'avait choisie revient à
+  `default` (langue) ou à « comme l'application » (langue parlée), **sans message
+  d'erreur**. Le serveur comprend toujours son code : rien ne casse entre-temps.
+- ⚠️ **NE VÉRIFIEZ PLUS `language` CONTRE UNE LISTE ÉCRITE DANS L'APPLICATION.**
+  Une langue ajoutée à la console serait refusée chez vous avant d'arriver au
+  serveur, qui sait la traiter. Prenez `items`, et laissez le serveur répondre
+  (`422 unknown_language`, `503 language_not_served`).
+- **Absent ou illisible** (serveur plus ancien, panne) : gardez la liste embarquée.
+- **Le modèle qui répond dans chaque langue ne vous regarde pas**, et il n'est pas
+  servi : c'est un réglage de l'exploitation, qui ne change rien à vos appels.
+- Le **direct** a sa propre liste, `live.languages` (§8 quater.1) : toutes les
+  langues parlées n'y sont pas ouvertes.
 
 ### ⚠️ Rien n'est coupé par défaut
 
@@ -1247,7 +1291,11 @@ l'exploitation (au Sénégal ce peut être le wolof, au Togo le français).
 
 ⚠️ **CE N'EST PAS `Accept-Language`** : celui-ci dit la langue de l'interface,
 et un téléphone réglé en français n'empêche pas son propriétaire de parler
-wolof. Douze codes sont admis, tout autre est refusé (`422 unknown_language`) :
+wolof.
+
+🆕 **Ce qu'on propose à la personne est dans `languages` de `/app/config`** (§4 ter,
+v4.119.0), pas ici. Treize codes sont admis, y compris ceux qu'aucune liste ne
+propose aujourd'hui ; tout autre est refusé (`422 unknown_language`) :
 
 | Code | Langue | Pays |
 |---|---|---|
@@ -1257,6 +1305,7 @@ wolof. Douze codes sont admis, tout autre est refusé (`422 unknown_language`) :
 | `man` · `sus` · `ff` | malinké · soussou · peul (pular) | Guinée |
 | `shu` · `sba` · `ff` | arabe tchadien · ngambay (sara) · peul (fulfulde) | Tchad |
 | `fan` | fang | Gabon |
+| `bm` | bamanan (bambara) | — |
 
 #### 🆕 🎯 REMPLIR UN CHAMP À LA VOIX — départ, destination, plat (v4.108.0)
 
@@ -1864,8 +1913,11 @@ qui le garantit.
   ne change.
 - **Bloc présent** → le micro de l'accueil peut ouvrir le direct, et l'écran de
   l'assistant gagne une entrée « En direct ».
-- `languages` dit **les langues ouvertes ici**. Une langue absente est refusée à
-  l'ouverture de la session, pas au premier mot.
+- `languages` dit **les langues ouvertes au direct**. Une langue absente est
+  refusée à l'ouverture de la session, pas au premier mot. 🆕 **Depuis v4.119.0
+  elle se règle langue par langue, plus pays par pays** : là où le bloc `live` est
+  servi, la liste est la même. Le pays dit seulement si le direct existe chez lui
+  et combien de temps une session dure.
 
 ### 8 quater.2 La socket
 
@@ -3010,6 +3062,16 @@ du métier.
 ---
 
 ## 15. Journal
+
+### 4.119.0 — 5 novembre 2026
+
+🟢 **LES LANGUES SE RÈGLENT À LA CONSOLE** (§4 ter, `languages` de `/app/config`).
+Une liste unique, la même dans tous les pays, qui dit ce qu'on propose aux écrans
+(`app`) et à la voix (`spoken`). Au départ : français, anglais, arabe tchadien,
+éwé, wolof, peul, malinké, bamanan. 🟠 **À faire** : lire cette liste au lieu de
+celle écrite dans l'application, et n'offrir une langue d'écran que si sa
+traduction est embarquée. 🟠 `live.languages` ne dépend plus du pays (§8 quater.1) :
+rien à changer si vous le lisiez déjà. 🟢 Nouveau code admis : `bm` (bamanan).
 
 ### 4.118.0 — 5 novembre 2026
 

@@ -91,6 +91,12 @@ type Registry struct {
 	Live map[string]LiveRule `bson:"live,omitempty" json:"live,omitempty"`
 	// ListRules : clé de liste → sa règle (c'est `Allow` qui y compte).
 	ListRules map[string]Rule `bson:"lists,omitempty" json:"lists,omitempty"`
+	// Languages : le catalogue des langues, dans l'ordre de la console. Vide =
+	// la liste de départ — voir `languages.go`.
+	//
+	// ⚠️ IL A SA PROPRE ROUTE D'ÉCRITURE : la grille des éditions réécrit tout
+	// le registre, et elle aurait repassé un catalogue lu avant une retouche.
+	Languages []Language `bson:"languages,omitempty" json:"languages,omitempty"`
 }
 
 // Allows dit si une fonction est disponible pour ce pays et cette édition.
@@ -219,6 +225,9 @@ type Resolved struct {
 	// ⚠️ LES MÊMES PARTOUT : ce sont les bornes de la plateforme
 	// (`pkg/voice`), pas un réglage de pays.
 	Voice voice.Limits `json:"voice"`
+	// Languages : les langues que l'application propose — aux écrans et à la
+	// voix. ⚠️ LES MÊMES PARTOUT, et toujours servies : voir `languages.go`.
+	Languages LanguagesBlock `json:"languages"`
 }
 
 // Resolve rend ce que cette édition voit dans ce pays.
@@ -228,6 +237,9 @@ func (r *Registry) Resolve(countryCode, ed string) Resolved {
 		Country:  strings.ToUpper(strings.TrimSpace(countryCode)),
 		Features: make(map[string]bool, len(Features)),
 		Voice:    voice.Served(),
+		// ⚠️ AVANT LE GARDE DU REGISTRE NIL, plus bas : un socle sans réglage
+		// doit quand même dire quelles langues on peut choisir.
+		Languages: r.LanguagesFor(),
 	}
 	for _, f := range Features {
 		out.Features[f.Key] = r.Allows(f.Key, countryCode, ed)
