@@ -1,6 +1,6 @@
 # IMMOBILIER — CHERCHEUR (louer, acheter) — contrat d'API
 
-> **Version 4.125.0** · 10 novembre 2026
+> **Version 4.126.0** · 10 novembre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Immobilier : `https://api-staging.dira.llc/api/v1/immo`
 > Site public en service : `https://immo-staging.dira.llc`
 
@@ -266,7 +266,7 @@ adresse renseignerait un concurrent.
     { "id": "6af2e2c115ec33d946d843e1", "kind": "photo",
       "url": "https://api-staging.dira.llc/api/v1/immo/media/GA/6af2e2c115ec33d946d843e1/display.jpg",
       "thumb_url": "https://api-staging.dira.llc/api/v1/immo/media/GA/6af2e2c115ec33d946d843e1/thumb.jpg",
-      "alt": "Pièce de vie", "width": 1500, "height": 1000 }
+      "alt": "Pièce de vie", "width": 1500, "height": 1000, "on_site": true }
   ],
   "completeness": 90,
   "share_url": "https://immo-staging.dira.llc/fr/properties/villa-contemporaine-a-la-sabliere-21038f233fbc3debd94bffbd"
@@ -313,6 +313,11 @@ d'image ordinaire la suit sans rien faire.
 - Les photos sont **réencodées** à l'envoi : aucune métadonnée de l'original
   (dont la position GPS du téléphone de l'annonceur) n'y est. Il n'y a rien à
   retirer de votre côté.
+- 🆕 **`on_site: true` = « prise sur place »** (v4.126.0) : la photo a été prise à
+  moins de 150 m de l'adresse du bien (le serveur a comparé, puis jeté la
+  position). Affichez un petit badge sur la photo. ⚠️ **`false` ne veut PAS dire
+  « prise ailleurs »** : une photo sans position, ou envoyée avant cette lecture,
+  est aussi `false`. N'écrivez jamais « photo non conforme ».
 
 ---
 
@@ -833,6 +838,11 @@ GET /immo/listings/{ref}
 ---
 
 ## 13. Journal
+
+### 4.126.0 — 10 novembre 2026
+
+🟢 **`media[].on_site`** (§5) : « prise sur place » — la photo a été prise à moins de
+150 m de l'adresse. `false` ne dit pas « ailleurs ».
 
 ### 4.125.0 — 10 novembre 2026
 

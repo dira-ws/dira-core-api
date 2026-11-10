@@ -1,6 +1,6 @@
 # Specs frontend — par rôle
 
-> **Version 4.125.0** · 10 novembre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics` + `dira-immo-api`
+> **Version 4.126.0** · 10 novembre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics` + `dira-immo-api`
 
 **Cinq** documents, un par application. Chacun est **autonome** : tout ce qu'un frontend doit savoir pour son rôle, sans avoir à ouvrir les vingt specs de modules.
 
@@ -395,6 +395,14 @@ Chaque document porte la même version en en-tête, et son propre journal des ch
 - [ ] ⚠️ **`TRACKING_JWT_SECRET` renseigné dans chaque environnement déployé.** Vide, l'authentification du service de suivi est **désactivée** : n'importe qui connaissant un `delivery_id` suit la course. Le secret doit valoir **exactement** le `JWT_SECRET` de `dira-food-api`.
 
 ## Journal
+
+### 4.126.0 — 10 novembre 2026
+
+🟢 **L'IMMOBILIER — « prise sur place »** (`IMMO-PUBLISHER.md` §7.1, `IMMO-SEEKER.md` §5) :
+le serveur compare la position GPS d'une photo à l'adresse du bien et ne garde que
+le verdict (`on_site`). Le public ne voit que le badge ; l'annonceur voit pourquoi
+une photo ne l'a pas. ⚠️ Une photo réduite sur le téléphone doit garder ses
+étiquettes GPS.
 
 ### 4.125.0 — 10 novembre 2026
 

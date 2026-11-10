@@ -1,6 +1,6 @@
 # IMMOBILIER — ANNONCEUR (agence ou particulier) — contrat d'API
 
-> **Version 4.125.0** · 10 novembre 2026
+> **Version 4.126.0** · 10 novembre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Immobilier : `https://api-staging.dira.llc/api/v1/immo`
 
 ---
@@ -988,17 +988,37 @@ alt  = "Salon, vue sur le jardin" ← facultatif, 160 caractères au plus
   "height":      1200,
   "created_at":  "2026-11-10T09:05:00Z",
   "url":         "https://…?X-Amz-Signature=…",
-  "thumb_url":   "https://…?X-Amz-Signature=…"
+  "thumb_url":   "https://…?X-Amz-Signature=…",
+  "on_site":     "match"
 }
 ```
 
 ⚠️⚠️ **LA PHOTO EST RÉENCODÉE, ET RIEN DE L'ORIGINAL NE SURVIT — C'EST VOULU.**
 Le serveur la redresse (l'orientation du téléphone est lue, puis jetée), la
-réduit et la réécrit en JPEG. **Aucune métadonnée ne passe**, dont la
-**position GPS** de la prise de vue : pour un particulier qui photographie son
-salon, ce serait l'adresse exacte de sa maison publiée à côté d'une annonce qui
-ne montre qu'un cercle de 300 m. Ne cherchez pas à préserver l'EXIF, et ne
-promettez pas l'original à la personne.
+réduit et la réécrit en JPEG. **Aucune métadonnée ne sort**, dont la **position
+GPS** de la prise de vue : pour un particulier qui photographie son salon, ce
+serait l'adresse exacte de sa maison publiée à côté d'une annonce qui ne montre
+qu'un cercle de 300 m. Ne promettez pas l'original à la personne.
+
+🆕 ⚠️⚠️ **« PRISE SUR PLACE » — LA POSITION EST LUE AVANT D'ÊTRE JETÉE**
+(v4.126.0). Le serveur lit la position GPS de la photo (JPEG), la compare à
+l'adresse du bien, et **ne garde que le verdict** — jamais la position, ni dans
+un fichier, ni en base, ni dans un journal :
+
+| `on_site` | Ce que ça veut dire | Le public voit |
+|---|---|---|
+| `match` | prise à **moins de 150 m** de l'adresse du bien | le badge **« prise sur place »** |
+| `mismatch` | prise ailleurs | rien — ⚠️ pas d'accusation publique : une vue de la plage voisine, un plan scanné au bureau sont honnêtes |
+| `absent` | la photo ne dit pas où elle a été prise (PNG, WebP, position coupée, téléphone sans point) | rien |
+| `unknown` | envoyée avant que le serveur ne lise la position | rien |
+
+- ⚠️⚠️ **ENVOYEZ LA PHOTO AVEC SA POSITION** : c'est elle qui fait le badge. Une
+  application qui réencode la photo avant l'envoi perd l'EXIF — et le badge avec
+  lui (section 10 bis.3).
+- La comparaison se fait contre `address.lat` / `address.lng` **au moment de
+  l'envoi** : posez la position du bien **avant** d'ajouter ses photos.
+- Dites à l'annonceur, sur `mismatch` ou `absent`, pourquoi la photo n'a pas le
+  badge — et que ce n'est pas un refus.
 
 - **Deux tailles** : `url` (le plus grand côté ramené à **1 600 px**) et
   `thumb_url` (**480 px**). Une photo n'est jamais agrandie. `width` et
@@ -1667,8 +1687,16 @@ règles de la section 7 restent la loi ; voici ce qu'un téléphone y ajoute.
 - **L'orientation** : si vous réencodez, **appliquez la rotation aux pixels**
   (les bibliothèques de redimensionnement le font) ; si vous envoyez
   l'original, le serveur lit l'orientation et redresse.
-- **Rien à retirer des métadonnées** : le serveur jette tout, position GPS
-  comprise (section 7.1). Ne promettez pas l'original à la personne.
+- 🆕 ⚠️⚠️ **SI VOUS RÉDUISEZ, RECOPIEZ LA POSITION** (v4.126.0). Presque toutes
+  les bibliothèques de redimensionnement **jettent l'EXIF** — et avec lui la
+  position, qui fait le badge « prise sur place » (section 7.1). Recopiez au
+  moins les étiquettes GPS dans la photo réduite (Android : `ExifInterface` ;
+  iOS : les métadonnées de `CGImageDestination`), ou envoyez l'original quand il
+  fait moins de 15 Mio. **Rien d'autre à retirer** : le serveur jette tout après
+  l'avoir lu.
+- La permission de **localisation de l'appareil photo** est celle du système :
+  si la personne l'a coupée, les photos arrivent `absent`. Dites-le une fois,
+  sans insister — le badge est un plus, pas une condition.
 - **Une à une, avec une progression par photo** — jamais trente en parallèle :
   le serveur en traite deux à la fois, et les dernières expireraient.
 - ⚠️ **UNE FILE LOCALE DES PHOTOS NON ENVOYÉES EST PERMISE, ET SEULEMENT
@@ -1830,6 +1858,7 @@ côté application.
 - [ ] **Biens** : seule la provenance `declared` proposée à la saisie ; aucune position par défaut ; `(0, 0)` jamais envoyé ; « meublé » n'est pas un équipement.
 - [ ] **Biens** : `verified: null` ne s'écrit jamais « refusé » ; un agent voit **tous** les biens, et l'écran ne dit pas le contraire.
 - [ ] **Archivage** : la confirmation propose de clôturer les annonces du bien, et dit qu'on ne désarchive pas.
+- [ ] 🆕 **Photos — « prise sur place »** : la position du bien posée **avant** les photos ; la photo réduite **garde ses étiquettes GPS** ; `mismatch` / `absent` expliqués, jamais présentés comme un refus.
 - [ ] **Photos** : envoyées une à une ; les adresses signées jamais gardées plus d'une heure ; l'ordre lu dans le tableau, pas dans `order`.
 - [ ] **Annonces** : `price_period` omis ; le montant formaté avec monnaie et périodicité avant validation ; `title` ≤ 140 octets et `pitch` ≤ 2 000 octets tenus côté application ; aucun bouton « publier » ; `review_note` en tête du brouillon ; `note` jamais envoyé.
 - [ ] **Listes** : `items: null` traité comme `[]` ; la fin de la liste des biens = `next_cursor` **absent**, celle des annonces = `next_cursor` **vide**.
@@ -1942,6 +1971,14 @@ côté application.
 ---
 
 ## 15. Journal
+
+### 4.126.0 — 10 novembre 2026
+
+🟢 **« PRISE SUR PLACE »** (§7.1, §10 bis.3) : le serveur lit la position GPS de la
+photo, la compare à l'adresse du bien (150 m), et garde le **verdict** seul —
+`on_site` : `match`, `mismatch`, `absent`, `unknown`. Le public ne voit que
+« prise sur place ». ⚠️ Une photo réduite sur le téléphone doit **garder ses
+étiquettes GPS**, sinon elle arrive `absent`.
 
 ### 4.125.0 — 10 novembre 2026
 
