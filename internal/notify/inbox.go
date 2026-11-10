@@ -56,7 +56,9 @@ func categoryOf(key string) string {
 	// l'oublier ici l'aurait rangé dans la catégorie par défaut — donc sous un
 	// autre interrupteur que les messages écrits, ce qu'aucun utilisateur
 	// n'attend.
-	case KeyChatMessage, KeyChatVoiceMessage:
+	case KeyChatMessage, KeyChatVoiceMessage, KeyImmoThreadMessage:
+		// ⚠️ LA MESSAGERIE DE L'IMMOBILIER AUSSI : c'est une conversation, et
+		// la personne qui coupe les messages ne les veut d'aucun métier.
 		return CategoryChatMessages
 	case KeyDriverCall:
 		return CategoryDriverCall
