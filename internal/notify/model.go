@@ -423,6 +423,17 @@ const (
 	// plus), quel que soit le nombre d'annonces : « 3 nouvelles », pas trois
 	// messages. Le titre de l'annonce est public — il est déjà sur le site.
 	KeyImmoSavedSearchMatch = "immo_saved_search_match"
+	// LES VISITES DE L'IMMOBILIER (`dira-immo-api`, module `visit`). L'heure est
+	// l'heure LOCALE du pays de la visite, composée par l'immobilier.
+	//
+	// ⚠️ NI ADRESSE NI TÉLÉPHONE DANS LE TEXTE : un écran verrouillé se lit
+	// par-dessus l'épaule, et l'adresse exacte d'un particulier n'est levée
+	// que dans l'application, pour la visite confirmée.
+	KeyImmoVisitRequested = "immo_visit_requested" // → l'annonceur
+	KeyImmoVisitConfirmed = "immo_visit_confirmed" // → le chercheur
+	KeyImmoVisitDeclined  = "immo_visit_declined"  // → le chercheur
+	KeyImmoVisitCancelled = "immo_visit_cancelled" // → l'autre partie
+	KeyImmoVisitReminder  = "immo_visit_reminder"  // → les deux, deux heures avant
 )
 
 // defaults sont les gabarits COMPILÉS, servis tant que la base n'en porte pas.
@@ -1209,6 +1220,51 @@ var defaults = map[string]Template{
 			LocaleEN: {Title: "New for “[name]”", Body: "[title] was just listed. New listings: [count]."},
 		},
 	},
+	KeyImmoVisitRequested: {
+		Key:         KeyImmoVisitRequested,
+		Description: "Immobilier — un chercheur demande une visite (à l'annonceur, qui confirme ou refuse).",
+		Enabled:     true,
+		Locales: map[string]Text{
+			LocaleFR: {Title: "Demande de visite", Body: "Une visite est demandée pour « [listing_title] », le [date] à [time]. Confirmez-la ou refusez-la."},
+			LocaleEN: {Title: "Visit request", Body: "A visit is requested for “[listing_title]” on [date] at [time]. Confirm or decline it."},
+		},
+	},
+	KeyImmoVisitConfirmed: {
+		Key:         KeyImmoVisitConfirmed,
+		Description: "Immobilier — l'annonceur a confirmé la visite (au chercheur ; l'adresse et le contact s'ouvrent dans l'application).",
+		Enabled:     true,
+		Locales: map[string]Text{
+			LocaleFR: {Title: "Visite confirmée", Body: "Votre visite de « [listing_title] » est confirmée : le [date] à [time]. L'adresse et le contact sont dans l'application."},
+			LocaleEN: {Title: "Visit confirmed", Body: "Your visit to “[listing_title]” is confirmed: [date] at [time]. The address and contact are in the app."},
+		},
+	},
+	KeyImmoVisitDeclined: {
+		Key:         KeyImmoVisitDeclined,
+		Description: "Immobilier — l'annonceur n'a pas accepté la demande de visite (au chercheur).",
+		Enabled:     true,
+		Locales: map[string]Text{
+			LocaleFR: {Title: "Visite non acceptée", Body: "La visite de « [listing_title] » du [date] à [time] n'a pas été acceptée. D'autres créneaux sont peut-être libres."},
+			LocaleEN: {Title: "Visit not accepted", Body: "The visit to “[listing_title]” on [date] at [time] was not accepted. Other slots may be free."},
+		},
+	},
+	KeyImmoVisitCancelled: {
+		Key:         KeyImmoVisitCancelled,
+		Description: "Immobilier — une visite est annulée (à l'autre partie, ou au chercheur quand le créneau est retiré).",
+		Enabled:     true,
+		Locales: map[string]Text{
+			LocaleFR: {Title: "Visite annulée", Body: "La visite de « [listing_title] » du [date] à [time] est annulée."},
+			LocaleEN: {Title: "Visit cancelled", Body: "The visit to “[listing_title]” on [date] at [time] is cancelled."},
+		},
+	},
+	KeyImmoVisitReminder: {
+		Key:         KeyImmoVisitReminder,
+		Description: "Immobilier — rappel deux heures avant une visite confirmée (aux deux parties).",
+		Enabled:     true,
+		Locales: map[string]Text{
+			LocaleFR: {Title: "Visite à [time]", Body: "Rappel : visite de « [listing_title] » aujourd'hui à [time]."},
+			LocaleEN: {Title: "Visit at [time]", Body: "Reminder: visit to “[listing_title]” today at [time]."},
+		},
+	},
 }
 
 // provided déclare, par clé, les variables que la PLATEFORME sait remplir.
@@ -1346,6 +1402,12 @@ var provided = map[string][]string{
 	// Le nom donné à la recherche, le titre de la plus récente, le nombre
 	// d'annonces nouvelles, le pays de la recherche.
 	KeyImmoSavedSearchMatch: {"name", "title", "count", "country"},
+	// Le titre de l'annonce, le jour (`JJ/MM`) et l'heure (`HH:MM`), LOCAUX.
+	KeyImmoVisitRequested: {"listing_title", "date", "time"},
+	KeyImmoVisitConfirmed: {"listing_title", "date", "time"},
+	KeyImmoVisitDeclined:  {"listing_title", "date", "time"},
+	KeyImmoVisitCancelled: {"listing_title", "date", "time"},
+	KeyImmoVisitReminder:  {"listing_title", "date", "time"},
 }
 
 // Provided rend les variables que la plateforme remplit pour une clé.
