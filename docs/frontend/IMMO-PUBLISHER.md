@@ -1,6 +1,6 @@
 # IMMOBILIER — ANNONCEUR (agence ou particulier) — contrat d'API
 
-> **Version 4.127.0** · 10 novembre 2026
+> **Version 4.128.0** · 10 novembre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Immobilier : `https://api-staging.dira.llc/api/v1/immo`
 
 ---
@@ -604,12 +604,13 @@ DELETE /immo/publishers/me/members/{id}                                         
 
 - **Les annonces de l'ancien collaborateur restent à l'agence.** Le porteur et
   les `manager` continuent de les voir et de les gérer. Bien.
-- ⚠️ **MAIS LES DEMANDES DE VISITE DE CES ANNONCES CONTINUENT D'ÊTRE NOTIFIÉES
-  À L'ANCIEN COLLABORATEUR**, et à personne d'autre : la visite retient le
-  compte qui a saisi l'annonce, et aucune route ne le change. Il reçoit le
-  titre de l'annonce et l'heure (jamais d'adresse ni de téléphone), sans
-  pouvoir agir. **Avant de détacher**, mettez en pause ou clôturez ses
-  annonces, ou dites au `manager` de suivre leurs visites dans la liste.
+- 🆕 **LES NOTIFICATIONS DE CES ANNONCES VONT AU PORTEUR DE LA FICHE** (v4.128.0) :
+  demandes, annulations et rappels de visite, messages des chercheurs (9.7).
+  Jusqu'au 10 novembre, elles continuaient d'aller à l'ancien collaborateur,
+  qui ne pouvait plus agir — et l'agence n'en savait rien. Les visites et les
+  fils gardent la trace de qui avait saisi l'annonce ; seul le destinataire
+  change. Dites-le dans la confirmation : « ses visites et ses messages vous
+  seront adressés ».
 - Le compte détaché peut ensuite ouvrir **sa propre fiche** : il ne voit plus
   rien de l'agence.
 
@@ -843,7 +844,8 @@ d'une location à Lomé bien plus qu'un lave-vaisselle) :
 | Champ | |
 |---|---|
 | `label` | la rue, telle qu'elle se lit. ⚠️ **Jamais montrée au public pour un particulier** |
-| `neighborhood`, `city` | ce que le chercheur tape. Le serveur ne les exige pas : **demandez-les quand même**, une annonce sans quartier ne se trouve pas |
+| `city` 🆕 | ⚠️ **obligatoire** (v4.128.0) : c'est ce que le chercheur tape, et le filtre de ville de la recherche ne trouve jamais un bien sans ville — `422 address_city_required`, `fields: ["address.city"]` |
+| `neighborhood` | ce que le chercheur tape aussi. Le serveur ne l'exige pas : **demandez-le quand même**, une annonce sans quartier ne se trouve pas |
 | `lat`, `lng` | **obligatoires** |
 
 | Refus | Code | `reason` |
@@ -1152,12 +1154,11 @@ POST /immo/listings
 pas** : le serveur les pose (`422 validation_failed`, `unknown_field`, sinon).
 
 - **Toute annonce naît `draft`** (brouillon), visible de la seule fiche.
-- `title` : **140 octets** au plus ; `pitch` : **2 000 octets** au plus.
-  ⚠️ **Des octets en UTF-8, pas des caractères** : une lettre accentuée en
-  compte deux, et « Résidence à Bè, Lomé » est plus long qu'il n'en a l'air.
-  ⚠️ **Tenez ces bornes côté application** : la création ne les vérifie pas
-  encore, la modification si — un titre trop long passe à la création, puis la
-  moindre retouche de ce titre est refusée tant qu'il n'est pas raccourci.
+- `title` : **140 caractères** au plus ; `pitch` : **2 000 caractères** au plus
+  — des caractères, pas des octets (« Résidence à Bè, Lomé » en compte 20),
+  vérifiés **à la création comme à la modification** (`422 validation_failed`,
+  `fields`). (🔧 4.128.0 : ce paragraphe décrivait encore la règle d'avant
+  dira-immo-api#74, en octets et à la modification seulement.)
 - ⚠️ **Rappelez à un particulier, à côté du titre et du texte, de n'y écrire ni
   sa rue ni son numéro** (section 0.2).
 
@@ -1212,7 +1213,7 @@ pas** : le serveur les pose (`422 validation_failed`, `unknown_field`, sinon).
 ### 8.4 Lister — `GET /immo/publishers/me/listings`
 
 ```
-GET /immo/publishers/me/listings?status=draft&limit=50&cursor=<id>
+GET /immo/publishers/me/listings?status=draft&limit=20&cursor=<id>
 
 → 200 { "items": [ <annonce>, … ], "next_cursor": "6b2c3d4e5f6a7b8c9d0e1f01" }
 ```
@@ -1221,12 +1222,12 @@ GET /immo/publishers/me/listings?status=draft&limit=50&cursor=<id>
 - `status` (facultatif) : `draft`, `in_review`, `published`, `paused`,
   `closed`. ⚠️ **Une valeur inconnue n'est pas refusée** : elle rend une liste
   vide. Ne l'envoyez que depuis la liste ci-dessus.
-- `limit` : 50 par défaut, 100 au plus — ⚠️ une valeur au-delà de 100 retombe à
-  **50**, pas à 100.
-- ⚠️⚠️ **`next_cursor` EST TOUJOURS PRÉSENT ICI**, et vaut `""` sur la
-  dernière page — à la différence de la liste des biens, où il disparaît.
-  Testez « vide », pas « absent ».
-- ⚠️ **`items` VAUT `null` QUAND IL N'Y A RIEN.**
+- 🆕 **LA PAGINATION DE LA PLATEFORME** (v4.128.0) — la même que les biens :
+  `limit` 20 par défaut, 100 au plus (au-delà : 100) ; ⚠️ **`next_cursor`
+  ABSENT = DERNIÈRE PAGE**. Jusqu'au 10 novembre, il valait `""` en fin de
+  liste, avec 50 par page : une application qui testait « vide » doit tester
+  « absent ».
+- `items` vaut `[]` quand il n'y a rien — jamais `null`.
 
 ### 8.5 Lire et modifier
 
@@ -1250,7 +1251,7 @@ PATCH /immo/publishers/me/listings/{id}
 - ⚠️ **LA VÉRIFICATION PORTE SUR LE RÉSULTAT** : `{"price": 0}` est refusé, et
   `{"charges": 5000}` sur une vente aussi, même si la requête ne parle que d'un
   champ.
-- `title` vide ou au-delà de 140 octets, `pitch` au-delà de 2 000 octets :
+- `title` vide ou au-delà de 140 caractères, `pitch` au-delà de 2 000 caractères :
   `422 validation_failed` (`fields`).
 - ⚠️ **UN CORPS QUI NE CHANGE RIEN EST REFUSÉ** — `PATCH {}`, ou un prix égal
   au prix actuel : `422 nothing_to_update`.
@@ -1615,7 +1616,8 @@ DÉCONNEXION.** Un jeton laissé derrière continue de recevoir : la personne à
 qui l'on prête le téléphone de l'agence lirait les demandes de visite.
 
 **Ce que reçoit l'annonceur** — ⚠️ **le compte qui a saisi l'annonce**, et lui
-seul (section 5.1) :
+seul (section 5.1) ; 🆕 **le porteur de la fiche** quand ce compte a été
+détaché de l'agence (v4.128.0, section 5.3) :
 
 | Clé | Quand | Texte (fr) |
 |---|---|---|
@@ -1889,14 +1891,15 @@ côté application.
 - [ ] **Porte** : `404 publisher_not_found` ouvre **deux** portes ; la seconde (« je travaille pour une agence ») ne crée **rien**.
 - [ ] **Fiche** : le téléphone demandé à la création, et dit comme « le numéro que recevront vos visiteurs » ; la case `name` vide refusée côté application.
 - [ ] **Sites** : reposés **en entier**, avec leurs `id` ; aucun `id` inventé.
-- [ ] **Équipe** : rattachement **par téléphone complet** ; la confirmation du détachement dit que les visites de ses annonces lui resteront notifiées.
+- [ ] **Équipe** : rattachement **par téléphone complet** ; la confirmation du détachement dit que les visites et les messages de ses annonces seront adressés au porteur.
 - [ ] **Biens** : seule la provenance `declared` proposée à la saisie ; aucune position par défaut ; `(0, 0)` jamais envoyé ; « meublé » n'est pas un équipement.
 - [ ] **Biens** : `verified: null` ne s'écrit jamais « refusé » ; un agent voit **tous** les biens, et l'écran ne dit pas le contraire.
 - [ ] **Archivage** : la confirmation propose de clôturer les annonces du bien, et dit qu'on ne désarchive pas.
 - [ ] 🆕 **Photos — « prise sur place »** : la position du bien posée **avant** les photos ; la photo réduite **garde ses étiquettes GPS** ; `mismatch` / `absent` expliqués, jamais présentés comme un refus.
 - [ ] **Photos** : envoyées une à une ; les adresses signées jamais gardées plus d'une heure ; l'ordre lu dans le tableau, pas dans `order`.
-- [ ] **Annonces** : `price_period` omis ; le montant formaté avec monnaie et périodicité avant validation ; `title` ≤ 140 octets et `pitch` ≤ 2 000 octets tenus côté application ; aucun bouton « publier » ; `review_note` en tête du brouillon ; `note` jamais envoyé.
-- [ ] **Listes** : `items: null` traité comme `[]` ; la fin de la liste des biens = `next_cursor` **absent**, celle des annonces = `next_cursor` **vide**.
+- [ ] **Annonces** : `price_period` omis ; le montant formaté avec monnaie et périodicité avant validation ; `title` ≤ 140 caractères et `pitch` ≤ 2 000 caractères tenus côté application ; aucun bouton « publier » ; `review_note` en tête du brouillon ; `note` jamais envoyé.
+- [ ] **Listes** : la fin d'une liste — biens comme annonces — = `next_cursor` **absent** ; `items` vaut `[]`, jamais `null`.
+- [ ] 🆕 **Biens** : la ville obligatoire à la saisie (`address_city_required`).
 - [ ] **Clôture / pause** : la clôture **dit** combien de visiteurs seront prévenus (le serveur annule) ; la pause **propose** d'annuler les visites à venir (le serveur n'y touche pas).
 - [ ] 🆕 **Créneaux** : « retirer » masqué sur un créneau commencé.
 - [ ] **Visites** : les demandes à trancher en tête ; l'heure affichée dans le fuseau du pays ; « Confirmer » dit qu'il donne le téléphone de la fiche (et l'adresse, pour un particulier) ; la présence constatée **avant** de retirer un créneau passé ; le contact du chercheur jamais gardé au-delà de la visite.
@@ -1952,6 +1955,7 @@ côté application.
 | `property_type_unknown` | 422 | Ce type de bien n'existe pas au catalogue. Les types acceptés sont indiqués dans le détail du refus. |
 | `country_required` | 422 | Un bien est toujours rattaché à un pays, et celui-ci n'en a pas. (ne devrait jamais sortir d'une route) |
 | `address_invalid` | 422 | Cette adresse n'a pas de coordonnées utilisables : vérifiez la latitude et la longitude. |
+| `address_city_required` 🆕 | 422 | Le bien a besoin de sa ville : c'est elle que les chercheurs tapent |
 | `address_outside_country` | 422 | Ces coordonnées tombent dans un autre pays que celui de votre compte. |
 | `area_required` | 422 | Ce type de bien doit porter au moins une surface, et elle doit être nommée. |
 | `area_source_required` | 422 | Chaque surface doit dire d'où vient son chiffre : déclarée, mesurée ou relevée par un géomètre. Une surface sans provenance ne peut pas être affichée. |
@@ -2008,6 +2012,19 @@ côté application.
 ---
 
 ## 15. Journal
+
+### 4.128.0 — 10 novembre 2026
+
+🔧 **LE DÉTACHÉ N'EST PLUS PRÉVENU** (§5.3, §10) : les visites et les messages des
+annonces d'un collaborateur détaché vont au **porteur** de la fiche.
+
+🔧 **LA VILLE EST OBLIGATOIRE** (§6.7) : `422 address_city_required`.
+
+🔧 **UNE SEULE PAGINATION** (§8.4) : les annonces comme les biens — 20 par défaut,
+100 au plus, `next_cursor` **absent** en fin (il valait `""`).
+
+🔧 Deux restes de la 4.121.0 corrigés : `items` n'est jamais `null` (§8.4), et les
+bornes du titre et du texte se comptent en **caractères** (§13).
 
 ### 4.127.0 — 10 novembre 2026
 
