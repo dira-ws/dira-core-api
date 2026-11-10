@@ -1,6 +1,6 @@
 # IMMOBILIER — ANNONCEUR (agence ou particulier) — contrat d'API
 
-> **Version 4.123.0** · 10 novembre 2026
+> **Version 4.124.0** · 10 novembre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Immobilier : `https://api-staging.dira.llc/api/v1/immo`
 
 ---
@@ -466,29 +466,34 @@ PATCH /immo/publishers/me
 ```
 
 - **Champ absent = inchangé.** `kind` ne s'envoie pas (`422`, `unknown_field`).
-- ⚠️ **`"name": ""` EST ACCEPTÉ ET EFFACE LE NOM** : le serveur ne vérifie la
-  longueur que d'un nom non vide. Refusez la case vide côté application.
+- 🆕 **`name` : 2 à 160 caractères, espaces retirés** (v4.124.0) — `"name": ""`
+  est **refusé** (`422 validation_failed`, `fields: ["name"]`, `reason`
+  `"0 — 2…160"`). Il effaçait le nom de l'agence jusqu'au 10 novembre.
 - ⚠️ **`sites` REMPLACE, IL NE FUSIONNE PAS.** Reposez **toutes** les
   implantations, **avec leur `id`** : un `id` conservé garde les collaborateurs
   qui y sont rattachés ; un site renvoyé sans `id` en reçoit un **nouveau**.
   50 implantations au plus. Un site a `id`, `name`, et `address` et `phone`
   facultatifs (absents quand vides).
-- ⚠️ **N'INVENTEZ JAMAIS UN `id` DE SITE.** Le serveur le range tel quel, mais
-  le rattachement d'un collaborateur n'accepte qu'un identifiant de 24
-  caractères hexadécimaux : un site nommé `"kara"` par l'application ne pourra
-  jamais recevoir personne.
-- ⚠️ **RETIRER UN SITE NE DÉTACHE PERSONNE** : ses collaborateurs gardent un
-  `site_id` qui ne désigne plus rien. Réaffectez-les avant (section 5.3).
-- ⚠️ **`PATCH {}` RÉPOND `200` ET NE CHANGE RIEN**, alors que les biens et les
-  annonces refusent un corps vide (`422 nothing_to_update`). N'affichez pas
-  « enregistré » sans avoir rien envoyé.
+- 🆕 ⚠️ **UN `id` DE SITE EST CELUI D'UN SITE DE LA FICHE, OU RIEN** (v4.124.0).
+  Un identifiant inventé (`"kara"`) ou répété est **refusé** :
+  `422 unknown_site`, `fields: ["sites"]`, `reason` = l'identifiant en cause.
+  Il était rangé tel quel, et le site ne pouvait plus jamais recevoir personne.
+- 🆕 ⚠️ **RETIRER UN SITE OÙ TRAVAILLENT ENCORE DES COLLABORATEURS EST
+  REFUSÉ** : `409 site_has_members`, `reason` = les identifiants des sites en
+  cause. Ils restaient rattachés à un site qui n'existait plus. Réaffectez-les
+  d'abord (section 5.3), puis retirez le site.
+- 🆕 **`PATCH {}` EST REFUSÉ** : `422 nothing_to_update`, comme pour les biens et
+  les annonces (il répondait `200` sans rien changer).
 
 | Refus | Code |
 |---|---|
 | Un collaborateur tente de modifier | `403 not_the_agency_owner` |
 | Un particulier envoie `sites` | `422 members_need_an_agency` |
+| Un `id` de site inventé ou répété | `422 unknown_site` (`reason` = l'identifiant) |
+| Un site retiré porte encore des collaborateurs | `409 site_has_members` (`reason` = les sites) |
+| Corps vide | `422 nothing_to_update` |
 | Pas de fiche | `404 publisher_not_found` |
-| Valeur invalide | `422 validation_failed` |
+| Valeur invalide (dont un nom de moins de 2 caractères) | `422 validation_failed` |
 
 ---
 
@@ -553,22 +558,23 @@ POST /immo/publishers/me/members
   quelqu'un qui change de nom au socle garde l'ancien ici. Ils sont absents
   quand le socle n'en avait pas ; `site_id` est absent sans implantation.
 
-> ⚠️ **RATTACHER PAR `user_id` NE VÉRIFIE NI LE RÔLE NI LE PAYS DU COMPTE**
-> (constaté dans le code au 10 novembre 2026). Un compte client rattaché ainsi
-> ne pourra **jamais** ouvrir cette application — `403 wrong_app` à sa première
-> connexion — et restera pourtant compté dans l'équipe. La recherche par
-> téléphone, elle, filtre les deux. C'est une raison de plus de n'exposer que
-> le téléphone.
+> 🆕 **PAR `user_id` COMME PAR TÉLÉPHONE, LE COMPTE DOIT ÊTRE UN ANNONCEUR DU
+> PAYS DE L'AGENCE** (v4.124.0). Un compte client, ou d'un autre pays, rend
+> `404 account_not_found` avec `fields` = la case remplie (`["user_id"]` ou
+> `["phone"]`) — **le même refus que « personne »**, exprès : dire « ce compte
+> existe, mais au Sénégal » renseignerait sur un compte qui n'est pas le vôtre.
+> Jusqu'au 10 novembre, l'identifiant laissait passer un compte client, qui ne
+> pouvait ensuite jamais ouvrir cette application.
 
 | Refus | Code | Ce que l'écran fait |
 |---|---|---|
 | Ni `phone` ni `user_id` | `422 validation_failed`, `fields: ["user_id", "phone"]` | souligner le téléphone |
 | Aucun ou plusieurs comptes pour ce numéro | `404 account_not_found` (`reason` `"0"` / `"2+"`) | « vérifiez le numéro complet ; la personne doit d'abord s'inscrire dans l'application Dira Immo Pro » |
 | Identifiant inconnu (par `user_id`) | `404 user_not_found` (refus du socle) | idem |
+| 🆕 Le compte n'est pas un annonceur, ou pas de ce pays | `404 account_not_found` (`fields` = la case remplie) | idem |
 | Vous vous rattachez vous-même | `422 cannot_attach_yourself` | afficher le `message` |
 | La personne a déjà **sa propre fiche** | `409 publisher_exists` | « ce compte publie déjà pour lui-même : il ne peut pas rejoindre une agence » |
-| La personne est **déjà collaboratrice** (ici ou ailleurs) | `409 publisher_is_member` | ⚠️ la phrase du serveur parle d'« ouvrir sa propre fiche » : **écrivez la vôtre** — « ce compte travaille déjà pour une agence » |
-| Rattachement simultané (deux requêtes à la fois) | `409 member_already_attached` | relire l'équipe |
+| La personne est **déjà collaboratrice** (ici ou ailleurs), ou rattachement simultané | 🆕 `409 member_already_attached` (« Ce compte appartient déjà à un annonceur ») | afficher le `message` ; relire l'équipe. ⚠️ C'était `publisher_is_member`, dont la phrase parlait d'« ouvrir sa propre fiche » |
 | Implantation inconnue | `422 unknown_site` | proposer la liste des sites |
 | Vous êtes collaborateur, pas porteur | `403 not_the_agency_owner` | masquer le bouton |
 | Vous êtes un particulier | `422 members_need_an_agency` | masquer le bouton ; dire que seule une agence a une équipe |
@@ -588,7 +594,7 @@ DELETE /immo/publishers/me/members/{id}                                         
   `items` vaut `[]` pour une agence sans équipe et pour un particulier.
 - `PATCH` : `role` change le rang **immédiatement** (un `agent` passé
   `manager` voit tout à la requête suivante). `"site_id": ""` retire
-  l'implantation. ⚠️ **`PATCH {}` rend `200` sans rien changer.**
+  l'implantation. 🆕 **`PATCH {}` est refusé** (`422 nothing_to_update`).
 - **Porteur seul** pour `PATCH` et `DELETE` (`403 not_the_agency_owner`).
   Collaborateur introuvable ou d'une autre agence : `404 member_not_found`.
 
@@ -750,13 +756,21 @@ Une surface :
 | `measured_photogrammetry` | `measured` | oui | oui (par drone) |
 | `gps_polygon` (contour marché) | `measured` | ⚠️ non — le GPS dérive à l'intérieur | oui |
 
-⚠️⚠️ **LE SERVEUR CROIT LA PROVENANCE QU'ON LUI DÉCLARE.** Rien ne vérifie
-qu'une surface dite `measured_lidar` ou `surveyed` l'a été. Cette application
-**saisit à la main** : **ne proposez que `declared`**. `surveyed` seulement si la
-personne a un plan de géomètre à joindre ; les `measured_*` et `gps_polygon`
-sont réservés à une mesure réellement faite par un capteur — l'application de
-capture, à venir (section 12). Une étiquette « mesuré » posée sur un chiffre
-tapé est exactement le mensonge que ce champ existe pour empêcher.
+🆕 ⚠️⚠️ **UNE SURFACE « MESURÉE » NE SE SAISIT PAS** (v4.124.0). Les `measured_*`
+et `gps_polygon` sont réservés à une mesure réellement faite par un capteur —
+l'application de capture, à venir (section 12). Posés par cette application, ils
+sont **refusés** : `422 area_source_reserved`, `fields: ["areas"]`, `reason`
+`"measured_lidar / living"`. Une étiquette « mesuré » posée sur un chiffre tapé
+est exactement le mensonge que ce champ existe pour empêcher — et le serveur la
+croyait jusqu'au 10 novembre.
+
+- **Proposez `declared`** ; `surveyed` seulement si la personne a un plan de
+  géomètre à joindre (le serveur l'accepte : rien ne le vérifie encore).
+- ⚠️ **UNE MESURE DÉJÀ ÉCRITE, RENVOYÉE TELLE QUELLE, PASSE** : reposer les
+  surfaces lues pour corriger le quartier ne fait rien refuser. C'est une
+  mesure **nouvelle ou modifiée** (chiffre, précision, provenance) qui est
+  refusée — une mesure qu'on corrige à la main redevient une saisie :
+  renvoyez-la en `declared`.
 
 **`source_family`** est **servie et jamais lue** : elle se calcule depuis
 `source`. L'application qui repose ce qu'elle a lu peut la renvoyer — elle est
@@ -1086,7 +1100,7 @@ vous l'envoyez, elle doit être celle du genre (`422 price_period_not_for_kind`,
 | `price` | entier, plus petite unité de la monnaie du pays | **obligatoire**, de 1 à 100 000 000 000 (`422 price_required` / `price_out_of_range`) |
 | `currency` | la monnaie | ⚠️ **posée par le serveur** depuis le pays — ne s'envoie pas |
 | `charges` | charges **mensuelles**, même unité | ⚠️ **location longue durée seulement** (`422 charges_not_for_kind`) ; 0 = aucune |
-| `deposit_months` | caution, **en mois de loyer** | ⚠️ **location longue durée seulement** (`422 deposit_not_for_kind`) ; 0 à 24 (au-delà : `422 price_out_of_range`, `fields: ["deposit_months"]`) |
+| `deposit_months` | caution, **en mois de loyer** | ⚠️ **location longue durée seulement** (`422 deposit_not_for_kind`) ; 0 à 24 (au-delà : 🆕 `422 deposit_out_of_range`, `fields: ["deposit_months"]`, `reason` `"36 — 0…24"`) |
 | `negotiable` | prix négociable | facultatif ; `null` = « pas dit », qui n'est pas « non » |
 | `available_from` | disponible à partir du | facultatif, **date locale** `YYYY-MM-DD` — jamais un horodatage (stocké en UTC, un jour glisserait) |
 
@@ -1163,14 +1177,14 @@ pas** : le serveur les pose (`422 validation_failed`, `unknown_field`, sinon).
 | Refus | Code |
 |---|---|
 | `property_id`, `kind` ou `title` manquant ; `property_id` mal formé | `422 validation_failed` (`fields`) |
-| Bien introuvable (ou d'un autre pays) | `404 property_not_found` |
-| ⚠️ Bien d'une **autre fiche** | `403 listing_not_yours` (`reason: "property"`) — la phrase parle d'« annonce » : écrivez « ce bien n'est pas à vous » |
+| Bien introuvable, d'un autre pays, ou 🆕 d'une **autre fiche** | `404 property_not_found` — ⚠️ c'était `403 listing_not_yours` pour un bien d'une autre agence, ce qui **confirmait** qu'il existait (v4.124.0) |
 | Bien archivé | `409 property_archived` |
 | Genre incompatible avec le type du bien | `422 listing_kind_not_for_property` (`reason: "sale / land"`) |
 | Genre inconnu | `422 listing_kind_unknown` |
 | Périodicité contraire au genre | `422 price_period_not_for_kind` |
 | Prix absent ou nul / hors bornes | `422 price_required` / `422 price_out_of_range` |
 | Charges ou caution hors location longue durée | `422 charges_not_for_kind` / `422 deposit_not_for_kind` |
+| 🆕 Caution au-delà de 24 mois | `422 deposit_out_of_range` |
 | `available_from` qui n'est pas `YYYY-MM-DD` | `422 validation_failed`, `fields: ["available_from"]` |
 
 ### 8.4 Lister — `GET /immo/publishers/me/listings`
@@ -1263,7 +1277,8 @@ chercheurs (ou dont une photo a déjà servi chez un autre annonceur) peut être
 **retirée** après examen par un humain — clôturée, pas mise en pause, parce
 qu'une pause se reprend seule. Affichez-la comme « retirée par l'équipe Dira »
 avec sa `review_note`. ⚠️ **Vous ne pouvez pas l'envoyer** vous-même :
-`403 listing_not_yours` (`reason: "moderated"`). Republier le bien, c'est une
+🆕 `403 listing_moderated_by_staff` (« Seule l'équipe Dira retire une annonce
+pour modération »). Republier le bien, c'est une
 annonce **neuve**, qui repasse en relecture.
 
 ⚠️ **UNE PHOTO DÉJÀ PUBLIÉE PAR UN AUTRE ANNONCEUR EST MARQUÉE** pour l'équipe
@@ -1274,7 +1289,7 @@ biens vous-même.
 
 | Refus | Code | Ce que l'écran fait |
 |---|---|---|
-| ⚠️ L'annonceur tente `in_review` → `published` | `403 listing_not_yours` (`reason: "review"`) | ⚠️ la phrase dit « n'est pas la vôtre » : **ne la montrez pas** ; écrivez « la publication est faite par l'équipe Dira après relecture » |
+| ⚠️ L'annonceur tente `in_review` → `published` | 🆕 `403 listing_published_by_staff` | afficher le `message` : « La publication est faite par l'équipe Dira, après relecture » |
 | Passage non permis | `409 listing_status_transition` | `reason` liste les passages ouverts (`"draft → published ; possible : in_review"`) : proposez-les |
 | Annonce close | `409 listing_closed` | rien : proposer une annonce neuve sur le même bien |
 | `status` manquant | `422 validation_failed` | bug de l'application |
@@ -1834,7 +1849,7 @@ côté application.
 | **Fiche et équipe** | | |
 | `publisher_not_found` | 404 | Annonceur introuvable |
 | `publisher_exists` | 409 | Ce compte a déjà une fiche d'annonceur |
-| `publisher_is_member` | 409 | Ce compte appartient à une agence : il ne peut pas ouvrir sa propre fiche |
+| `publisher_is_member` | 409 | Ce compte appartient à une agence : il ne peut pas ouvrir sa propre fiche (⚠️ à la **création** seulement ; au rattachement : `member_already_attached`) |
 | `members_need_an_agency` | 422 | Seule une agence a des collaborateurs |
 | `not_the_agency_owner` | 403 | Seul le compte qui porte la fiche de l'agence gère ses collaborateurs |
 | `member_already_attached` | 409 | Ce compte appartient déjà à un annonceur |
@@ -1843,6 +1858,7 @@ côté application.
 | `account_not_found` | 404 | Aucun compte de ce pays ne correspond |
 | `user_not_found` | 404 | (refus du socle, rattachement par `user_id`) |
 | `unknown_site` | 422 | Cette agence n'a pas cette implantation |
+| `site_has_members` 🆕 | 409 | Des collaborateurs travaillent encore sur ce site : rattachez-les à un autre site avant de le retirer |
 | `core_unavailable` | 503 | Le socle de la plateforme est injoignable |
 | **Biens** | | |
 | `not_a_publisher` | 403 | Ce compte n'a pas de profil d'annonceur. |
@@ -1878,12 +1894,16 @@ côté application.
 | `media_too_small` | 422 | Cette photo est trop petite : 480 pixels au moins sur le petit côté |
 | **Annonces** | | |
 | `listing_not_found` | 404 | Annonce introuvable |
-| `listing_not_yours` | 403 | Cette annonce n'est pas la vôtre (⚠️ aussi pour un bien d'une autre fiche, et pour une auto-publication : écrivez votre phrase) |
+| ~~`listing_not_yours`~~ | — | 🆕 v4.124.0 — **n'est plus émis** : un bien d'une autre fiche rend `property_not_found`, l'auto-publication `listing_published_by_staff`, le motif `moderated` `listing_moderated_by_staff` |
+| `listing_published_by_staff` 🆕 | 403 | La publication est faite par l'équipe Dira, après relecture |
+| `listing_moderated_by_staff` 🆕 | 403 | Seule l'équipe Dira retire une annonce pour modération |
+| `area_source_reserved` 🆕 | 422 | Une surface « mesurée » vient d'un capteur : saisie à la main, elle se déclare |
+| `deposit_out_of_range` 🆕 | 422 | La caution se compte en mois de loyer, de 0 à 24 |
 | `listing_kind_unknown` | 422 | Ce type d'offre n'existe pas |
 | `listing_kind_not_for_property` | 422 | Ce type d'offre ne va pas avec ce type de bien |
 | `price_period_not_for_kind` | 422 | Cette périodicité ne va pas avec ce type d'offre : un loyer se dit au mois, une nuitée à la nuit, une vente au total |
 | `price_required` | 422 | Une offre a besoin d'un prix |
-| `price_out_of_range` | 422 | Ce montant est hors des bornes acceptées (⚠️ aussi pour `deposit_months` > 24 : dites « 24 mois au plus ») |
+| `price_out_of_range` | 422 | Ce montant est hors des bornes acceptées |
 | `charges_not_for_kind` | 422 | Seule une location longue durée porte des charges mensuelles |
 | `deposit_not_for_kind` | 422 | Seule une location longue durée porte une caution |
 | `listing_status_transition` | 409 | Cette annonce ne peut pas aller là depuis son état actuel |
@@ -1902,6 +1922,26 @@ côté application.
 ---
 
 ## 15. Journal
+
+### 4.124.0 — 10 novembre 2026
+
+🔧 **SEPT REFUS QUI DISENT ENFIN LA BONNE CHOSE** (dira-immo-api#72, second lot) :
+
+- **Rattacher** (§5.2) : par `user_id` comme par téléphone, le compte doit être un
+  **annonceur du pays de l'agence** — sinon `404 account_not_found`, le même refus
+  que « personne ». Un collaborateur déjà pris rend `409 member_already_attached`.
+- **La fiche** (§4.3) : `name` vide refusé (il effaçait le nom) ; un `id` de site
+  inventé ou répété refusé (`422 unknown_site`) ; un site retiré sous ses
+  collaborateurs refusé (`409 site_has_members`) ; `PATCH {}` refusé
+  (`422 nothing_to_update`), ici et sur un collaborateur (§5.3).
+- **Les surfaces** (§6.4) : `measured_*` et `gps_polygon` saisis à la main sont
+  refusés (`422 area_source_reserved`) — une mesure déjà écrite, renvoyée telle
+  quelle, passe.
+- **Les annonces** (§8) : le bien d'une autre agence est `404 property_not_found`
+  (le `403` confirmait qu'il existait) ; publier depuis la relecture rend
+  `403 listing_published_by_staff`, le motif `moderated` `403
+  listing_moderated_by_staff` ; une caution au-delà de 24 mois
+  `422 deposit_out_of_range`. `listing_not_yours` n'est plus émis.
 
 ### 4.123.0 — 10 novembre 2026
 

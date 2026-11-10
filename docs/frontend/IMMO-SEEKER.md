@@ -1,6 +1,6 @@
 # IMMOBILIER — CHERCHEUR (louer, acheter) — contrat d'API
 
-> **Version 4.123.0** · 10 novembre 2026
+> **Version 4.124.0** · 10 novembre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Immobilier : `https://api-staging.dira.llc/api/v1/immo`
 > Site public en service : `https://immo-staging.dira.llc`
 
