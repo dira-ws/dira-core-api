@@ -418,6 +418,11 @@ const (
 	// période suffisent à reconnaître de quoi on parle ; le motif d'une retenue
 	// sur un écran verrouillé se lit par-dessus l'épaule.
 	KeyPayrollPaid = "payroll_paid"
+	// L'IMMOBILIER (`dira-immo-api`) — une recherche gardée a de nouvelles
+	// annonces. UNE par recherche et par passage (toutes les 30 minutes au
+	// plus), quel que soit le nombre d'annonces : « 3 nouvelles », pas trois
+	// messages. Le titre de l'annonce est public — il est déjà sur le site.
+	KeyImmoSavedSearchMatch = "immo_saved_search_match"
 )
 
 // defaults sont les gabarits COMPILÉS, servis tant que la base n'en porte pas.
@@ -1195,6 +1200,15 @@ var defaults = map[string]Template{
 			LocaleEN: {Title: "Pay sent", Body: "Your pay for [period] has been sent: [amount]."},
 		},
 	},
+	KeyImmoSavedSearchMatch: {
+		Key:         KeyImmoSavedSearchMatch,
+		Description: "Immobilier — une recherche sauvegardée a de nouvelles annonces (une alerte par recherche et par passage).",
+		Enabled:     true,
+		Locales: map[string]Text{
+			LocaleFR: {Title: "Du nouveau pour « [name] »", Body: "[title] vient d'être publiée. Nouvelles annonces : [count]."},
+			LocaleEN: {Title: "New for “[name]”", Body: "[title] was just listed. New listings: [count]."},
+		},
+	},
 }
 
 // provided déclare, par clé, les variables que la PLATEFORME sait remplir.
@@ -1329,6 +1343,9 @@ var provided = map[string][]string{
 	KeySupportReply: {"country"},
 	// La période et le NET versé — rien du détail : voir `KeyPayrollPaid`.
 	KeyPayrollPaid: {"period", "amount"},
+	// Le nom donné à la recherche, le titre de la plus récente, le nombre
+	// d'annonces nouvelles, le pays de la recherche.
+	KeyImmoSavedSearchMatch: {"name", "title", "count", "country"},
 }
 
 // Provided rend les variables que la plateforme remplit pour une clé.
