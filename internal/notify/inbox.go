@@ -109,6 +109,12 @@ func categoryOf(key string) string {
 		// doit pas cesser d'apprendre qu'il a été payé. La ranger dans les
 		// promotions aurait fait disparaître l'annonce la plus attendue du mois.
 		return CategorySupport
+	case KeyImmoSavedSearchMatch:
+		// ⚠️ COUPABLE, ET C'EST VOULU : c'est une alerte qu'on a DEMANDÉE, pas
+		// une réponse qu'on attend. Rangée avec les mises à jour (et non dans
+		// les promotions, qu'on coupe d'un geste) ; chaque recherche s'éteint
+		// aussi seule, côté immobilier.
+		return CategoryOrderUpdates
 	case KeyMerchantNewOrder:
 		// Rangée avec les mises à jour de commande : c'est ce que c'est pour
 		// le marchand, et lui donner une catégorie à part lui offrirait un
