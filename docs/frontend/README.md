@@ -1,6 +1,6 @@
 # Specs frontend — par rôle
 
-> **Version 4.120.0** · 5 novembre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics`
+> **Version 4.121.0** · 10 novembre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics` + `dira-immo-api`
 
 **Cinq** documents, un par application. Chacun est **autonome** : tout ce qu'un frontend doit savoir pour son rôle, sans avoir à ouvrir les vingt specs de modules.
 
@@ -11,6 +11,8 @@
 | [`FOOD-DELIVERY.md`](FOOD-DELIVERY.md) | livraison | **livreur** — véhicules, appel de course, collectes, portefeuille, matériel |
 | [`VTC-CLIENT.md`](VTC-CLIENT.md) | courses | client — devis, course, suivi, conversation |
 | [`VTC-DRIVER.md`](VTC-DRIVER.md) | courses | **chauffeur** — véhicules, appel de 30 s, course, **dette**, matériel |
+| [`IMMO-SEEKER.md`](IMMO-SEEKER.md) | immobilier | **chercheur** — recherche, annonce, photos, favoris, alertes, visites |
+| [`IMMO-PUBLISHER.md`](IMMO-PUBLISHER.md) | immobilier | **annonceur** — fiche, biens, photos, annonces, créneaux et visites |
 
 > ⚠️ **Le nom du fichier dit la VERTICALE.** « Livreur » et « chauffeur » se
 > traduisent tous les deux par *driver* : un document nommé `DRIVER.md` à côté
@@ -88,6 +90,23 @@ quelqu'un), lire le grand livre d'un chauffeur, lire ses tickets de support.
 
 **Ce ne sont pas des manques à combler.** Si l'un de ces champs apparaît un jour
 dans une réponse, ne l'affichez pas — signalez-le.
+
+### 🆕 L'IMMOBILIER — [`IMMO-SEEKER.md`](IMMO-SEEKER.md) et [`IMMO-PUBLISHER.md`](IMMO-PUBLISHER.md) (v4.121.0)
+
+**La quatrième verticale a ses deux contrats** : le **chercheur** (qui loue ou
+achète) et l'**annonceur** (agence ou particulier qui publie). Une base d'URL de
+plus, servie par `dira-immo-api` : `…/api/v1/immo/…` — le jeton, l'identité et
+la boîte de notifications restent ceux du socle.
+
+⚠️ **TROIS RÈGLES DE CONFIANCE TIENNENT LES DEUX DOCUMENTS**, et leur §0 les
+pose avant toute route : le **téléphone** d'un annonceur (et celui du
+chercheur) n'apparaît qu'une fois une **visite confirmée** ; l'adresse d'un
+**particulier** est un **cercle de 300 m** jusque-là ; une annonce **non
+vérifiée le dit**. Ce ne sont pas des manques à combler.
+
+⚠️ **Toutes les routes de l'immobilier y sont écrites AVEC leur préfixe**
+(`GET /immo/listings`) : c'est ce qui permet à `dira-immo-api` de vérifier,
+depuis chez lui, que chaque route citée est servie avec le bon verbe.
 
 ## ⚠️ v4.0.0 — UN vocabulaire d'état pour toute la plateforme
 
@@ -355,6 +374,14 @@ Chaque document porte la même version en en-tête, et son propre journal des ch
 - [ ] ⚠️ **`TRACKING_JWT_SECRET` renseigné dans chaque environnement déployé.** Vide, l'authentification du service de suivi est **désactivée** : n'importe qui connaissant un `delivery_id` suit la course. Le secret doit valoir **exactement** le `JWT_SECRET` de `dira-food-api`.
 
 ## Journal
+
+### 4.121.0 — 10 novembre 2026
+
+🟢 **L'IMMOBILIER** — deux contrats nouveaux : `IMMO-SEEKER.md` (recherche, annonce,
+photos, comparatif, favoris, recherches gardées et alertes, visites) et
+`IMMO-PUBLISHER.md` (fiche annonceur et collaborateurs, biens, photos, annonces,
+créneaux et visites). Nouvelle base d'URL `…/api/v1/immo/`. Rien ne change pour les
+applications existantes.
 
 ### 4.120.0 — 5 novembre 2026
 
