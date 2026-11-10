@@ -1,6 +1,6 @@
 # IMMOBILIER — ANNONCEUR (agence ou particulier) — contrat d'API
 
-> **Version 4.124.0** · 10 novembre 2026
+> **Version 4.125.0** · 10 novembre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Immobilier : `https://api-staging.dira.llc/api/v1/immo`
 
 ---
@@ -467,8 +467,10 @@ PATCH /immo/publishers/me
 
 - **Champ absent = inchangé.** `kind` ne s'envoie pas (`422`, `unknown_field`).
 - 🆕 **`name` : 2 à 160 caractères, espaces retirés** (v4.124.0) — `"name": ""`
-  est **refusé** (`422 validation_failed`, `fields: ["name"]`, `reason`
-  `"0 — 2…160"`). Il effaçait le nom de l'agence jusqu'au 10 novembre.
+  est **refusé** (`422 validation_failed`, `fields: ["name"]`) — un nom fait
+  d'espaces aussi, avec `reason` `"0 — 2…160"`. Il effaçait le nom de l'agence
+  jusqu'au 10 novembre. (🔧 4.125.0 : la 4.124.0 promettait `reason` sur le nom
+  vide ; il n'y est que pour un nom fait d'espaces.)
 - ⚠️ **`sites` REMPLACE, IL NE FUSIONNE PAS.** Reposez **toutes** les
   implantations, **avec leur `id`** : un `id` conservé garde les collaborateurs
   qui y sont rattachés ; un site renvoyé sans `id` en reçoit un **nouveau**.
@@ -1272,6 +1274,19 @@ les passages** :
 décoratifs : c'est de là que se tire le délai de location par quartier. Sans
 motif, ou un motif hors liste : `422 close_reason_unknown`.
 
+🆕 ⚠️⚠️ **CLÔTURER FERME LES VISITES À VENIR** (v4.125.0) : les créneaux **pas
+encore commencés** sont retirés, leurs visites (demandées ou confirmées) passent
+`cancelled` avec **`closed_by: "listing"`**, et **chaque chercheur est prévenu**
+(`immo_visit_cancelled`). Louée le matin, une annonce gardait jusqu'ici sa visite
+confirmée de l'après-midi, et le chercheur traversait la ville pour rien. Dites
+dans la confirmation combien de visiteurs seront prévenus. Les créneaux **déjà
+commencés** restent : leurs visites se constatent (9.6).
+
+⚠️ **UNE PAUSE N'Y TOUCHE PAS** : elle ferme les nouvelles demandes (l'annonce
+n'est plus en ligne), pas les rendez-vous déjà pris. Si l'annonceur veut les
+annuler, c'est créneau par créneau (9.3) ou visite par visite (9.5) — proposez-le
+dans la confirmation de la pause.
+
 ⚠️ **`moderated` est le motif de l'ÉQUIPE** : une annonce signalée par des
 chercheurs (ou dont une photo a déjà servi chez un autre annonceur) peut être
 **retirée** après examen par un humain — clôturée, pas mise en pause, parce
@@ -1419,9 +1434,11 @@ liste des visites (9.4).
   confirmées (`status: cancelled`, `closed_by: "slot"`), et **chaque chercheur
   est prévenu** (`immo_visit_cancelled`). Dites-le dans la confirmation, avec le
   nombre (`booked`) : « 2 visiteurs seront prévenus ».
-- ⚠️ **LE SERVEUR NE REGARDE PAS L'HEURE** : retirer un créneau déjà commencé
-  annule aussi les visites confirmées dont vous n'avez pas encore constaté la
-  présence. **Constatez d'abord** (9.6).
+- 🆕 ⚠️ **UN CRÉNEAU COMMENCÉ NE SE RETIRE PLUS** (v4.125.0) : à partir de
+  `starts_at`, `409 visit_slot_started`. Le retirer annulait la visite
+  confirmée du chercheur qui était en train de visiter. Ses visites se
+  **constatent** (9.6) ; une demande jamais tranchée expire seule. Masquez
+  « retirer » sur un créneau commencé.
 - Retirer deux fois rend `204` les deux fois.
 - `404 visit_slot_not_found` : créneau inexistant, d'une autre fiche, ou — pour
   un `agent` — d'une annonce d'un collègue.
@@ -1456,7 +1473,7 @@ filtrez dans l'application (à venir / à trancher / passées).
 | `requested` | demandée, **à trancher** par vous | `null` |
 | `confirmed` | vous avez accepté | ⚠️ **rempli** : nom et téléphone du chercheur |
 | `declined` | vous avez refusé | `null` |
-| `cancelled` | annulée — `closed_by` : `seeker` (lui), `host` (vous), `slot` (créneau retiré) | `null` |
+| `cancelled` | annulée — `closed_by` : `seeker` (lui), `host` (vous), `slot` (créneau retiré), 🆕 `listing` (annonce clôturée) | `null` |
 | `expired` | demandée, **jamais tranchée avant l'heure** — close par le serveur | `null` |
 | `attended` | vous avez constaté sa venue | rempli |
 | `no_show` | vous avez constaté son absence | ⚠️ `null` |
@@ -1514,7 +1531,8 @@ filtrez dans l'application (à venir / à trancher / passées).
 - **Depuis `confirmed` seulement** : sinon `409 visit_status_transition`.
 - ⚠️ **Constater `no_show` referme le contact du chercheur** (`seeker`
   redevient `null`). Si vous devez le rappeler, faites-le avant.
-- L'heure du constat n'est pas servie.
+- 🆕 **`presence_at`** : l'heure du constat, servie sur la visite constatée
+  (v4.125.0) — elle était écrite et jamais relue. Absente avant le constat.
 
 | Refus communs aux visites | Code |
 |---|---|
@@ -1815,7 +1833,8 @@ côté application.
 - [ ] **Photos** : envoyées une à une ; les adresses signées jamais gardées plus d'une heure ; l'ordre lu dans le tableau, pas dans `order`.
 - [ ] **Annonces** : `price_period` omis ; le montant formaté avec monnaie et périodicité avant validation ; `title` ≤ 140 octets et `pitch` ≤ 2 000 octets tenus côté application ; aucun bouton « publier » ; `review_note` en tête du brouillon ; `note` jamais envoyé.
 - [ ] **Listes** : `items: null` traité comme `[]` ; la fin de la liste des biens = `next_cursor` **absent**, celle des annonces = `next_cursor` **vide**.
-- [ ] **Clôture / pause** : la confirmation propose d'annuler les visites à venir.
+- [ ] **Clôture / pause** : la clôture **dit** combien de visiteurs seront prévenus (le serveur annule) ; la pause **propose** d'annuler les visites à venir (le serveur n'y touche pas).
+- [ ] 🆕 **Créneaux** : « retirer » masqué sur un créneau commencé.
 - [ ] **Visites** : les demandes à trancher en tête ; l'heure affichée dans le fuseau du pays ; « Confirmer » dit qu'il donne le téléphone de la fiche (et l'adresse, pour un particulier) ; la présence constatée **avant** de retirer un créneau passé ; le contact du chercheur jamais gardé au-delà de la visite.
 - [ ] **Notifications** : appareil déclaré à la connexion, retiré **avant** la déconnexion ; `type: "immo_visit"` ouvre la bonne visite, **relue** avant d'afficher ses boutons.
 - [ ] 🆕 **Téléphone — la porte** relue à chaque retour au premier plan (un détachement n'est pas notifié).
@@ -1917,11 +1936,24 @@ côté application.
 | `visit_too_late` | 409 | Trop tard : la visite a commencé ou va commencer |
 | `visit_status_transition` | 409 | Cette visite ne peut pas aller là depuis son état actuel |
 | `visit_not_started` | 409 | La présence se constate une fois la visite commencée |
+| `visit_slot_started` 🆕 | 409 | Ce créneau a commencé : il ne se retire plus — constatez la présence des visiteurs |
 | `account_unknown` | 401 | Cette session ne désigne aucun compte : reconnectez-vous |
 
 ---
 
 ## 15. Journal
+
+### 4.125.0 — 10 novembre 2026
+
+🟢 **CLÔTURER FERME LES VISITES À VENIR** (§8.6) : créneaux pas encore commencés
+retirés, visites annulées avec `closed_by: "listing"`, chercheurs prévenus. Une
+pause n'y touche pas.
+
+🔧 **UN CRÉNEAU COMMENCÉ NE SE RETIRE PLUS** (§9.3) : `409 visit_slot_started` — il
+annulait la visite en cours. **`presence_at`** est servi (§9.6).
+
+🔧 §4.3 : la 4.124.0 promettait `reason` sur un nom vide ; il n'y est que pour un
+nom fait d'espaces.
 
 ### 4.124.0 — 10 novembre 2026
 

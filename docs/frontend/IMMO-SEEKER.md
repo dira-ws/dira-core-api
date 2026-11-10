@@ -1,6 +1,6 @@
 # IMMOBILIER — CHERCHEUR (louer, acheter) — contrat d'API
 
-> **Version 4.124.0** · 10 novembre 2026
+> **Version 4.125.0** · 10 novembre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Immobilier : `https://api-staging.dira.llc/api/v1/immo`
 > Site public en service : `https://immo-staging.dira.llc`
 
@@ -499,7 +499,7 @@ close rend `409 visit_status_transition`. L'annonceur est prévenu.
 | `requested` | demandée, l'annonceur n'a pas tranché | `null` |
 | `confirmed` | acceptée | **remplis** |
 | `declined` | refusée par l'annonceur | `null` |
-| `cancelled` | annulée — `closed_by` : `seeker`, `host` ou `slot` (créneau retiré) | `null` |
+| `cancelled` | annulée — `closed_by` : `seeker`, `host`, `slot` (créneau retiré) ou 🆕 `listing` (l'annonce est close : louée, vendue, retirée) | `null` |
 | `expired` | jamais tranchée avant l'heure | `null` |
 | `attended` | l'annonceur a constaté votre venue | remplis |
 | `no_show` | l'annonceur a constaté votre absence | `null` |
@@ -508,6 +508,12 @@ close rend `409 visit_status_transition`. L'annonceur est prévenu.
 l'adresse exacte**, et seulement pour `confirmed` / `attended`. Annulée, la
 visite les **referme** : ne les gardez pas sur l'appareil au-delà de la visite.
 `note`, `decided_at` et `closed_by` sont absents quand ils n'ont pas de valeur.
+🆕 `presence_at` (v4.125.0) : l'heure où l'annonceur a constaté votre venue
+(`attended`) ou votre absence (`no_show`) ; absente avant.
+
+⚠️ **`closed_by: "listing"` se dit en clair** (v4.125.0) : « l'annonce n'est plus
+disponible — votre visite est annulée ». Une annonce close annule ses visites à
+venir, et vous en êtes prévenu (`immo_visit_cancelled`).
 
 ---
 
@@ -827,6 +833,11 @@ GET /immo/listings/{ref}
 ---
 
 ## 13. Journal
+
+### 4.125.0 — 10 novembre 2026
+
+🟢 **Une annonce close annule ses visites à venir** : `closed_by: "listing"`, et une
+notification `immo_visit_cancelled` (§9.4). 🟢 `presence_at` est servi.
 
 ### 4.123.0 — 10 novembre 2026
 

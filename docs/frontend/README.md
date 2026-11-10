@@ -1,6 +1,6 @@
 # Specs frontend — par rôle
 
-> **Version 4.124.0** · 10 novembre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics` + `dira-immo-api`
+> **Version 4.125.0** · 10 novembre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics` + `dira-immo-api`
 
 **Cinq** documents, un par application. Chacun est **autonome** : tout ce qu'un frontend doit savoir pour son rôle, sans avoir à ouvrir les vingt specs de modules.
 
@@ -395,6 +395,13 @@ Chaque document porte la même version en en-tête, et son propre journal des ch
 - [ ] ⚠️ **`TRACKING_JWT_SECRET` renseigné dans chaque environnement déployé.** Vide, l'authentification du service de suivi est **désactivée** : n'importe qui connaissant un `delivery_id` suit la course. Le secret doit valoir **exactement** le `JWT_SECRET` de `dira-food-api`.
 
 ## Journal
+
+### 4.125.0 — 10 novembre 2026
+
+🟢 **L'IMMOBILIER — clôturer une annonce ferme ses visites à venir** (`IMMO-PUBLISHER.md`
+§8.6, `IMMO-SEEKER.md` §9.4) : `closed_by: "listing"`, chercheurs prévenus ; une pause
+n'y touche pas. Un créneau commencé ne se retire plus (`409 visit_slot_started`) ;
+`presence_at` est servi.
 
 ### 4.124.0 — 10 novembre 2026
 
