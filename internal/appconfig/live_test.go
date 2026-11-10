@@ -89,3 +89,18 @@ func TestNoLiveSettingStoresNothing(t *testing.T) {
 	require.NoError(t, err)
 	assert.Nil(t, got)
 }
+
+// L'IMMOBILIER S'ÉCRIT, et un pays faux est refusé EN LE NOMMANT : la console
+// affiche `reason`, et « validation échouée » sur une liste de quatorze cases
+// ne dit pas laquelle.
+func TestImmoCountriesAreSavedCleanAndAWrongOneIsNamed(t *testing.T) {
+	repo := &fakeStore{}
+	svc := NewService(repo)
+	require.NoError(t, svc.Save(t.Context(), pkgconf.Registry{Immo: []string{"td", "GA", "GA"}}, "test"))
+	require.NotNil(t, repo.saved)
+	assert.Equal(t, []string{"GA", "TD"}, repo.saved.Immo)
+
+	err := svc.Save(t.Context(), pkgconf.Registry{Immo: []string{"GA", "Gabon"}}, "test")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "Gabon")
+}

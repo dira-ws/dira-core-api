@@ -274,9 +274,11 @@ func TestResolveServesEveryKeyIncludingTheOnesLeftOn(t *testing.T) {
 // l'enfreindre sans le dire aurait laissé croire que les autres fonctions
 // peuvent s'allumer aussi. Le direct est facturé à la seconde et ses langues
 // restent à mesurer : il s'allume par la présence d'un bloc `live`, pays par
-// pays (voir `live.go`). Toute AUTRE fonction qui ferait échouer cette
-// épreuve est un défaut, pas une exception de plus.
-func TestResolveOnANilRegistryOpensEverythingButTheLiveAssistant(t *testing.T) {
+// pays (voir `live.go`). L'immobilier est la SECONDE, nommée de même : il ne
+// coûte rien, mais il n'a d'annonces que dans deux pays, et un onglet vide se
+// lit « Dira ne marche pas ici » (voir `immo.go`). Toute AUTRE fonction qui
+// ferait échouer cette épreuve est un défaut, pas une exception de plus.
+func TestResolveOnANilRegistryOpensEverythingButTheLiveAssistantAndImmo(t *testing.T) {
 	var r *Registry
 	got := r.Resolve("td", "LITE")
 	assert.Equal(t, "lite", got.Edition)
@@ -285,6 +287,10 @@ func TestResolveOnANilRegistryOpensEverythingButTheLiveAssistant(t *testing.T) {
 	for key, on := range got.Features {
 		if key == FeatureAssistantLive {
 			assert.False(t, on, "le direct s'allume, il ne se coupe pas : sans bloc `live`, il est éteint")
+			continue
+		}
+		if key == FeatureImmo {
+			assert.False(t, on, "l'immobilier s'allume pays par pays : sans liste, il est fermé partout")
 			continue
 		}
 		assert.True(t, on, "%s", key)

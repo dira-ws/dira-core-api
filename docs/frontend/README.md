@@ -1,6 +1,6 @@
 # Specs frontend — par rôle
 
-> **Version 4.121.0** · 10 novembre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics` + `dira-immo-api`
+> **Version 4.122.0** · 10 novembre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics` + `dira-immo-api`
 
 **Cinq** documents, un par application. Chacun est **autonome** : tout ce qu'un frontend doit savoir pour son rôle, sans avoir à ouvrir les vingt specs de modules.
 
@@ -11,8 +11,8 @@
 | [`FOOD-DELIVERY.md`](FOOD-DELIVERY.md) | livraison | **livreur** — véhicules, appel de course, collectes, portefeuille, matériel |
 | [`VTC-CLIENT.md`](VTC-CLIENT.md) | courses | client — devis, course, suivi, conversation |
 | [`VTC-DRIVER.md`](VTC-DRIVER.md) | courses | **chauffeur** — véhicules, appel de 30 s, course, **dette**, matériel |
-| [`IMMO-SEEKER.md`](IMMO-SEEKER.md) | immobilier | **chercheur** — recherche, annonce, photos, favoris, alertes, visites |
-| [`IMMO-PUBLISHER.md`](IMMO-PUBLISHER.md) | immobilier | **annonceur** — fiche, biens, photos, annonces, créneaux et visites |
+| [`IMMO-SEEKER.md`](IMMO-SEEKER.md) | immobilier | **chercheur** — recherche, annonce, photos, favoris, alertes, visites ; 🆕 sur téléphone, l'**onglet Logement** de l'application cliente |
+| [`IMMO-PUBLISHER.md`](IMMO-PUBLISHER.md) | immobilier | **annonceur** — fiche, biens, photos, annonces, créneaux et visites ; 🆕 sur téléphone, l'**application des agents** (`immo_pro`) |
 
 > ⚠️ **Le nom du fichier dit la VERTICALE.** « Livreur » et « chauffeur » se
 > traduisent tous les deux par *driver* : un document nommé `DRIVER.md` à côté
@@ -107,6 +107,22 @@ vérifiée le dit**. Ce ne sont pas des manques à combler.
 ⚠️ **Toutes les routes de l'immobilier y sont écrites AVEC leur préfixe**
 (`GET /immo/listings`) : c'est ce qui permet à `dira-immo-api` de vérifier,
 depuis chez lui, que chaque route citée est servie avec le bon verbe.
+
+### 🆕 📱 L'IMMOBILIER SUR TÉLÉPHONE — deux applications, pas trois (v4.122.0)
+
+| Qui | Quelle application | Où c'est écrit |
+|---|---|---|
+| le **chercheur** | un **onglet « Logement »** de l'application cliente — même compte `client`, même session, même boîte | `DIRA-CLIENT.md` §10 · `IMMO-SEEKER.md` §10 bis |
+| l'**annonceur** (agence, particulier) | **son application**, `app: "immo_pro"` — un compte `publisher` | `IMMO-PUBLISHER.md` §10 bis |
+
+⚠️⚠️ **L'ONGLET S'ALLUME PAYS PAR PAYS** : `GET /app/config` sert
+`features.immo`, **le second drapeau dont le défaut est `false`** (après
+`assistant_live`). L'immobilier n'a d'annonces que là où des agences publient ;
+un onglet vide dans douze pays se lirait « Dira ne marche pas ici ». L'exploitation
+l'ouvre dans la console (**Réglages → Éditions → Immobilier**).
+
+⚠️ **`share_url`** : l'adresse publique d'une annonce est **composée par le
+serveur**. Aucune des deux applications ne l'écrit en dur.
 
 ## ⚠️ v4.0.0 — UN vocabulaire d'état pour toute la plateforme
 
@@ -374,6 +390,25 @@ Chaque document porte la même version en en-tête, et son propre journal des ch
 - [ ] ⚠️ **`TRACKING_JWT_SECRET` renseigné dans chaque environnement déployé.** Vide, l'authentification du service de suivi est **désactivée** : n'importe qui connaissant un `delivery_id` suit la course. Le secret doit valoir **exactement** le `JWT_SECRET` de `dira-food-api`.
 
 ## Journal
+
+### 4.122.0 — 10 novembre 2026
+
+🟢 **L'IMMOBILIER SUR TÉLÉPHONE** — l'onglet **Logement** de l'application cliente
+(`DIRA-CLIENT.md` §10, `IMMO-SEEKER.md` §10 bis) et l'**application des agents**
+(`IMMO-PUBLISHER.md` §10 bis) : l'ouverture, les notifications routées sur
+`data.type`, les photos sur réseau mobile (et depuis l'appareil photo), la carte et
+son cercle, l'appel réservé à la visite confirmée, le partage, et ce qui ne part
+jamais en file.
+
+🟢 **`GET /app/config` → `features.immo`** : il **s'allume pays par pays**
+(`rules.immo` à la console), et absent il vaut `false` — l'inverse des autres clés,
+comme `assistant_live`.
+
+🟢 **`share_url`** sur `GET /immo/listings/{ref}` : l'adresse publique de l'annonce,
+dans la langue de la requête.
+
+🔧 **`DIRA-CLIENT.md` citait `GET /notifications`, qui n'existe pas** (un `404`) :
+la boîte est `GET /me/notifications`, depuis toujours. Corrigé aux deux endroits.
 
 ### 4.121.0 — 10 novembre 2026
 

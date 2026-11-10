@@ -152,6 +152,12 @@ func (s *Service) Save(ctx context.Context, reg appconfig.Registry, actor string
 		return err
 	}
 	clean.Live = live
+	immo, bad := appconfig.CleanCountries(reg.Immo)
+	if bad != "" {
+		return apperr.Validation("a country is two letters: " + bad).
+			WithMeta(map[string]any{"fields": []string{"immo"}, "reason": bad})
+	}
+	clean.Immo = immo
 	if err := s.repo.Save(ctx, clean, actor); err != nil {
 		return err
 	}

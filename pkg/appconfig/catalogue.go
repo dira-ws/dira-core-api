@@ -54,6 +54,7 @@ const (
 	OwnerVTC       = "vtc"
 	OwnerFood      = "food"
 	OwnerAnalytics = "analytics"
+	OwnerImmo      = "immo"
 )
 
 // Features est le catalogue des fonctions qu'on peut couper.
@@ -81,6 +82,7 @@ var Features = []Feature{
 	{FeatureAssistantSupport, "Joindre l'équipe depuis l'assistant", "Le geste « écrire à l'équipe » disparaît : à couper là où personne ne lit la file du support.", OwnerAnalytics},
 	{FeatureVoiceMessages, "Messages vocaux", "Le bouton micro disparaît : le client écrit.", OwnerAnalytics},
 	{FeatureWallet, "Portefeuille", "Le solde et la recharge disparaissent ; restent les espèces et le mobile money.", OwnerCore},
+	{FeatureImmo, "Immobilier", "L'onglet « Logement » disparaît : plus de recherche, de favoris ni de visites dans l'application.", OwnerImmo},
 }
 
 // Les clés du catalogue.
@@ -106,6 +108,9 @@ const (
 	FeatureAssistantSupport = "assistant_support_request"
 	FeatureVoiceMessages    = "voice_messages"
 	FeatureWallet           = "wallet"
+	// ⚠️ CELUI-LÀ AUSSI S'ALLUME, pays par pays, par `Registry.Immo` — voir
+	// `immo.go`. La règle de catalogue ne fait que le RETIRER d'une édition.
+	FeatureImmo = "immo"
 )
 
 // Known dit si cette clé nomme une fonction du catalogue.

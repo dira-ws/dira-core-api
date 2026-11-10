@@ -1,6 +1,6 @@
 # IMMOBILIER — CHERCHEUR (louer, acheter) — contrat d'API
 
-> **Version 4.121.0** · 10 novembre 2026
+> **Version 4.122.0** · 10 novembre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Immobilier : `https://api-staging.dira.llc/api/v1/immo`
 > Site public en service : `https://immo-staging.dira.llc`
 
@@ -268,7 +268,8 @@ adresse renseignerait un concurrent.
       "thumb_url": "https://api-staging.dira.llc/api/v1/immo/media/GA/6af2e2c115ec33d946d843e1/thumb.jpg",
       "alt": "Pièce de vie", "width": 1500, "height": 1000 }
   ],
-  "completeness": 90
+  "completeness": 90,
+  "share_url": "https://immo-staging.dira.llc/fr/properties/villa-contemporaine-a-la-sabliere-21038f233fbc3debd94bffbd"
 }
 ```
 
@@ -288,6 +289,7 @@ adresse renseignerait un concurrent.
 | `publisher.verified_at` | **toujours présent**, `null` sans badge |
 | `media` | **jamais `null`** ; la première photo est la **couverture** (section 5) |
 | `completeness` | 0 à 100 ; sert au classement, ne l'affichez pas comme une note |
+| `share_url` 🆕 | l'adresse de l'annonce **sur le site public**, dans la langue de la requête — ce qu'on partage. **Servie par cette route seulement**, et **absente** quand le déploiement ne connaît pas son site : pas de bouton « partager », alors. ⚠️ **Ne la fabriquez pas** (section 10 bis.7) |
 
 ---
 
@@ -565,6 +567,179 @@ l'épaule. Ouvrez la visite pour les lire.
 
 ---
 
+## 10 bis. 🆕 📱 L'ONGLET « LOGEMENT » DE L'APPLICATION CLIENTE (v4.122.0)
+
+Sur téléphone, le chercheur **n'a pas d'application à lui** : l'immobilier est
+un **onglet** de l'application cliente Dira — celle des repas et des courses —,
+avec le même compte, la même session et la même boîte de notifications. Cette
+section dit ce qu'un téléphone ajoute aux précédentes ; tout le reste vaut tel
+quel.
+
+### 10 bis.1 ⚠️⚠️ L'onglet n'existe que là où `/app/config` l'ouvre
+
+```
+GET /app/config                    ← socle, SANS jeton, lu à l'ouverture
+→ { "country": "GA", "edition": "full",
+    "features": { …, "immo": true }, … }
+```
+
+- `features.immo` vaut `true` **seulement** dans les pays que l'exploitation a
+  ouverts, un par un. Ailleurs : **pas d'onglet**, pas d'entrée de menu, pas
+  d'écran « bientôt chez vous ».
+- ⚠️⚠️ **CE DRAPEAU S'ALLUME, ET SON DÉFAUT EST `false`.** Presque toutes les
+  fonctions de `/app/config` partent de « disponible » et une règle les retire ;
+  celle-ci non. L'immobilier n'a d'annonces que là où des agences publient, et
+  un onglet vide se lit « Dira ne marche pas ici » — ce qui est faux pour les
+  repas et les courses du même écran. **Une clé `immo` absente** (serveur plus
+  ancien que l'application) se lit donc **`false`**, à l'inverse des autres clés.
+- **Le pays est celui où la personne cherche** : connecté, celui du compte (le
+  jeton l'impose) ; sans compte, celui que vous envoyez dans `X-Dira-Country`.
+  **Relisez `/app/config` à chaque changement de pays** : l'onglet peut
+  apparaître ou disparaître.
+- ⚠️ **C'est un réglage d'AFFICHAGE, pas un verrou.** Les routes `/immo/…` ne
+  le lisent pas : une recherche dans un pays fermé rend simplement une liste
+  vide. C'est l'onglet qui ne doit pas exister.
+
+### 10 bis.2 La même session — rien à rouvrir
+
+- Le jeton de l'application cliente (`app: "client"`) sert **tel quel** sur
+  `…/api/v1/immo/`. Pas de seconde connexion, pas d'« espace immobilier » : une
+  base d'URL de plus (`IMMO_BASE`), c'est tout.
+- **On cherche sans compte.** L'onglet s'ouvre et cherche déconnecté ; la
+  connexion se propose **au geste** qui en a besoin (garder, être prévenu,
+  visiter), puis on **revient sur l'annonce** d'où l'on venait.
+- `401` sur une route `/immo/me/…` : **le même rafraîchissement** que pour les
+  repas et les courses, **un seul à la fois** — le jeton de rafraîchissement
+  tourne, et deux onglets qui rafraîchissent chacun de leur côté ferment la
+  session.
+- `X-Dira-Country` et `Accept-Language` sur **chaque** requête `/immo/…`.
+  `X-Dira-Edition` n'est pas lu par l'immobilier ; l'envoyer ne coûte rien.
+
+### 10 bis.3 Les notifications — le téléphone est déjà déclaré
+
+L'application cliente déclare déjà son téléphone (`POST /me/devices`, avec
+`edition`) : les notifications de l'immobilier arrivent **par le même canal**,
+dans la **même boîte** (`GET /me/notifications`). Rien de plus à déclarer.
+
+⚠️ **ROUTEZ SUR `data.type`, JAMAIS SUR LA CLÉ** — la clé est un gabarit que
+l'exploitation peut renommer :
+
+| `data.type` | Clés | Ouvrir |
+|---|---|---|
+| `immo_visit` | `immo_visit_confirmed` · `immo_visit_declined` · `immo_visit_cancelled` · `immo_visit_reminder` | **la visite** `visit_id` |
+| `immo_saved_search` | `immo_saved_search_match` | **l'annonce** `slug` — avec, à côté, « voir toute la recherche » (`saved_search_id`) |
+
+- ⚠️ **IL N'Y A PAS DE ROUTE POUR UNE SEULE VISITE NI POUR UNE SEULE RECHERCHE
+  GARDÉE.** `GET /immo/me/visits` puis celle dont l'`id` est `visit_id` ;
+  `GET /immo/me/saved-searches` puis celle dont l'`id` est `saved_search_id`,
+  et rejouez sa `query` sur `GET /immo/listings`.
+- ⚠️ **La notification dit qu'il s'est passé quelque chose ; la visite dit
+  quoi.** Relisez-la à l'ouverture : `contact` et `address` n'arrivent que par
+  elle, et seulement confirmée.
+- ⚠️ **Aucune notification ne porte d'adresse ni de téléphone**, et n'en
+  composez pas une locale qui les ajouterait : un écran verrouillé se lit
+  par-dessus l'épaule.
+- Une clé inconnue s'affiche **dans la boîte**, sans rien ouvrir.
+
+### 10 bis.4 Les photos, sur un réseau mobile
+
+- Listes, cartes et carrousels : **`thumb_url`**. Galerie plein écran : `url`.
+- ⚠️ **Indexez le cache d'images par l'adresse STABLE** (celle de la réponse),
+  jamais par l'adresse signée vers laquelle elle redirige : la signée meurt au
+  bout de douze heures, la stable non.
+- **Ne préchargez pas les galeries d'une liste** : vingt annonces de dix photos
+  en grande taille, c'est des dizaines de mégaoctets sur un forfait payé au
+  mégaoctet. Préchargez la **couverture** (`media[0].thumb_url`), le reste à
+  l'ouverture de l'annonce.
+- **Une photo `404` = une annonce close** : emplacement vide, pas d'erreur. Et
+  **purgez du cache** les images d'une annonce que la relecture dit close —
+  l'intérieur d'un logement loué n'a plus rien à faire sur le téléphone d'un
+  inconnu.
+
+### 10 bis.5 La carte
+
+- **Le même fond que le reste de l'application**, et la même règle : le
+  **choix de la personne**, sinon le `basemap` du pays où elle cherche
+  (`maps.basemap` à la connexion et au rafraîchissement, `GET /countries →
+  items[].basemap` sans compte), sinon `dira`. ⚠️ Le serveur ne sert **aucune
+  clé** de carte : celle de Google appartient à l'application.
+- ⚠️⚠️ **UN PARTICULIER EST UN CERCLE, UNE AGENCE EST UNE ÉPINGLE.**
+  `property.geo.approx_m > 0` : dessinez un cercle de ce rayon autour de
+  `geo` — **jamais** d'épingle au centre, même au zoom maximal, et **jamais**
+  de bouton « itinéraire » vers ce point : il conduirait chez un voisin.
+  `approx_m: 0` : la position est exacte.
+- **L'itinéraire n'existe que depuis une visite `confirmed`**, vers
+  `address.lat` / `address.lng` — l'adresse exacte, que la visite seule porte.
+- **« Autour de moi »** : la position du téléphone en `near=lat,lng` (avec
+  `radius_m`, ou `sort=nearest`). Demandez la permission **au geste**, pas au
+  démarrage — et sans elle, la recherche par ville marche.
+- **Ce que l'écran montre** : `bbox=sud,ouest,nord,est` du rectangle visible,
+  relancé quand la carte **s'arrête** de bouger (pas à chaque image du geste).
+
+### 10 bis.6 Garder sans compte, puis se connecter
+
+- Les favoris se gardent **sur l'appareil** tant que la personne n'est pas
+  connectée, puis se portent au compte à la connexion : `PUT
+  /immo/me/favorites/{ref}` **un par un** (idempotent). C'est **une union** :
+  n'effacez rien de ce qu'elle avait gardé.
+- ⚠️ **Les favoris sont rangés par PAYS.** Gardés au Gabon sans compte, ils ne
+  se portent pas sur un compte du Tchad : chacun rend `404 listing_not_found`.
+  **Gardez-les sur l'appareil** au lieu de les jeter — la personne les
+  retrouvera en revenant au Gabon.
+- **Une recherche gardée et une visite exigent le compte** : il n'y a pas de
+  version locale à porter ensuite.
+
+### 10 bis.7 Partager une annonce — `share_url`
+
+```json
+GET /immo/listings/{ref}
+→ { …, "share_url": "https://immo-staging.dira.llc/fr/properties/appartement-2-chambres-a-klemat-dbd36b8d6454b31a3849068a" }
+```
+
+- **L'adresse de l'annonce sur le site public**, composée par le serveur, dans
+  la **langue de la requête** (`Accept-Language` ; une langue que le site ne
+  sert pas donne le français). Passez-la à la **feuille de partage du
+  système** — WhatsApp en tête.
+- ⚠️ **Servie par la fiche seulement** (pas par la recherche), et **absente**
+  quand le déploiement ne connaît pas son site : **pas de bouton**, alors.
+- ⚠️ **NE FABRIQUEZ PAS L'ADRESSE.** L'hôte change d'un environnement à
+  l'autre ; une adresse écrite en dur dans l'application partagerait la
+  préproduction le jour où elle part en production.
+- ⚠️ **Le lien ouvre le SITE, pas l'application** : aucun lien universel
+  (iOS) ni App Link (Android) n'est servi aujourd'hui (§11).
+
+### 10 bis.8 Appeler, y aller
+
+- **Le bouton « appeler » n'existe que sur une visite `confirmed` ou
+  `attended`** dont `contact.phone` est servi : un lien `tel:`. ⚠️ **Jamais dans
+  le carnet de contacts du téléphone**, et rien de gardé sur l'appareil au-delà
+  de la visite — annulée, elle referme le contact.
+- **`mode: "video"`** : aucun lien de visioconférence n'est servi. La visite
+  confirmée donne le contact ; c'est par lui qu'on se joint.
+- **« Ajouter à l'agenda »** est permis, à l'heure **du pays du bien**, avec le
+  titre de l'annonce — et l'adresse **seulement** si la visite est confirmée.
+
+### 10 bis.9 Hors ligne, réseau faible
+
+- Gardez **pour l'affichage** la dernière recherche, les favoris et les visites,
+  **avec l'heure de leur lecture** (« vu à 14 h 05 »).
+- ⚠️ **NE METTEZ JAMAIS EN FILE une demande de visite, une annulation ou un
+  signalement.** Quand la file repartira, le créneau aura été pris, ou la
+  visite aura commencé — et l'annonceur aura été prévenu à tort. Ces gestes
+  partent **en ligne**, ou pas du tout, et l'écran le dit.
+- Retirer un favori peut attendre le réseau : la route est idempotente.
+
+### 10 bis.10 ⚠️ Ce que l'application cliente ne fait PAS pour l'immobilier
+
+| Absent | Pourquoi |
+|---|---|
+| **L'assistant unifié sur l'onglet Logement** | il ne sert que les repas et les courses : `vertical: "immo"` est **refusé** (`422 validation_failed`, `fields: ["vertical"]`), et « je cherche un trois-pièces » envoyé sans `vertical` partirait vers un taxi ou un repas. **Pas de boîte de l'assistant sur cet onglet.** |
+| **Les visites dans le fil d'activité** | le fil compte les courses et les commandes ; les visites se lisent par `GET /immo/me/visits` |
+| **Le portefeuille, les codes promo, le SOS** | rien ne se paie dans l'immobilier aujourd'hui, et une visite n'est pas un trajet |
+| **Une socket** | une annonce ne bouge pas à la seconde ; ce qui compte arrive en notification |
+
+---
+
 ## 11. ⚠️ CE QUE CETTE SURFACE NE SERT PAS — et pourquoi
 
 | Absent | Pourquoi |
@@ -576,6 +751,8 @@ l'épaule. Ouvrez la visite pour les lire.
 | **Le loyer, le bail, les quittances** | la gestion locative n'est pas ouverte |
 | **La visite 3D** | `property.has_3d` le dit, le visionneur n'est pas encore servi |
 | **Choisir son pays en étant connecté** | le pays est celui du compte (1 bis) |
+| **Ouvrir l'application depuis un lien d'annonce** | le site ne publie ni `assetlinks.json` (Android) ni `apple-app-site-association` (iOS) : `share_url` ouvre le **navigateur** |
+| **L'onglet Logement dans un pays fermé** | `features.immo` le ferme (10 bis.1) — ouvert pays par pays, quand des annonces y sont en ligne |
 
 ---
 
@@ -604,6 +781,19 @@ l'épaule. Ouvrez la visite pour les lire.
 ---
 
 ## 13. Journal
+
+### 4.122.0 — 10 novembre 2026
+
+🟢 **SUR TÉLÉPHONE — l'onglet « Logement » de l'application cliente** (§10 bis) : il
+n'existe que si `GET /app/config` sert `features.immo: true` — un drapeau qui
+**s'allume pays par pays** et dont l'absence vaut `false` ; la même session, le
+téléphone déjà déclaré, les notifications routées sur `data.type`, les photos sur
+réseau mobile, le cercle sur la carte, les favoris gardés sans compte, l'appel et
+l'itinéraire réservés à la visite confirmée, ce qui ne part jamais en file, et ce
+que l'assistant unifié ne fait pas ici.
+
+🟢 **`share_url`** sur `GET /immo/listings/{ref}` (§4) : l'adresse publique de
+l'annonce, composée par le serveur dans la langue de la requête.
 
 ### 4.121.0 — 10 novembre 2026
 
