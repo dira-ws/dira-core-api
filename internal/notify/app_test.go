@@ -20,8 +20,8 @@ import (
 	"go.mongodb.org/mongo-driver/bson/primitive"
 
 	"github.com/kgtech-org/dira-core-api/pkg/auth"
-	"github.com/kgtech-org/dira-core-api/pkg/edition"
 	"github.com/kgtech-org/dira-core-api/pkg/db"
+	"github.com/kgtech-org/dira-core-api/pkg/edition"
 )
 
 func tokens(ds []Device) []string {
@@ -214,4 +214,18 @@ func TestTheImmoInboxIsScopedThroughTheRoutes(t *testing.T) {
 	assert.Contains(t, call(http.MethodPost, "/me/notifications/read?app=immo"), `"marked":2`)
 	assert.Contains(t, call(http.MethodGet, "/me/notifications"), `"unread":2`,
 		"les commandes et les courses restent non lues dans l'application cliente")
+}
+
+// ⚠️ LA MESSAGERIE DE L'IMMOBILIER VA À DIRA IMMO, ET SE COUPE AVEC LES AUTRES
+// MESSAGES : un gabarit hors du préfixe `immo_` partirait vers l'application
+// des courses ; rangé ailleurs, il échapperait à l'interrupteur des messages.
+func TestTheImmoThreadMessageGoesToDiraImmoAndIsAMessage(t *testing.T) {
+	assert.Equal(t, AppImmo, AppOfKey(KeyImmoThreadMessage))
+	assert.Equal(t, CategoryChatMessages, categoryOf(KeyImmoThreadMessage))
+	tmpl, ok := defaults[KeyImmoThreadMessage]
+	require.True(t, ok)
+	for _, loc := range []string{LocaleFR, LocaleEN} {
+		assert.Contains(t, tmpl.Locales[loc].Title, "[listing_title]")
+		assert.Equal(t, "[body]", tmpl.Locales[loc].Body)
+	}
 }

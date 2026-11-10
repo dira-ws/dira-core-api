@@ -437,6 +437,11 @@ const (
 	KeyImmoVisitDeclined  = "immo_visit_declined"  // → le chercheur
 	KeyImmoVisitCancelled = "immo_visit_cancelled" // → l'autre partie
 	KeyImmoVisitReminder  = "immo_visit_reminder"  // → les deux, deux heures avant
+	// LA MESSAGERIE DE L'IMMOBILIER (`dira-immo-api`, module `thread`) : un
+	// message sur une annonce, avant la visite. ⚠️ NI NOM NI NUMÉRO, comme
+	// `chat_message` — et le corps est déjà MASQUÉ par l'immobilier (un numéro
+	// écrit avant une visite confirmée ne passe pas).
+	KeyImmoThreadMessage = "immo_thread_message"
 )
 
 // defaults sont les gabarits COMPILÉS, servis tant que la base n'en porte pas.
@@ -1259,6 +1264,15 @@ var defaults = map[string]Template{
 			LocaleEN: {Title: "Visit cancelled", Body: "The visit to “[listing_title]” on [date] at [time] is cancelled."},
 		},
 	},
+	KeyImmoThreadMessage: {
+		Key:         KeyImmoThreadMessage,
+		Description: "Immobilier — un message sur une annonce, avant la visite (à l'autre partie). Ne nomme JAMAIS l'expéditeur.",
+		Enabled:     true,
+		Locales: map[string]Text{
+			LocaleFR: {Title: "Message sur « [listing_title] »", Body: "[body]"},
+			LocaleEN: {Title: "Message about “[listing_title]”", Body: "[body]"},
+		},
+	},
 	KeyImmoVisitReminder: {
 		Key:         KeyImmoVisitReminder,
 		Description: "Immobilier — rappel deux heures avant une visite confirmée (aux deux parties).",
@@ -1411,6 +1425,8 @@ var provided = map[string][]string{
 	KeyImmoVisitDeclined:  {"listing_title", "date", "time"},
 	KeyImmoVisitCancelled: {"listing_title", "date", "time"},
 	KeyImmoVisitReminder:  {"listing_title", "date", "time"},
+	// Le titre de l'annonce (public), et l'aperçu du message — déjà masqué.
+	KeyImmoThreadMessage: {"listing_title", "body"},
 }
 
 // Provided rend les variables que la plateforme remplit pour une clé.
