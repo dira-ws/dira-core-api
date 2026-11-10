@@ -1,6 +1,6 @@
 # Specs frontend — par rôle
 
-> **Version 4.122.0** · 10 novembre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics` + `dira-immo-api`
+> **Version 4.123.0** · 10 novembre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics` + `dira-immo-api`
 
 **Cinq** documents, un par application. Chacun est **autonome** : tout ce qu'un frontend doit savoir pour son rôle, sans avoir à ouvrir les vingt specs de modules.
 
@@ -11,8 +11,8 @@
 | [`FOOD-DELIVERY.md`](FOOD-DELIVERY.md) | livraison | **livreur** — véhicules, appel de course, collectes, portefeuille, matériel |
 | [`VTC-CLIENT.md`](VTC-CLIENT.md) | courses | client — devis, course, suivi, conversation |
 | [`VTC-DRIVER.md`](VTC-DRIVER.md) | courses | **chauffeur** — véhicules, appel de 30 s, course, **dette**, matériel |
-| [`IMMO-SEEKER.md`](IMMO-SEEKER.md) | immobilier | **chercheur** — recherche, annonce, photos, favoris, alertes, visites ; 🆕 sur téléphone, l'**onglet Logement** de l'application cliente |
-| [`IMMO-PUBLISHER.md`](IMMO-PUBLISHER.md) | immobilier | **annonceur** — fiche, biens, photos, annonces, créneaux et visites ; 🆕 sur téléphone, l'**application des agents** (`immo_pro`) |
+| [`IMMO-SEEKER.md`](IMMO-SEEKER.md) | immobilier | **chercheur** — recherche, annonce, photos, favoris, alertes, visites ; 🆕 sur téléphone, l'application **Dira Immo** |
+| [`IMMO-PUBLISHER.md`](IMMO-PUBLISHER.md) | immobilier | **annonceur** — fiche, biens, photos, annonces, créneaux et visites ; 🆕 sur téléphone, l'application **Dira Immo Pro** (`immo_pro`) |
 
 > ⚠️ **Le nom du fichier dit la VERTICALE.** « Livreur » et « chauffeur » se
 > traduisent tous les deux par *driver* : un document nommé `DRIVER.md` à côté
@@ -108,18 +108,23 @@ vérifiée le dit**. Ce ne sont pas des manques à combler.
 (`GET /immo/listings`) : c'est ce qui permet à `dira-immo-api` de vérifier,
 depuis chez lui, que chaque route citée est servie avec le bon verbe.
 
-### 🆕 📱 L'IMMOBILIER SUR TÉLÉPHONE — deux applications, pas trois (v4.122.0)
+### 🆕 📱 L'IMMOBILIER SUR TÉLÉPHONE — deux applications natives (v4.123.0)
 
-| Qui | Quelle application | Où c'est écrit |
-|---|---|---|
-| le **chercheur** | un **onglet « Logement »** de l'application cliente — même compte `client`, même session, même boîte | `DIRA-CLIENT.md` §10 · `IMMO-SEEKER.md` §10 bis |
-| l'**annonceur** (agence, particulier) | **son application**, `app: "immo_pro"` — un compte `publisher` | `IMMO-PUBLISHER.md` §10 bis |
+| Qui | Quelle application | Compte | Où c'est écrit |
+|---|---|---|---|
+| le **chercheur** | **Dira Immo** — iOS et Android | le `client` **existant** (celui des repas et des courses), `app: "client"` | `IMMO-SEEKER.md` §10 bis |
+| l'**annonceur** (agence, particulier) | **Dira Immo Pro** — iOS et Android | `publisher`, `app: "immo_pro"` | `IMMO-PUBLISHER.md` §10 bis |
 
-⚠️⚠️ **L'ONGLET S'ALLUME PAYS PAR PAYS** : `GET /app/config` sert
-`features.immo`, **le second drapeau dont le défaut est `false`** (après
-`assistant_live`). L'immobilier n'a d'annonces que là où des agences publient ;
-un onglet vide dans douze pays se lirait « Dira ne marche pas ici ». L'exploitation
-l'ouvre dans la console (**Réglages → Éditions → Immobilier**).
+⚠️⚠️ **LE CHERCHEUR PARTAGE SON COMPTE AVEC L'APPLICATION CLIENTE**, et c'est
+ce qui demande deux précautions : **`POST /me/devices` porte `"app": "immo"`**
+dans Dira Immo — sans lui, les notifications des deux applications se croisent —
+et Dira Immo lit sa boîte avec **`GET /me/notifications?app=immo`**.
+L'application cliente, elle, n'a **aucun écran** de l'immobilier
+(`DIRA-CLIENT.md` §10).
+
+⚠️ **LE PAYS S'OUVRE UN PAR UN** : `GET /app/config` sert `features.immo`, **le
+second drapeau dont le défaut est `false`** (après `assistant_live`).
+L'exploitation l'ouvre dans la console (**Réglages → Éditions → Immobilier**).
 
 ⚠️ **`share_url`** : l'adresse publique d'une annonce est **composée par le
 serveur**. Aucune des deux applications ne l'écrit en dur.
@@ -390,6 +395,20 @@ Chaque document porte la même version en en-tête, et son propre journal des ch
 - [ ] ⚠️ **`TRACKING_JWT_SECRET` renseigné dans chaque environnement déployé.** Vide, l'authentification du service de suivi est **désactivée** : n'importe qui connaissant un `delivery_id` suit la course. Le secret doit valoir **exactement** le `JWT_SECRET` de `dira-food-api`.
 
 ## Journal
+
+### 4.123.0 — 10 novembre 2026
+
+🔧 **LE CHERCHEUR A SON APPLICATION, DIRA IMMO — pas un onglet de l'application
+cliente.** La 4.122.0 avait mal lu l'architecture de l'immobilier, qui prévoit deux
+applications natives (Dira Immo, Dira Immo Pro). `IMMO-SEEKER.md` §10 bis est
+réécrite, `DIRA-CLIENT.md` retire l'onglet et ne garde que ce qui la concerne : les
+notifications de l'immobilier qui y arrivent quand Dira Immo n'est pas installée.
+
+🟢 **DEUX APPLICATIONS CLIENTES, UN COMPTE** — `POST /me/devices` accepte
+`"app": "immo"` : les notifications `immo_*` vont au téléphone de Dira Immo (et
+replient sur les autres s'il n'y en a pas), les autres n'y vont **jamais**.
+`GET /me/notifications?app=immo` et `POST /me/notifications/read?app=immo` bornent
+la boîte et son badge. Une valeur inconnue est refusée (`422`, `fields: ["app"]`).
 
 ### 4.122.0 — 10 novembre 2026
 

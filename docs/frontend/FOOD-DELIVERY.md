@@ -1,6 +1,6 @@
 # App LIVREUR — LIVRAISON — contrat d'API
 
-> **Version 4.122.0** · 10 novembre 2026
+> **Version 4.123.0** · 10 novembre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Livraison : `https://api-staging.dira.llc/api/v1/food` · Suivi : `wss://tracking-staging.dira.llc` · SIG : `https://maps.dira.llc/api`
 
 

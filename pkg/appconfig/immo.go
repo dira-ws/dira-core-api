@@ -1,16 +1,15 @@
 package appconfig
 
-// L'IMMOBILIER DANS L'APPLICATION CLIENTE — l'onglet qui s'ouvre pays par pays.
+// L'IMMOBILIER — l'application Dira Immo, ouverte pays par pays.
 //
 // ⚠️⚠️ CELUI-LÀ S'ALLUME, IL NE SE COUPE PAS — la seconde exception de ce
 // paquet, après le direct (`live.go`), et pour une raison différente. Le
 // direct coûte à la seconde ; l'immobilier, lui, ne coûte rien, mais il n'a
 // de sens QUE là où des annonces existent. Une verticale accepte les quatorze
 // pays du catalogue, et n'a de biens qu'au Gabon et au Tchad : un défaut
-// « disponible partout » aurait posé, le jour du déploiement, un onglet
-// « Logement » dans douze pays où toute recherche répond « aucune annonce ».
-// Un onglet vide se lit « Dira ne marche pas ici », et c'est faux pour les
-// courses et les repas du même écran.
+// « disponible partout » aurait ouvert, le jour du déploiement, Dira Immo dans
+// douze pays où toute recherche répond « aucune annonce » — ce qui se lit « il
+// n'y a rien à louer ici », alors que personne n'y publie encore.
 //
 // Il s'allume donc par la PRÉSENCE du pays dans `Registry.Immo`, et la
 // fonction du catalogue ne sert qu'à le retirer ENSUITE d'une édition —

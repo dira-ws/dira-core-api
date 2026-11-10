@@ -275,8 +275,8 @@ func TestResolveServesEveryKeyIncludingTheOnesLeftOn(t *testing.T) {
 // peuvent s'allumer aussi. Le direct est facturé à la seconde et ses langues
 // restent à mesurer : il s'allume par la présence d'un bloc `live`, pays par
 // pays (voir `live.go`). L'immobilier est la SECONDE, nommée de même : il ne
-// coûte rien, mais il n'a d'annonces que dans deux pays, et un onglet vide se
-// lit « Dira ne marche pas ici » (voir `immo.go`). Toute AUTRE fonction qui
+// coûte rien, mais il n'a d'annonces que dans deux pays, et une recherche vide se
+// lit « il n'y a rien à louer ici » (voir `immo.go`). Toute AUTRE fonction qui
 // ferait échouer cette épreuve est un défaut, pas une exception de plus.
 func TestResolveOnANilRegistryOpensEverythingButTheLiveAssistantAndImmo(t *testing.T) {
 	var r *Registry

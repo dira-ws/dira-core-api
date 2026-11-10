@@ -26,6 +26,11 @@ type RegisterDeviceRequest struct {
 	// taire. Une valeur inconnue retombe aussi sur `full` — jamais sur `lite`,
 	// qui recevrait des textes amputés sans l'avoir demandé.
 	Edition string `json:"edition" validate:"omitempty,oneof=full lite"`
+	// App : `immo` pour l'application Dira Immo (le chercheur de logement),
+	// absent pour toutes les autres — voir `app.go`. ⚠️ Une valeur inconnue
+	// est REFUSÉE : rangée en silence parmi les autres, elle ferait recevoir à
+	// Dira Immo les courses et les repas du compte.
+	App string `json:"app" validate:"omitempty,oneof=immo"`
 }
 
 // SaveTemplateRequest écrit un gabarit dans toutes ses langues.

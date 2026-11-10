@@ -92,10 +92,13 @@ func (r *Repository) UpsertDevice(ctx context.Context, d *Device) error {
 	now := time.Now().UTC()
 	_, err := r.devices.UpdateOne(ctx, bson.M{"token": d.Token}, bson.M{
 		"$set": bson.M{
-			"user_id":      d.UserID,
-			"platform":     d.Platform,
-			"locale":       d.Locale,
-			"edition":      d.Edition,
+			"user_id":  d.UserID,
+			"platform": d.Platform,
+			"locale":   d.Locale,
+			"edition":  d.Edition,
+			// ⚠️ ÉCRIT MÊME VIDE : un jeton passé d'une application à l'autre
+			// (réinstallation, même jeton) ne doit pas garder l'ancienne.
+			"app":          d.App,
 			"last_seen_at": now,
 		},
 		"$setOnInsert": bson.M{"token": d.Token, "created_at": now},

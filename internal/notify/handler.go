@@ -191,7 +191,13 @@ func (h *Handler) listInbox(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	page := httpx.PageFromRequest(r)
-	items, unread, next, err := h.svc.ListInbox(r.Context(), userID, page.Cursor, page.Limit)
+	// `?app=immo` : la boîte de l'application Dira Immo seulement (`app.go`).
+	app, err := ParseApp(r.URL.Query().Get("app"))
+	if err != nil {
+		httpx.Error(w, r, err)
+		return
+	}
+	items, unread, next, err := h.svc.ListInbox(r.Context(), userID, page.Cursor, page.Limit, app)
 	if err != nil {
 		httpx.Error(w, r, err)
 		return
@@ -215,7 +221,12 @@ func (h *Handler) markRead(w http.ResponseWriter, r *http.Request, id string) {
 		httpx.Error(w, r, apperr.Unauthorized("missing_token", "missing bearer token"))
 		return
 	}
-	n, err := h.svc.MarkRead(r.Context(), userID, id)
+	app, err := ParseApp(r.URL.Query().Get("app"))
+	if err != nil {
+		httpx.Error(w, r, err)
+		return
+	}
+	n, err := h.svc.MarkRead(r.Context(), userID, id, app)
 	if err != nil {
 		httpx.Error(w, r, err)
 		return

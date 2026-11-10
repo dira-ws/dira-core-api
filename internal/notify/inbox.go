@@ -171,8 +171,8 @@ func (r *Repository) InsertInbox(ctx context.Context, n *Inbox) error {
 }
 
 // ListInbox rend les notifications d'un compte, de la plus récente.
-func (r *Repository) ListInbox(ctx context.Context, userID primitive.ObjectID, cursor primitive.ObjectID, limit int) ([]Inbox, error) {
-	filter := bson.M{"user_id": userID}
+func (r *Repository) ListInbox(ctx context.Context, userID primitive.ObjectID, cursor primitive.ObjectID, limit int, app string) ([]Inbox, error) {
+	filter := inboxScope(bson.M{"user_id": userID}, app)
 	if !cursor.IsZero() {
 		filter["_id"] = bson.M{"$lt": cursor}
 	}
@@ -189,10 +189,10 @@ func (r *Repository) ListInbox(ctx context.Context, userID primitive.ObjectID, c
 }
 
 // CountUnread compte ce que le compte n'a pas lu — le badge de l'écran Compte.
-func (r *Repository) CountUnread(ctx context.Context, userID primitive.ObjectID) (int64, error) {
-	n, err := r.inbox.CountDocuments(ctx, bson.M{
+func (r *Repository) CountUnread(ctx context.Context, userID primitive.ObjectID, app string) (int64, error) {
+	n, err := r.inbox.CountDocuments(ctx, inboxScope(bson.M{
 		"user_id": userID, "read_at": bson.M{"$exists": false},
-	})
+	}, app))
 	if err != nil {
 		return 0, fmt.Errorf("notify: count unread: %w", err)
 	}
@@ -217,8 +217,11 @@ func (r *Repository) SentSince(ctx context.Context, userID primitive.ObjectID, k
 }
 
 // MarkInboxRead marque une notification lue, ou TOUTES quand id est nul.
-func (r *Repository) MarkInboxRead(ctx context.Context, userID, id primitive.ObjectID, at time.Time) (int64, error) {
-	filter := bson.M{"user_id": userID, "read_at": bson.M{"$exists": false}}
+//
+// ⚠️ BORNÉE À L'APPLICATION qui le demande : « tout marquer lu » dans Dira Immo
+// ne doit pas éteindre le badge des commandes dans l'application cliente.
+func (r *Repository) MarkInboxRead(ctx context.Context, userID, id primitive.ObjectID, at time.Time, app string) (int64, error) {
+	filter := inboxScope(bson.M{"user_id": userID, "read_at": bson.M{"$exists": false}}, app)
 	if !id.IsZero() {
 		filter["_id"] = id
 	}
@@ -232,7 +235,9 @@ func (r *Repository) MarkInboxRead(ctx context.Context, userID, id primitive.Obj
 // --- service ---
 
 // ListInbox rend le centre de notifications d'un compte, avec le non-lu.
-func (s *Service) ListInbox(ctx context.Context, userID, cursor string, limit int) ([]InboxResponse, int, string, error) {
+//
+// `app` borne la boîte à une application (`immo`), "" la rend entière.
+func (s *Service) ListInbox(ctx context.Context, userID, cursor string, limit int, app string) ([]InboxResponse, int, string, error) {
 	uid, err := primitive.ObjectIDFromHex(userID)
 	if err != nil {
 		return nil, 0, "", apperr.Validation("invalid user id").WithCause(err)
@@ -246,11 +251,11 @@ func (s *Service) ListInbox(ctx context.Context, userID, cursor string, limit in
 	if limit <= 0 || limit > 100 {
 		limit = 30
 	}
-	items, err := s.repo.ListInbox(ctx, uid, after, limit)
+	items, err := s.repo.ListInbox(ctx, uid, after, limit, app)
 	if err != nil {
 		return nil, 0, "", err
 	}
-	unread, err := s.repo.CountUnread(ctx, uid)
+	unread, err := s.repo.CountUnread(ctx, uid, app)
 	if err != nil {
 		// Un compteur perdu ne doit pas emporter la liste elle-même.
 		unread = 0
@@ -267,7 +272,7 @@ func (s *Service) ListInbox(ctx context.Context, userID, cursor string, limit in
 }
 
 // MarkRead marque une notification lue, ou toutes quand notificationID est vide.
-func (s *Service) MarkRead(ctx context.Context, userID, notificationID string) (int, error) {
+func (s *Service) MarkRead(ctx context.Context, userID, notificationID, app string) (int, error) {
 	uid, err := primitive.ObjectIDFromHex(userID)
 	if err != nil {
 		return 0, apperr.Validation("invalid user id").WithCause(err)
@@ -278,7 +283,7 @@ func (s *Service) MarkRead(ctx context.Context, userID, notificationID string) (
 			return 0, apperr.NotFound("notification_not_found", "notification not found").WithCause(err)
 		}
 	}
-	n, err := s.repo.MarkInboxRead(ctx, uid, id, time.Now().UTC())
+	n, err := s.repo.MarkInboxRead(ctx, uid, id, time.Now().UTC(), app)
 	return int(n), err
 }
 
