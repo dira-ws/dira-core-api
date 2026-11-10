@@ -167,6 +167,10 @@ func TestEveryRoleSpecIsPresent(t *testing.T) {
 		"FOOD-CLIENT.md",
 		"FOOD-DELIVERY.md",
 		"FOOD-MERCHANT.md",
+		// L'IMMOBILIER (v4.121.0) : le chercheur et l'annonceur. Leurs routes
+		// se vérifient chez `dira-immo-api`, qui importe ce paquet.
+		"IMMO-PUBLISHER.md",
+		"IMMO-SEEKER.md",
 		// La console du PROPRIÉTAIRE DE FLOTTE — un tiers extérieur qui a des
 		// pouvoirs sur le travail d'autres personnes (v4.62.0). ⚠️ Son §2 dit
 		// ce que cette surface NE sert PAS : c'est le contrat, pas une liste
