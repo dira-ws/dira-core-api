@@ -8,7 +8,7 @@ go 1.26.4
 // rouge sur des dépôts dont aucune ligne n'avait changé. Épingler ici plutôt
 // que dans la CI met la décision là où elle se relit — et la même pour tous
 // ceux qui compilent, y compris en local.
-toolchain go1.26.9
+toolchain go1.26.10
 
 require (
 	github.com/BurntSushi/toml v1.6.0
@@ -38,7 +38,7 @@ require (
 	github.com/go-playground/locales v0.14.1 // indirect
 	github.com/go-playground/universal-translator v0.18.1 // indirect
 	github.com/golang/snappy v0.0.4 // indirect
-	github.com/klauspost/compress v1.19.1 // indirect
+	github.com/klauspost/compress v1.20.2 // indirect
 	github.com/klauspost/cpuid/v2 v2.2.11 // indirect
 	github.com/klauspost/crc32 v1.3.0 // indirect
 	github.com/kylelemons/godebug v1.1.0 // indirect
