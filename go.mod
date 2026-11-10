@@ -8,7 +8,7 @@ go 1.26.4
 // rouge sur des dépôts dont aucune ligne n'avait changé. Épingler ici plutôt
 // que dans la CI met la décision là où elle se relit — et la même pour tous
 // ceux qui compilent, y compris en local.
-toolchain go1.26.9
+toolchain go1.26.10
 
 require (
 	github.com/BurntSushi/toml v1.6.0
