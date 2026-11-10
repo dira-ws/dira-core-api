@@ -71,6 +71,33 @@ const (
 	RideConnectionBack = "ride.connection_back"
 )
 
+// Ce que dit l'immobilier (dira-immo-api#31). Un chercheur ne « demande » pas
+// un fournisseur comme un passager demande un chauffeur : il CHERCHE, regarde,
+// demande une visite. La demande non servie, c'est la recherche qui tombe à
+// vide — quartier × budget × type —, et c'est elle que les agences du quartier
+// voudront savoir.
+//
+// ⚠️ AUCUNE DONNÉE PERSONNELLE DANS `Attrs` : des CRITÈRES (ville, quartier,
+// genre, type, bornes de prix, chambres), jamais un texte libre — « villa près
+// de chez Clarisse » est une recherche, et une phrase qui nomme quelqu'un.
+const (
+	// ImmoSearch : une recherche — la PREMIÈRE page seulement. `Attrs.total`
+	// dit combien d'annonces lui répondent.
+	ImmoSearch = "immo.search"
+	// ImmoSearchEmpty : une recherche qui n'a rien trouvé, émise EN PLUS de
+	// `ImmoSearch`. C'est la demande non servie.
+	ImmoSearchEmpty = "immo.search_empty"
+	// ImmoListingView : la fiche d'une annonce a été lue. `Ref` = l'annonce,
+	// `Supplier` = l'annonceur.
+	ImmoListingView = "immo.listing_view"
+	// ImmoVisitBooked : une visite a été demandée. `Ref` = la visite,
+	// `Attrs.listing_id` l'annonce.
+	ImmoVisitBooked = "immo.visit_booked"
+	// ImmoContact : l'annonceur a confirmé la visite — chacun a désormais le
+	// téléphone de l'autre. C'est la mise en relation, ce qu'une agence paie.
+	ImmoContact = "immo.contact"
+)
+
 // Raisons d'une demande non satisfaite.
 const (
 	ReasonExhausted = "exhausted"
@@ -81,6 +108,7 @@ const (
 const (
 	VerticalVTC  = "vtc"
 	VerticalFood = "food"
+	VerticalImmo = "immo"
 )
 
 // Fact est un événement daté et situé.
