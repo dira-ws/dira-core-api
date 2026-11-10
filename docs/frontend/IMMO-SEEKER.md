@@ -1,6 +1,6 @@
 # IMMOBILIER — CHERCHEUR (louer, acheter) — contrat d'API
 
-> **Version 4.126.0** · 10 novembre 2026
+> **Version 4.127.0** · 10 novembre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Immobilier : `https://api-staging.dira.llc/api/v1/immo`
 > Site public en service : `https://immo-staging.dira.llc`
 
@@ -559,6 +559,71 @@ signe d'une arnaque.
 
 ---
 
+## 9 ter. 🆕 Écrire à l'annonceur — avant la visite (v4.127.0)
+
+Une question avant de se déplacer (« le loyer est-il négociable ? », « y a-t-il
+un groupe électrogène ? ») passe par une **conversation dans la plateforme** :
+un fil par annonce et par chercheur, compte `client` obligatoire.
+
+```json
+POST /immo/listings/{ref}/threads
+{ "body": "Bonjour, la villa est-elle libre en décembre ?" }
+
+→ 201 (fil ouvert) ou 200 (fil repris)
+{
+  "thread": {
+    "id": "6b5a1c2d3e4f5a6b7c8d9e01",
+    "listing": { "id": "…", "title": "Villa à la Sablière", "slug": "villa-a-la-sabliere-…" },
+    "preview": "Bonjour, la villa est-elle libre en décembre ?",
+    "last_from": "seeker", "last_message_at": "2026-11-10T21:40:00Z",
+    "created_at": "2026-11-10T21:40:00Z",
+    "publisher": { "name": "Estuaire Habitat", "kind": "agency", "verified": true },
+    "unread": 0
+  },
+  "message": { "id": "…", "from": "seeker", "mine": true,
+               "body": "Bonjour, la villa est-elle libre en décembre ?",
+               "created_at": "2026-11-10T21:40:00Z" },
+  "masked": false
+}
+```
+
+- **UN fil par annonce** : réécrire depuis la fiche **reprend** le fil (`200`),
+  il n'en ouvre pas un second.
+- `{ref}` : le slug ou l'identifiant ; l'annonce doit être **en ligne** dans ce
+  pays (`404 listing_not_found` sinon).
+- 1 à 1 000 caractères ; vide ou trop long : `422 validation_failed`. Un
+  premier message refusé **n'ouvre pas** de fil.
+
+⚠️⚠️ **LES COORDONNÉES SONT MASQUÉES TANT QU'AUCUNE VISITE N'EST CONFIRMÉE**, dans
+les deux sens : un numéro de téléphone ou une adresse e-mail écrits dans un
+message deviennent `•• •• •• ••` et `•••@•••`, et **`masked: true`** le dit.
+Affichez-le à côté du message envoyé : « les coordonnées ne passent qu'après une
+visite confirmée ». Le message **part quand même** — le reste de la phrase a une
+vraie question dedans. ⚠️ **Un montant n'est pas masqué** (`280 000 000`,
+`250 000 F`). Une visite **confirmée** de cette annonce lève le masque.
+
+⚠️ **LA MODÉRATION EST CELLE DES AUTRES CONVERSATIONS DE DIRA** : une menace ne
+part pas (`422 message_blocked` — gardez le texte dans la zone de saisie) ; une
+insulte part, marquée pour l'équipe.
+
+| Geste | Route |
+|---|---|
+| mes fils | `GET /immo/me/threads` → `{ "items": [ … ] }`, le plus récent d'abord, avec `unread` |
+| lire | `GET /immo/me/threads/{id}/messages?after=<id>&limit=50` → `{ "items": [ message… ], "unread": 2 }`, du plus ancien au plus récent |
+| répondre | `POST /immo/me/threads/{id}/messages` `{ "body": "…" }` → `201`, la même forme que l'ouverture |
+| marquer lu | `POST /immo/me/threads/{id}/read` → `{ "marked": 2 }` |
+
+- `message.from` : `seeker` (vous) ou `publisher` (l'annonceur) ; `mine` le dit
+  pour vous. Un message retiré par l'équipe porte `hidden: true` et un `body`
+  vide : affichez « message retiré ».
+- ⚠️ **L'annonceur ne voit ni votre nom ni votre téléphone** : seulement votre
+  message. Ils n'arrivent qu'avec une visite confirmée, dans la visite.
+- `404 thread_not_found` : le fil n'existe pas, n'est pas le vôtre, ou appartient
+  à un autre pays. `409 threads_full` : 100 fils ouverts dans ce pays — reprendre
+  un fil existant reste permis.
+
+---
+
 ## 10. Les notifications
 
 Elles arrivent par le socle (poussée + boîte, `GET /me/notifications`). Les
@@ -571,6 +636,7 @@ Elles arrivent par le socle (poussée + boîte, `GET /me/notifications`). Les
 | `immo_visit_declined` | l'annonceur a refusé | idem |
 | `immo_visit_cancelled` | l'annonceur a annulé, ou retiré le créneau | idem |
 | `immo_visit_reminder` | **deux heures avant** une visite confirmée | idem |
+| `immo_thread_message` 🆕 | l'annonceur vous a répondu (§9 ter) | `type: "immo_thread"`, `thread_id`, `listing_id` — le texte est le message, **déjà masqué** |
 
 Le texte porte l'**heure locale du pays** de la visite. ⚠️ **Aucune notification
 ne porte d'adresse ni de téléphone** : un écran verrouillé se lit par-dessus
@@ -685,6 +751,7 @@ l'exploitation peut renommer :
 |---|---|---|
 | `immo_visit` | `immo_visit_confirmed` · `immo_visit_declined` · `immo_visit_cancelled` · `immo_visit_reminder` | **la visite** `visit_id` |
 | `immo_saved_search` | `immo_saved_search_match` | **l'annonce** `slug` — avec, à côté, « voir toute la recherche » (`saved_search_id`) |
+| `immo_thread` 🆕 | `immo_thread_message` | **le fil** `thread_id` (`GET /immo/me/threads/{id}/messages`) |
 
 - ⚠️ **IL N'Y A PAS DE ROUTE POUR UNE SEULE VISITE NI POUR UNE SEULE RECHERCHE
   GARDÉE.** `GET /immo/me/visits` puis celle dont l'`id` est `visit_id` ;
@@ -803,7 +870,6 @@ GET /immo/listings/{ref}
 |---|---|
 | **Le téléphone de l'annonceur avant une visite confirmée** | règle 1 de la section 0 — ce n'est pas un manque |
 | **L'adresse exacte d'un particulier sur l'annonce** | règle 2 — elle vient dans la visite confirmée |
-| **Écrire à l'annonceur avant la visite** | la messagerie n'est **pas encore servie** ; seul le mot joint à la demande de visite lui parvient |
 | **Faire une offre d'achat, réserver un séjour, payer** | pas servis : le séjour attend le cadre du séquestre, l'offre d'achat son module |
 | **Le loyer, le bail, les quittances** | la gestion locative n'est pas ouverte |
 | **La visite 3D** | `property.has_3d` le dit, le visionneur n'est pas encore servi |
@@ -833,11 +899,21 @@ GET /immo/listings/{ref}
 | `visit_status_transition` | 409 | Cette visite ne peut pas aller là depuis son état actuel |
 | `visit_not_found` | 404 | Visite introuvable |
 | `report_already_open` | 409 | Vous avez déjà signalé cette annonce : l'équipe regarde |
+| `thread_not_found` 🆕 | 404 | Conversation introuvable |
+| `threads_full` 🆕 | 409 | Vous avez déjà ouvert 100 conversations dans ce pays : poursuivez-en une avant d'en ouvrir une autre |
+| `message_blocked` 🆕 | 422 | Ce message n'a pas été envoyé : il contient une menace ou une insulte que nous ne relayons pas |
 | `wrong_app` | 403 | (connexion) — affichez `reason`, qui nomme l'application à ouvrir |
 
 ---
 
 ## 13. Journal
+
+### 4.127.0 — 10 novembre 2026
+
+🟢 **ÉCRIRE À L'ANNONCEUR AVANT LA VISITE** (§9 ter) : un fil par annonce,
+`POST /immo/listings/{ref}/threads`, puis `/immo/me/threads`. Les coordonnées sont
+**masquées** tant qu'aucune visite n'est confirmée (`masked`) ; la notification
+`immo_thread_message` ouvre le fil.
 
 ### 4.126.0 — 10 novembre 2026
 

@@ -1,6 +1,6 @@
 # IMMOBILIER — ANNONCEUR (agence ou particulier) — contrat d'API
 
-> **Version 4.126.0** · 10 novembre 2026
+> **Version 4.127.0** · 10 novembre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Immobilier : `https://api-staging.dira.llc/api/v1/immo`
 
 ---
@@ -1560,6 +1560,41 @@ filtrez dans l'application (à venir / à trancher / passées).
 | Pas de fiche | `403 not_a_publisher` |
 | Session sans compte lisible | `401 account_unknown` — reconnecter |
 
+### 9.7 🆕 Les messages des chercheurs — avant la visite (v4.127.0)
+
+Un chercheur peut vous écrire depuis l'annonce, avant toute visite : **un fil
+par annonce et par chercheur**.
+
+```
+GET  /immo/publishers/me/threads                     → { "items": [ <fil>, … ] }
+GET  /immo/publishers/me/threads/{id}/messages        → { "items": [ <message>, … ], "unread": 1 }
+POST /immo/publishers/me/threads/{id}/messages        { "body": "…" }  → 201 { "thread", "message", "masked" }
+POST /immo/publishers/me/threads/{id}/read            → { "marked": 1 }
+```
+
+```json
+{ "id": "6b5a1c2d3e4f5a6b7c8d9e01",
+  "listing": { "id": "…", "title": "Villa à la Sablière", "slug": "…" },
+  "preview": "Bonjour, la villa est-elle libre en décembre ?",
+  "last_from": "seeker", "last_message_at": "2026-11-10T21:40:00Z",
+  "created_at": "2026-11-10T21:40:00Z", "unread": 1 }
+```
+
+- **Qui lit, qui répond** : le compte qui a **saisi l'annonce**, et — pour une
+  agence — le **porteur** et les **`manager`**, qui voient tous les fils et
+  répondent au nom de l'agence. Un **`agent`** ne voit que les fils de **ses**
+  annonces (`404 thread_not_found` pour celles d'un collègue).
+- ⚠️ **LE CHERCHEUR EST ANONYME** : ni nom ni téléphone sur un fil. Son contact
+  n'arrive qu'avec une visite **confirmée** (9.4). Écrivez « un chercheur ».
+- ⚠️⚠️ **LES COORDONNÉES SONT MASQUÉES DANS LES DEUX SENS** tant qu'aucune visite
+  de ce chercheur n'est confirmée : un numéro ou un e-mail que **vous** écrivez
+  devient `•• •• •• ••` / `•••@•••`, et `masked: true` vous le dit. Ne contournez
+  pas : proposez un créneau (9.1) — la visite confirmée donne votre numéro.
+  Un montant n'est pas masqué.
+- `message.from` : `seeker` ou `publisher` ; `mine` dit si c'est le vôtre. 1 à
+  1 000 caractères (`422 validation_failed`) ; une menace ne part pas
+  (`422 message_blocked`).
+
 ---
 
 ## 10. Les notifications
@@ -1587,6 +1622,7 @@ seul (section 5.1) :
 | `immo_visit_requested` | un chercheur demande une visite | « Demande de visite » — « Une visite est demandée pour « [titre] », le [date] à [heure]. Confirmez-la ou refusez-la. » |
 | `immo_visit_cancelled` | **le chercheur** annule | « Visite annulée » — « La visite de « [titre] » du [date] à [heure] est annulée. » |
 | `immo_visit_reminder` | **deux heures avant** une visite confirmée (envoyé entre 1 h 50 et 2 h avant, jamais après le début) | « Visite à [heure] » — « Rappel : visite de « [titre] » aujourd'hui à [heure]. » |
+| `immo_thread_message` 🆕 | un chercheur vous écrit (9.7) | « Message sur « [titre] » » — le message, **déjà masqué**. `data` : `type: "immo_thread"`, `thread_id`, `listing_id` → ouvrez le fil |
 
 **Les données**, identiques pour les trois :
 
@@ -1821,7 +1857,6 @@ côté application.
 
 | Absent | Pourquoi |
 |---|---|
-| **Écrire au chercheur, ou lui répondre** | la messagerie n'est **pas encore servie**. Avant la visite, seul le mot joint à la demande (`note`) vous parvient ; après confirmation, le téléphone |
 | **Le téléphone ou le nom d'un chercheur avant confirmation** | ⚠️ **délibérément absent**, dans les deux sens. Un numéro donné avant la visite est un numéro démarché |
 | **Choisir le pays d'un bien ou d'une fiche** | ⚠️ **délibérément absent** : le pays est celui du compte (1 bis) |
 | **Poser le badge `verified`** (fiche ou bien) | il dit qu'un humain de Dira a regardé l'identité, le mandat, le titre ; une case à cocher en ferait une affirmation de plus |
@@ -1964,6 +1999,8 @@ côté application.
 | `visit_not_found` | 404 | Visite introuvable |
 | `visit_too_late` | 409 | Trop tard : la visite a commencé ou va commencer |
 | `visit_status_transition` | 409 | Cette visite ne peut pas aller là depuis son état actuel |
+| `thread_not_found` 🆕 | 404 | Conversation introuvable |
+| `message_blocked` 🆕 | 422 | Ce message n'a pas été envoyé : il contient une menace ou une insulte que nous ne relayons pas |
 | `visit_not_started` | 409 | La présence se constate une fois la visite commencée |
 | `visit_slot_started` 🆕 | 409 | Ce créneau a commencé : il ne se retire plus — constatez la présence des visiteurs |
 | `account_unknown` | 401 | Cette session ne désigne aucun compte : reconnectez-vous |
@@ -1971,6 +2008,13 @@ côté application.
 ---
 
 ## 15. Journal
+
+### 4.127.0 — 10 novembre 2026
+
+🟢 **LES MESSAGES DES CHERCHEURS** (§9.7) : `/immo/publishers/me/threads`. Le porteur
+et les `manager` voient tous les fils, un `agent` ceux de ses annonces ; le
+chercheur reste anonyme ; les coordonnées sont masquées dans les deux sens tant
+qu'aucune visite n'est confirmée. Notification `immo_thread_message`.
 
 ### 4.126.0 — 10 novembre 2026
 
