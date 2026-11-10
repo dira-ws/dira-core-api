@@ -143,7 +143,7 @@ func TestARefusalThroughTheRealRoute(t *testing.T) {
 
 // ⚠️⚠️ L'IMMOBILIER S'ÉCRIT VRAIMENT, et se relit — sur une vraie base, à travers
 // la vraie route. C'est le chemin qu'un `$set` oublié aurait cassé sans bruit :
-// la console aurait affiché les pays qu'elle venait d'envoyer, et l'onglet ne
+// la console aurait affiché les pays qu'elle venait d'envoyer, et Dira Immo ne
 // se serait jamais ouvert.
 func TestImmoCountriesRoundTripOnARealBase(t *testing.T) {
 	h := routesSurBase(t)

@@ -82,7 +82,7 @@ var Features = []Feature{
 	{FeatureAssistantSupport, "Joindre l'équipe depuis l'assistant", "Le geste « écrire à l'équipe » disparaît : à couper là où personne ne lit la file du support.", OwnerAnalytics},
 	{FeatureVoiceMessages, "Messages vocaux", "Le bouton micro disparaît : le client écrit.", OwnerAnalytics},
 	{FeatureWallet, "Portefeuille", "Le solde et la recharge disparaissent ; restent les espèces et le mobile money.", OwnerCore},
-	{FeatureImmo, "Immobilier", "L'onglet « Logement » disparaît : plus de recherche, de favoris ni de visites dans l'application.", OwnerImmo},
+	{FeatureImmo, "Immobilier", "L'application Dira Immo dit « pas encore ouvert ici » : plus de recherche, de favoris ni de visites dans ce pays.", OwnerImmo},
 }
 
 // Les clés du catalogue.

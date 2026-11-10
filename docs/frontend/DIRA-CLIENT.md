@@ -1,6 +1,6 @@
 # App CLIENT UNIFIÉE — LIVRAISON **et** COURSES — contrat d'API
 
-> **Version 4.122.0** · 10 novembre 2026
+> **Version 4.123.0** · 10 novembre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Livraison : `…/api/v1/food` · Courses : `…/api/v1/vtc` · Combiné : `…/api/v1/analytics` · Suivi : `wss://tracking-staging.dira.llc`
 
 ---
@@ -35,7 +35,7 @@
 
 ---
 
-## 1. ⚠️ CINQ BASES D'URL, et se tromper est SILENCIEUX
+## 1. ⚠️ QUATRE BASES D'URL, et se tromper est SILENCIEUX
 
 | Ce que vous appelez | Service | Base |
 |---|---|---|
@@ -43,14 +43,13 @@
 | catalogue, panier, commandes, nutrition, tombola | **livraison** | `…/api/v1/food/…` |
 | devis, courses, classes de véhicule, abonnements | **courses** | `…/api/v1/vtc/…` |
 | **l'assistant unifié et le fil d'activité** (§8, §9) | **combiné** | `…/api/v1/analytics/…` |
-| 🆕 **le logement** : recherche, annonces, favoris, alertes, visites (§10, v4.122.0) | **immobilier** | `…/api/v1/immo/…` |
 
 **Le jeton est le même partout** : même secret, même session. On ne se connecte
-pas cinq fois.
+pas quatre fois.
 
 ⚠️ **UN APPEL SUR LA MAUVAISE BASE COMPILE, PASSE LES TESTS, ET REND `404`
 DEVANT UN CLIENT.** `GET /api/v1/orders` n'existe pas ; c'est
-`GET /api/v1/food/orders`. Prévoyez **cinq** variables de configuration, et
+`GET /api/v1/food/orders`. Prévoyez **quatre** variables de configuration, et
 une règle vérifiable à la construction : d'où vient cette route ? Une
 application qui dérive la base d'une table de chemins finira par en oublier un.
 
@@ -278,13 +277,11 @@ GET /app/config          # SANS jeton — lu AVANT l'écran de connexion
 > `live` est servi, et le serveur garantit que les deux ne se contredisent
 > jamais. Détail du mode : **§8 quater**.
 
-> 🆕 ⚠️⚠️ **`immo` est le SECOND drapeau qui S'ALLUME** (v4.122.0) : l'onglet
-> **Logement** n'existe que dans les pays que l'exploitation ouvre, un par un.
-> L'immobilier ne coûte rien, mais il n'a d'annonces que là où des agences
-> publient — et un onglet vide se lit « Dira ne marche pas ici », ce qui est
-> faux pour les repas et les courses du même écran. **Son défaut est `false`.**
-> C'est un réglage d'**affichage** : les routes `/immo/…` ne le lisent pas, et
-> une recherche dans un pays fermé rend une liste vide. Détail : **§10**.
+> 🆕 **`immo` dit si l'application Dira Immo est ouverte dans ce pays**
+> (v4.122.0). ⚠️ **L'application cliente n'en fait rien** : le logement n'est
+> pas un de ses onglets, c'est une **autre application** (§10). C'est le
+> **second drapeau qui s'allume** — défaut `false` —, servi à toutes les
+> applications parce que le catalogue l'est en entier.
 
 **Lisez-la une fois à l'ouverture**, gardez-la en mémoire, et **cachez vos
 entrées de menu** sur ce qu'elle dit. C'est ce qui évite de proposer un bouton
@@ -311,9 +308,8 @@ coupée — sinon une fonction nouvelle disparaîtrait de vos écrans le jour o�
 serveur l'annonce.
 
 ⚠️ **SAUF LES DEUX QUI S'ALLUMENT** : `assistant_live` et `immo` (v4.122.0).
-Absentes, elles valent **`false`** — le direct parce qu'il est facturé, le
-logement parce qu'un onglet sans annonces ne doit pas apparaître dans douze
-pays le jour où l'application sort.
+Absentes, elles valent **`false`** — le direct parce qu'il est facturé,
+l'immobilier parce qu'il n'a d'annonces que là où des agences publient.
 
 ### `lists` — des listes blanches, et une liste absente veut dire « tout »
 
@@ -964,12 +960,9 @@ Trois décisions qui n'existaient pas quand il y avait deux applications :
    repas dakarois et une course dakaroise ; ne gardez pas un pays par onglet.
 3. **L'accueil n'a pas d'onglet.** Sur un écran où les deux métiers cohabitent,
    **n'envoyez pas** `vertical` : c'est au serveur de trancher.
-4. 🆕 **Le logement est un TROISIÈME onglet, et il n'existe que si
-   `features.immo` le dit** (v4.122.0, §10). Pas d'onglet grisé, pas d'écran
-   « bientôt » : un pays fermé n'a pas d'onglet. ⚠️ **Et l'assistant n'y est
-   pas** : il ne sert que les repas et les courses (§8) — `vertical: "immo"` est
-   refusé, et « je cherche un trois-pièces » envoyé sans `vertical` partirait
-   vers un taxi ou un repas.
+4. 🆕 **Le logement n'est PAS un onglet** (v4.123.0) : c'est l'application
+   **Dira Immo**, à part, avec le **même compte** (§10). N'en dessinez aucun
+   écran ici.
 
 ---
 
@@ -992,8 +985,7 @@ serveur tranche de quel métier il s'agit, délègue à l'assistant de ce métie
 et vous rend sa réponse **telle quelle**.
 
 ⚠️ **L'IMMOBILIER N'Y EST PAS** (v4.122.0). `vertical` n'accepte que `vtc` et
-`food` : `"immo"` rend `422 validation_failed` (`fields: ["vertical"]`). Ne
-montrez pas la boîte de l'assistant sur l'onglet Logement.
+`food` : `"immo"` rend `422 validation_failed` (`fields: ["vertical"]`).
 
 ### `plan` est celui du métier qui a répondu
 
@@ -2621,9 +2613,8 @@ l'apparence d'un vrai.
 
 ## 9. 🆕 LE FIL D'ACTIVITÉ — courses et commandes, par semaine (v4.43.0)
 
-> ⚠️ **Les visites de l'immobilier n'y sont pas** (v4.122.0) : elles se lisent
-> par `GET /immo/me/visits` (§10). Un fil qui les attendrait les attendrait
-> toujours.
+> ⚠️ **Les visites de l'immobilier n'y sont pas** (v4.122.0) : elles vivent dans
+> l'application Dira Immo (§10).
 
 ```
 GET /analytics/activity?weeks=4&before=2026-10-05T00:00:00Z
@@ -2805,49 +2796,21 @@ départ : sans lui, vous lisez les modes et le catalogue du pays du **compte**,
 et vous recevez les prix du pays où la course se fera. Deux pays dans un seul
 écran.
 
-### 🆕 Logement → **`IMMO-SEEKER.md`** (base `…/api/v1/immo`, v4.122.0)
+### 🆕 Logement → l'application **Dira Immo** — **pas ici** (v4.123.0)
 
-L'immobilier est un **onglet** de cette application, pas une application de
-plus : même compte `client`, même session, même téléphone déclaré, même boîte.
+Le chercheur de logement a **son application**, Dira Immo (iOS et Android), et
+il y entre avec **le même compte** que celui des repas et des courses. Cette
+application-ci n'a **aucun écran** de l'immobilier, et ne doit pas en avoir.
 
-| Ce que vous faites | Routes |
-|---|---|
-| Savoir si l'onglet existe | `GET /app/config` → `features.immo` (§4 ter). ⚠️⚠️ **Il S'ALLUME pays par pays, et absent il vaut `false`** — l'inverse des autres clés. Relu à chaque changement de pays : l'onglet peut apparaître ou disparaître |
-| Chercher — **sans compte** | `GET /immo/listings` : `q`, `kind`, `city`, `price_min`/`price_max`, `bedrooms_min`… et une forme de carte **au choix** (`bbox` du rectangle visible, `near` + `radius_m`, `polygon`) · `GET /immo/listings?ids=a,b,c` pour comparer |
-| Lire une annonce | `GET /immo/listings/{ref}` · `GET /immo/listings/{ref}/visit-slots` (public : on choisit son heure **avant** de se connecter) |
-| | 🔗 **PARTAGER — `share_url`** (fiche seulement) : l'adresse publique de l'annonce, **composée par le serveur** dans la langue de la requête → la feuille de partage du système. **Absente → pas de bouton.** ⚠️ **Ne la fabriquez pas** : l'hôte change d'un environnement à l'autre. ⚠️ Elle ouvre le **site**, pas l'application — aucun lien universel ni App Link n'est servi |
-| Garder | `GET /immo/me/favorites` · `PUT /immo/me/favorites/{ref}` · `DELETE /immo/me/favorites/{ref}` — sans compte, **sur l'appareil**, puis **union** au compte à la connexion (`PUT` un par un, idempotent). ⚠️ Rangés **par pays** : un favori du Gabon porté sur un compte du Tchad rend `404` — gardez-le sur l'appareil |
-| Être prévenu | `GET /immo/me/saved-searches` · `POST /immo/me/saved-searches` · `PATCH /immo/me/saved-searches/{id}` · `DELETE /immo/me/saved-searches/{id}` |
-| Visiter | `POST /immo/me/visits` · `GET /immo/me/visits` · `POST /immo/me/visits/{id}/cancel` — ⚠️ **pas de route pour une seule visite** : la liste, puis l'`id` |
-| Signaler | `POST /immo/listings/{ref}/reports` |
+Ce qui vous concerne quand même :
 
-⚠️⚠️ **TROIS RÈGLES DE CONFIANCE, QUI NE SONT PAS DES MANQUES :**
-
-1. **Le téléphone de l'annonceur n'apparaît qu'une fois la visite
-   CONFIRMÉE** — dans `contact`, sur la visite. C'est **là** que le bouton
-   `tel:` existe, et nulle part ailleurs ; jamais dans le carnet de contacts,
-   rien de gardé au-delà de la visite.
-2. **Un particulier est un CERCLE** de `property.geo.approx_m` mètres : jamais
-   d'épingle au centre, jamais d'itinéraire vers ce point — il conduirait chez
-   un voisin. L'adresse exacte vient avec la visite confirmée, et l'itinéraire
-   avec elle.
-3. **`verified: false` s'écrit « non vérifié »**, en toutes lettres.
-
-⚠️ **LES PHOTOS** : `thumb_url` dans les listes et les cartes, `url` en
-galerie ; le cache d'images s'indexe par l'adresse **stable** de la réponse,
-jamais par la redirection signée (elle meurt en douze heures) ; une photo `404`
-est une annonce close — emplacement vide, et purge du cache.
-
-⚠️ **HORS LIGNE** : la dernière lecture s'affiche avec son heure ; **jamais**
-de demande de visite, d'annulation ni de signalement mis en file — le créneau
-aura été pris, et l'annonceur prévenu à tort.
-
-⚠️ **L'HEURE D'UNE VISITE** s'affiche dans le fuseau **du pays du bien**, pas
-dans celui du téléphone.
-
-**Ce que l'onglet n'a pas** : ni assistant (§8), ni fil d'activité (§9), ni
-portefeuille, codes promo ou SOS (rien ne s'y paie, une visite n'est pas un
-trajet), ni socket (§11).
+- ⚠️ **Ses notifications ne viennent pas ici** quand Dira Immo est installée :
+  le socle les envoie à **son** téléphone (`app: "immo"` à l'enregistrement).
+  **Sans Dira Immo**, elles arrivent **ici** — la personne a pu demander sa
+  visite depuis le site. Affichez-les dans la boîte **sans rien ouvrir** (ou un
+  lien vers Dira Immo), §12.
+- ⚠️ Et dans l'autre sens, **vos** notifications (courses, repas, support) ne
+  vont **jamais** au téléphone de Dira Immo : rien à faire de votre côté.
 
 ---
 
@@ -2885,10 +2848,6 @@ sous prétexte que ce sont deux WebSockets. Celui des commandes est global et
 vit tant que l'application est ouverte ; celui du suivi est **par opération**
 et se referme quand l'écran se ferme. Une couche unique « le socket » finit par
 fermer le mauvais.
-
-🆕 ⚠️ **L'IMMOBILIER N'A AUCUNE SOCKET** (v4.122.0) : une annonce ne bouge pas à
-la seconde. Une visite confirmée, refusée ou rappelée arrive en **push**, et
-l'écran **relit** `GET /immo/me/visits`.
 
 ⚠️ **LES COURSES N'ONT PAS DE SOCKET GLOBAL.** Il n'existe rien qui annonce
 « une de vos courses a changé » : pour une course, c'est le socket du suivi de
@@ -3051,16 +3010,15 @@ Détail complet, écran par écran : `VTC-CLIENT` et `FOOD-CLIENT`, section 🆘
 
 ## 12. ⚠️ Une seule boîte, deux vocabulaires
 
-`GET /me/notifications` (socle) rend **tout** : les commandes, les courses et
-🆕 l'immobilier, dans une seule liste. Chaque entrée porte une **clé de gabarit** et des **données**.
+`GET /me/notifications` (socle) rend **tout** : les commandes, les courses — et
+🆕 l'immobilier, puisque c'est le même compte —, dans une seule liste. Chaque entrée porte une **clé de gabarit** et des **données**.
 
 | Métier | Clés | Données |
 |---|---|---|
 | Livraison | `order_confirmed` · `order_preparing` · `order_ready` · `order_assigned` · `order_delivered` · `order_cancelled` | `type: "order_status"`, `order_id`, `status` |
 | Courses | `ride_accepted` · `ride_driver_on_the_way` · `ride_driver_arrived` · `ride_driver_honked` · `ride_cancelled` · `ride_search_exhausted` · `ride_fare_adjusted` · `ride_rate_prompt` | `type: "ride_status"`, `ride_id`, `status` |
 | Courses partagées | `ride_pool_matched` · `ride_pool_no_match` · `ride_pool_partner_left` | `type: "ride_status"`, `ride_id`, `dispatch_reason` |
-| 🆕 Logement — visites | `immo_visit_confirmed` · `immo_visit_declined` · `immo_visit_cancelled` · `immo_visit_reminder` | `type: "immo_visit"`, `visit_id`, `listing_id` → **la visite** (la liste, puis l'`id`) |
-| 🆕 Logement — alertes | `immo_saved_search_match` | `type: "immo_saved_search"`, `saved_search_id`, `listing_id`, `slug` → **l'annonce** `slug`, et « voir toute la recherche » |
+| 🆕 Logement (Dira Immo) | `immo_visit_*` · `immo_saved_search_match` | `type: "immo_visit"` ou `"immo_saved_search"` → ⚠️ **ici, n'ouvrez rien** : ils appartiennent à l'application Dira Immo (§10). Affichez-les, ou proposez de l'ouvrir |
 | Transverse | `ticket_reply` · `ticket_resolved` · `session_superseded` | selon le gabarit |
 
 ⚠️ **ROUTEZ SUR `data.type`, PAS SUR LA CLÉ.** `type` dit quel écran ouvrir,
@@ -3140,7 +3098,7 @@ du métier.
 
 ## 14. Liste de contrôle d'intégration
 
-- [ ] **Cinq** bases configurées (🆕 `…/api/v1/immo/`), et une vérification à la construction que chaque route part de la bonne.
+- [ ] **Quatre** bases configurées, et une vérification à la construction que chaque route part de la bonne.
 - [ ] `app: "client"` à la connexion ; `403 wrong_app` traité avec `error.reason`.
 - [ ] Porte par code : compte à rebours rendu depuis `expires_at`, « renvoyer » gouverné par `resend_after`, nom demandé **seulement** si `created: true`, `dev_code` jamais nécessaire au fonctionnement.
 - [ ] Verrou : `app_lock` relu à **chaque** réponse qui le porte (y compris le rafraîchissement) et appliqué à chaud ; code de secours toujours possible ; au-delà de `max_attempts`, **déconnexion** — jamais blocage.
@@ -3169,12 +3127,7 @@ du métier.
 - [ ] Fil d'activité : `next_before` redonné, semaines vides sautées, `timezone` utilisé, `sources` affiché quand un métier manque.
 - [ ] Deux sockets distincts, cycles de vie séparés ; `GET` à chaque reconnexion.
 - [ ] Notifications routées sur `data.type` ; clé inconnue affichée sans ouvrir.
-- [ ] 🆕 **Logement** : l'onglet n'existe que si `features.immo` ; relu au changement de pays ; **pas** d'assistant sur cet onglet.
-- [ ] 🆕 **Logement** : on cherche **sans compte** ; la connexion se propose au geste (garder, être prévenu, visiter) et revient sur l'annonce.
-- [ ] 🆕 **Logement** : `immo_visit` ouvre la visite **relue** ; `immo_saved_search` ouvre l'annonce `slug`.
-- [ ] 🆕 **Logement** : un particulier est un **cercle**, jamais une épingle ni un itinéraire ; `tel:` et itinéraire **seulement** sur une visite confirmée ; rien dans le carnet de contacts.
-- [ ] 🆕 **Logement** : `share_url` partagé tel quel, jamais fabriqué ; absent → pas de bouton.
-- [ ] 🆕 **Logement** : favoris gardés sur l'appareil sans compte, puis **union** au compte ; aucune demande de visite mise en file.
+- [ ] 🆕 **Logement** : aucun écran ici — c'est l'application Dira Immo. Les notifications `immo_*` arrivées dans la boîte s'affichent **sans rien ouvrir**.
 - [ ] Un seul carnet d'adresses, un seul solde, une seule boîte.
 - [ ] 🆕 **Le direct** (§8 quater) : l'entrée « En direct » n'existe que si `features.assistant_live` **et** le bloc `live` sont servis ; jamais la seule sortie d'un écran.
 - [ ] 🆕 Le jeton du direct part dans l'en-tête `Authorization`, **jamais** dans l'URL de la socket.
@@ -3192,6 +3145,17 @@ du métier.
 ---
 
 ## 15. Journal
+
+### 4.123.0 — 10 novembre 2026
+
+🔧 **LE LOGEMENT N'EST PAS UN ONGLET D'ICI** : c'est l'application Dira Immo, avec le
+même compte (§10). La 4.122.0 en faisait un troisième onglet — retiré, avec sa
+cinquième base d'URL. Restent : `features.immo` dans `/app/config` (dont vous ne
+faites rien), et les notifications `immo_*` qui arrivent ici **quand Dira Immo
+n'est pas installée** — à afficher sans rien ouvrir (§12).
+
+🔧 **`GET /notifications` n'existait pas** : c'est `GET /me/notifications` (corrigé
+en 4.122.0).
 
 ### 4.120.0 — 5 novembre 2026
 

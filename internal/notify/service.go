@@ -120,6 +120,7 @@ func (s *Service) RegisterDevice(ctx context.Context, userID string, req Registe
 		Platform: req.Platform,
 		Locale:   normalizeLocale(req.Locale),
 		Edition:  ed,
+		App:      req.App,
 	})
 }
 
@@ -134,21 +135,27 @@ func (s *Service) RegisterDevice(ctx context.Context, userID string, req Registe
 //
 // Mieux vaut une notification dans la mauvaise application qu'un passager qui
 // attend une voiture déjà repartie.
-func (s *Service) devicesFor(ctx context.Context, uid primitive.ObjectID, ed string) ([]Device, error) {
+func (s *Service) devicesFor(ctx context.Context, uid primitive.ObjectID, ed, key string) ([]Device, error) {
+	// ⚠️ L'APPLICATION QUI SAIT OUVRIR CE MESSAGE EST TRIÉE AVANT LE REPLI SUR
+	// L'ÉDITION (`app.go`). Triée après, un compte qui n'a de « complète » que
+	// Dira Immo (Dira Immo + Lite) voyait la course partir vers Dira Immo, puis
+	// en être retirée : personne n'était prévenu, alors que Lite l'attendait.
 	if ed == "" {
-		return s.repo.ActiveDevices(ctx, uid)
+		all, err := s.repo.ActiveDevices(ctx, uid)
+		return routeByApp(all, key), err
 	}
 	only, err := s.repo.ActiveDevicesOfEdition(ctx, uid, ed)
 	if err != nil {
 		return nil, err
 	}
-	if len(only) > 0 {
+	if only = routeByApp(only, key); len(only) > 0 {
 		return only, nil
 	}
 	all, err := s.repo.ActiveDevices(ctx, uid)
 	if err != nil {
 		return nil, err
 	}
+	all = routeByApp(all, key)
 	if len(all) > 0 {
 		slog.InfoContext(ctx, "notify: no device of that edition, falling back to all of them",
 			"user_id", uid.Hex(), "edition", ed, "devices", len(all))
@@ -223,7 +230,7 @@ func (s *Service) notify(ctx context.Context, userID, ed, key string, vars map[s
 		}
 	}
 
-	devices, err := s.devicesFor(ctx, uid, ed)
+	devices, err := s.devicesFor(ctx, uid, ed, key)
 	if err != nil {
 		slog.WarnContext(ctx, "notify: devices unavailable", "user_id", userID, "error", err)
 		devices = nil

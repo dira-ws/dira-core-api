@@ -69,7 +69,10 @@ type Device struct {
 	// propriété de l'INSTALLATION, et la rattacher au compte aurait rendu
 	// impossible de distinguer ses deux téléphones — ou ses deux applications
 	// sur le même téléphone.
-	Edition    string    `bson:"edition,omitempty"`
+	Edition string `bson:"edition,omitempty"`
+	// App : `immo` quand le jeton est celui de l'application Dira Immo ; absent
+	// sinon (voir `app.go`). ⚠️ PROPRIÉTÉ DE L'INSTALLATION, comme l'édition.
+	App        string    `bson:"app,omitempty"`
 	CreatedAt  time.Time `bson:"created_at"`
 	LastSeenAt time.Time `bson:"last_seen_at"`
 	// DisabledAt marque un jeton que FCM a déclaré mort. On le GARDE, daté,

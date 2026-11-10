@@ -1,6 +1,6 @@
 # IMMOBILIER — ANNONCEUR (agence ou particulier) — contrat d'API
 
-> **Version 4.122.0** · 10 novembre 2026
+> **Version 4.123.0** · 10 novembre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Immobilier : `https://api-staging.dira.llc/api/v1/immo`
 
 ---
@@ -273,9 +273,9 @@ refuse **avant** d'émettre le jeton :
 ⚠️ **`error.reason` NOMME L'APPLICATION À OUVRIR** (`client`, `driver`,
 `merchant`, `partner`…) : affichez-la. Une valeur inconnue n'est pas une erreur
 — repli sur `error.message`, déjà traduit. ⚠️ **Et c'est `reason`, pas
-`meta`.** Un annonceur qui cherche aussi un logement le fait dans l'application
-cliente, **avec un compte client** : un compte n'a qu'un rôle, et un numéro de
-téléphone ne porte qu'un compte.
+`meta`.** Un annonceur qui cherche aussi un logement le fait dans **Dira Immo**,
+l'application du chercheur, **avec un compte client** : un compte n'a qu'un
+rôle, et un numéro de téléphone ne porte qu'un compte.
 
 | Refus | Code |
 |---|---|
@@ -1569,18 +1569,18 @@ l'`id` est `visit_id` (9.4).
 
 ## 10 bis. 🆕 📱 SUR LE TÉLÉPHONE DE L'AGENT — l'application des annonceurs (v4.122.0)
 
-L'annonceur a **son application**, distincte de l'application cliente : celle
-qui se connecte avec `"app": "immo_pro"`, pour Android et iOS. Elle sert les
+L'annonceur a **son application**, **Dira Immo Pro** — native, Android et iOS —,
+celle qui se connecte avec `"app": "immo_pro"`. Elle sert les
 trois rangs d'une agence (porteur, `manager`, `agent`) **et** le particulier :
 c'est la **fiche** (section 3) qui dit lesquels de ses écrans existent, pas
 l'application installée. Cette section dit ce qu'un téléphone ajoute aux
 précédentes ; tout le reste vaut tel quel.
 
-⚠️ **CE N'EST PAS UN ONGLET DE L'APPLICATION CLIENTE.** Un compte a un rôle, un
-seul : le compte `publisher` qui publie n'est pas le compte `client` qui
-cherche. Un agent qui cherche aussi un logement le fait dans l'application
-cliente, **avec un compte client** — et `403 wrong_app` (`reason` nomme
-l'application à ouvrir) l'y envoie s'il se trompe de porte.
+⚠️ **CE N'EST PAS DIRA IMMO, L'APPLICATION DU CHERCHEUR.** Un compte a un rôle,
+un seul : le compte `publisher` qui publie n'est pas le compte `client` qui
+cherche. Un agent qui cherche aussi un logement le fait dans **Dira Immo**,
+**avec un compte client** — et `403 wrong_app` (`reason` nomme l'application à
+ouvrir) l'y envoie s'il se trompe de porte.
 
 ### 10 bis.1 L'ouverture — trois appels, dans cet ordre
 
@@ -1593,7 +1593,9 @@ l'application à ouvrir) l'y envoie s'il se trompe de porte.
    détaché qui garde l'écran de son ancienne agence se fait refuser geste après
    geste.
 3. **Le téléphone** — `POST /me/devices { "token": "…", "platform":
-   "android" | "ios" }` après **chaque** connexion, et quand le système change
+   "android" | "ios" }` après **chaque** connexion — **sans** `app` : ce champ
+   ne sert qu'à séparer Dira Immo de l'application cliente, qui partagent un
+   compte ; un compte `publisher` n'a que Dira Immo Pro —, et quand le système change
    le jeton de notification. ⚠️ **`DELETE /me/devices/{token}` AVANT
    `POST /auth/logout`** : la déconnexion **ne retire pas** le téléphone, et
    après elle la session n'a peut-être plus le droit de le faire. Oublié, le
@@ -1901,10 +1903,16 @@ côté application.
 
 ## 15. Journal
 
+### 4.123.0 — 10 novembre 2026
+
+🔧 **L'application se nomme Dira Immo Pro**, et un agent qui cherche un logement le
+fait dans **Dira Immo** (l'application du chercheur), plus dans l'application
+cliente. `POST /me/devices` reste **sans** `app` ici (§10 bis.1).
+
 ### 4.122.0 — 10 novembre 2026
 
-🟢 **SUR LE TÉLÉPHONE DE L'AGENT** (§10 bis) : l'application des annonceurs
-(`app: "immo_pro"`) — l'ouverture en trois appels, le téléphone retiré **avant** la
+🟢 **SUR LE TÉLÉPHONE DE L'AGENT** (§10 bis) : l'application des annonceurs, Dira
+Immo Pro (`app: "immo_pro"`) — l'ouverture en trois appels, le téléphone retiré **avant** la
 déconnexion, la notification qui ouvre une visite, les photos depuis l'appareil
 photo (réduire à 1 600 px, convertir le HEIC, la seule file permise), la position
 du bien sans position par défaut, l'appel au visiteur jamais gardé dans les
