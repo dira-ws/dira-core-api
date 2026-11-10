@@ -140,3 +140,23 @@ func TestARefusalThroughTheRealRoute(t *testing.T) {
 	_, view := appelle(t, h, http.MethodGet, "/admin/languages", "")
 	assert.Equal(t, false, view["saved"], "un refus n'écrit rien")
 }
+
+// ⚠️⚠️ L'IMMOBILIER S'ÉCRIT VRAIMENT, et se relit — sur une vraie base, à travers
+// la vraie route. C'est le chemin qu'un `$set` oublié aurait cassé sans bruit :
+// la console aurait affiché les pays qu'elle venait d'envoyer, et l'onglet ne
+// se serait jamais ouvert.
+func TestImmoCountriesRoundTripOnARealBase(t *testing.T) {
+	h := routesSurBase(t)
+	code, out := appelle(t, h, http.MethodPut, "/admin/app-config", `{"immo":["td","GA"]}`)
+	require.Equal(t, http.StatusOK, code, "%v", out)
+
+	_, again := appelle(t, h, http.MethodGet, "/admin/app-config", "")
+	rules := again["rules"].(map[string]any)
+	assert.Equal(t, []any{"GA", "TD"}, rules["immo"])
+
+	code, out = appelle(t, h, http.MethodPut, "/admin/app-config", `{"immo":["GA","Gabon"]}`)
+	require.Equal(t, http.StatusUnprocessableEntity, code)
+	refus := out["error"].(map[string]any)
+	assert.Equal(t, "Gabon", refus["reason"], "la console affiche ce champ")
+	assert.Equal(t, []any{"immo"}, refus["fields"])
+}

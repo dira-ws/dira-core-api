@@ -81,6 +81,7 @@ func (r *Repository) Save(ctx context.Context, reg appconfig.Registry, actor str
 			// jusqu'au prochain rechargement. Une épreuve de parité tient
 			// cette liste à jour.
 			"live":       reg.Live,
+			"immo":       reg.Immo,
 			"updated_at": time.Now().UTC(),
 			"updated_by": actor,
 		},

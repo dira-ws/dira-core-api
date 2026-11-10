@@ -1,6 +1,6 @@
 # IMMOBILIER — ANNONCEUR (agence ou particulier) — contrat d'API
 
-> **Version 4.121.0** · 10 novembre 2026
+> **Version 4.122.0** · 10 novembre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Immobilier : `https://api-staging.dira.llc/api/v1/immo`
 
 ---
@@ -1327,6 +1327,11 @@ rue vide, les photos, la complétude. ⚠️ **Elle ne répond que pour une anno
 `published`** (`404 listing_not_found` sinon) : c'est un aperçu de ce qui est
 en ligne, pas d'un brouillon.
 
+🆕 **Elle porte `share_url`** (v4.122.0) : l'adresse de l'annonce sur le site
+public, composée par le serveur dans la langue de la requête — **c'est elle qui
+se partage** (section 10 bis.6). Absente quand le déploiement ne connaît pas son
+site : pas de bouton, alors. ⚠️ Ne la fabriquez pas.
+
 ---
 
 ## 9. Les créneaux et les visites
@@ -1562,6 +1567,153 @@ l'`id` est `visit_id` (9.4).
 
 ---
 
+## 10 bis. 🆕 📱 SUR LE TÉLÉPHONE DE L'AGENT — l'application des annonceurs (v4.122.0)
+
+L'annonceur a **son application**, distincte de l'application cliente : celle
+qui se connecte avec `"app": "immo_pro"`, pour Android et iOS. Elle sert les
+trois rangs d'une agence (porteur, `manager`, `agent`) **et** le particulier :
+c'est la **fiche** (section 3) qui dit lesquels de ses écrans existent, pas
+l'application installée. Cette section dit ce qu'un téléphone ajoute aux
+précédentes ; tout le reste vaut tel quel.
+
+⚠️ **CE N'EST PAS UN ONGLET DE L'APPLICATION CLIENTE.** Un compte a un rôle, un
+seul : le compte `publisher` qui publie n'est pas le compte `client` qui
+cherche. Un agent qui cherche aussi un logement le fait dans l'application
+cliente, **avec un compte client** — et `403 wrong_app` (`reason` nomme
+l'application à ouvrir) l'y envoie s'il se trompe de porte.
+
+### 10 bis.1 L'ouverture — trois appels, dans cet ordre
+
+1. **La session** : jeton gardé dans le stockage **chiffré** du téléphone
+   (Keystore, Trousseau) ; `POST /auth/refresh` si l'accès a expiré.
+2. **La porte** — `GET /immo/publishers/me` : elle dit s'il faut créer la fiche,
+   attendre une invitation d'agence ou ouvrir l'accueil, et **quel rang** porte
+   ce compte (section 3). ⚠️ **Relisez-la à chaque retour au premier plan** :
+   un détachement d'agence n'est **pas** notifié (section 10), et un agent
+   détaché qui garde l'écran de son ancienne agence se fait refuser geste après
+   geste.
+3. **Le téléphone** — `POST /me/devices { "token": "…", "platform":
+   "android" | "ios" }` après **chaque** connexion, et quand le système change
+   le jeton de notification. ⚠️ **`DELETE /me/devices/{token}` AVANT
+   `POST /auth/logout`** : la déconnexion **ne retire pas** le téléphone, et
+   après elle la session n'a peut-être plus le droit de le faire. Oublié, le
+   téléphone de l'agence prêté à quelqu'un d'autre continue de recevoir les
+   demandes de visite.
+
+### 10 bis.2 Une notification ouvre une visite
+
+- `data.type: "immo_visit"` → **l'écran des visites**, puis celle dont l'`id`
+  est `visit_id`. ⚠️ Il n'y a pas de route pour une seule visite :
+  `GET /immo/publishers/me/visits` et cherchez-la par `id`.
+- ⚠️ **Relisez avant d'afficher les boutons** : entre la notification et le
+  toucher, le chercheur a pu annuler, et `POST …/decision` rendrait
+  `409 visit_status_transition`.
+- **Une demande à trancher se tranche d'un geste**, depuis la notification
+  ouverte : « Confirmer — le visiteur recevra le téléphone de l'agence » /
+  « Refuser ». Une demande qui attend expire **toute seule à l'heure** — et le
+  chercheur a attendu pour rien.
+- Une clé inconnue s'affiche dans la boîte (`GET /me/notifications`), sans rien
+  ouvrir.
+
+### 10 bis.3 ⚠️⚠️ Les photos, depuis l'appareil photo
+
+C'est l'écran qui fait l'annonce, et celui qui coûte le plus de réseau. Les
+règles de la section 7 restent la loi ; voici ce qu'un téléphone y ajoute.
+
+- **RÉDUISEZ AVANT D'ENVOYER.** Le serveur ne garde que **1 600 px** sur le
+  grand côté : envoyer les 12 mégapixels du capteur (3 à 8 Mo) fait payer au
+  forfait de l'agent des pixels jetés à l'arrivée. Ramenez le grand côté à
+  **1 600 px** en JPEG de qualité ~0,8 (300 à 600 Ko) : sur un réseau 3G, dix
+  secondes au lieu de deux minutes. ⚠️ **Sauf si le petit côté passerait sous
+  480 px** (un panorama) : `422 media_too_small` — réduisez moins.
+- ⚠️ **LE HEIC N'EST PAS ACCEPTÉ** — c'est pourtant le format par défaut d'un
+  iPhone : `415 media_format`. Convertissez en **JPEG sur le téléphone** avant
+  l'envoi.
+- **L'orientation** : si vous réencodez, **appliquez la rotation aux pixels**
+  (les bibliothèques de redimensionnement le font) ; si vous envoyez
+  l'original, le serveur lit l'orientation et redresse.
+- **Rien à retirer des métadonnées** : le serveur jette tout, position GPS
+  comprise (section 7.1). Ne promettez pas l'original à la personne.
+- **Une à une, avec une progression par photo** — jamais trente en parallèle :
+  le serveur en traite deux à la fois, et les dernières expireraient.
+- ⚠️ **UNE FILE LOCALE DES PHOTOS NON ENVOYÉES EST PERMISE, ET SEULEMENT
+  ELLE.** Une photo prise sans réseau attend sur le téléphone et part au
+  retour du réseau. Mais **un envoi dont la réponse n'est pas arrivée a
+  peut-être réussi** (section 7.1 : un envoi rejoué crée une seconde photo) :
+  avant de le refaire, `GET …/photos` et comparez le nombre à celui d'avant
+  l'envoi.
+- **La permission** de l'appareil photo et de la galerie se demande **au
+  geste**, pas au démarrage. Sur Android 13 et plus, le sélecteur de photos du
+  système n'en demande aucune.
+- ⚠️ **Les adresses signées vivent une heure** (section 7.2). Le cache d'images
+  s'indexe par **l'`id` de la photo et sa taille**, jamais par `url` : la même
+  photo change d'adresse à chaque lecture.
+
+### 10 bis.4 Placer le bien — la position du téléphone
+
+- **« Je suis devant le bien »** est la meilleure source de `address.lat` /
+  `address.lng` : la position du téléphone, **avec sa précision affichée**.
+  Proposez d'attendre une meilleure position quand la précision dépasse
+  quelques dizaines de mètres, et laissez **déplacer l'épingle** sur la carte.
+- ⚠️ **AUCUNE POSITION PAR DÉFAUT.** Sans position, le formulaire **ne se valide
+  pas** : `(0, 0)` est refusé (`422 address_invalid`, `reason` « null island »),
+  et le centre de la ville passerait — faux.
+- `422 address_outside_country` : la position est dans un autre pays que celui
+  du compte (`reason` les nomme). Dites-le avec les deux noms ; c'est souvent
+  un agent frontalier qui saisit un bien de l'autre côté.
+- **Le fond de carte** : le choix de la personne, sinon `maps.basemap` du pays
+  (à la connexion et au rafraîchissement), sinon `dira`. ⚠️ Aucune clé de carte
+  n'est servie : celle de Google appartient à l'application.
+- ⚠️⚠️ **MONTREZ AU PARTICULIER CE QUE LE PUBLIC VERRA** : un **cercle** de
+  300 m, pas son épingle. Il saisit l'adresse exacte de sa maison ; il doit voir
+  sur le même écran que personne ne la lira avant une visite confirmée.
+
+### 10 bis.5 Appeler un visiteur
+
+- **Le bouton « appeler » n'existe que sur une visite `confirmed` ou
+  `attended`** dont `seeker.phone` est servi : un lien `tel:`.
+- ⚠️ **JAMAIS DANS LE CARNET DE CONTACTS DU TÉLÉPHONE**, et rien de gardé sur
+  l'appareil au-delà de la visite : annulée ou constatée `no_show`, elle
+  referme le contact (section 9.4). Le téléphone d'une agence passe de main en
+  main ; un carnet rempli de numéros de visiteurs serait une fuite que personne
+  ne verrait.
+- **Rappeler un absent, c'est AVANT de constater `no_show`** : après, le numéro
+  n'est plus servi. Mettez « appeler » au-dessus de « absent ».
+- **`mode: "video"`** : aucun lien de visioconférence n'est servi. La visite
+  confirmée donne le contact ; c'est par lui qu'on se joint.
+
+### 10 bis.6 Partager une annonce en ligne — `share_url`
+
+- Une annonce **`published`** se partage par **l'adresse du site public**, que
+  le serveur compose : lisez-la dans la **vue publique**
+  (`GET /immo/listings/{ref}`, section 8.8) → `share_url`, dans la langue de la
+  requête. Passez-la à la feuille de partage du système — WhatsApp et
+  Facebook en tête.
+- ⚠️ **Avant la publication, il n'y a pas de lien** : la vue publique rend
+  `404 listing_not_found` pour un brouillon, et un lien partagé trop tôt
+  ouvrirait une page introuvable chez tous les contacts de l'agent.
+- ⚠️ **`share_url` absent → pas de bouton.** Ne fabriquez pas l'adresse : l'hôte
+  change d'un environnement à l'autre.
+
+### 10 bis.7 Hors ligne, réseau faible — ce qui attend et ce qui n'attend pas
+
+| Geste | Sans réseau |
+|---|---|
+| Lire ses biens, annonces et visites | la dernière lecture, **avec son heure** |
+| Remplir le formulaire d'un bien | **gardé sur l'appareil**, envoyé au retour du réseau. ⚠️ `POST /immo/properties` n'est pas idempotent : un envoi sans réponse se vérifie par `GET /immo/properties` **avant** d'être refait, sinon le bien existe deux fois |
+| Prendre des photos | la file locale de 10 bis.3 |
+| ⚠️ Confirmer, refuser ou annuler une visite | **jamais en file** : la demande aura expiré ou le chercheur annulé, et l'autre partie aura été prévenue à tort |
+| ⚠️ Constater une présence, changer l'état d'une annonce, rattacher un collaborateur | **jamais en file**, pour la même raison |
+
+### 10 bis.8 Les heures
+
+Toute heure s'affiche dans le **fuseau du pays du bien** (Lomé : UTC+0 ;
+Libreville et N'Djamena : UTC+1), pas dans celui du téléphone : c'est l'heure
+que le texte de la notification donne déjà, et un agent qui lit « 15:00 » dans
+la notification et « 14:00 » dans l'écran ne sait plus à quelle heure venir.
+
+---
+
 ## 11. Les réglages de publication — `GET /immo/settings/publication`
 
 Ce que publier coûte **annoncé** dans le pays du compte. Lisible par tout
@@ -1624,6 +1776,8 @@ côté application.
 | **Réattribuer les annonces ou les visites d'un collaborateur** | aucune route : voir les pièges du détachement (5.3) |
 | **Une visite seule, par son identifiant** | lire la liste (9.4) |
 | **Un code par SMS ou WhatsApp pour se connecter** | réservé aux comptes clients (2.2) |
+| **Ouvrir l'application depuis un lien d'annonce** | le site ne publie ni `assetlinks.json` (Android) ni `apple-app-site-association` (iOS) : `share_url` ouvre le **navigateur** |
+| **Une route de synchronisation hors ligne** | aucune : la dernière lecture s'affiche avec son heure, et seules les photos et le formulaire d'un bien attendent le réseau (10 bis.7) |
 
 > ⚠️ **SI L'UN DE CES CHAMPS APPARAÎT UN JOUR DANS UNE RÉPONSE, NE L'AFFICHEZ
 > PAS — signalez-le.** Une interface qui l'affiche le rend définitif.
@@ -1646,7 +1800,13 @@ côté application.
 - [ ] **Listes** : `items: null` traité comme `[]` ; la fin de la liste des biens = `next_cursor` **absent**, celle des annonces = `next_cursor` **vide**.
 - [ ] **Clôture / pause** : la confirmation propose d'annuler les visites à venir.
 - [ ] **Visites** : les demandes à trancher en tête ; l'heure affichée dans le fuseau du pays ; « Confirmer » dit qu'il donne le téléphone de la fiche (et l'adresse, pour un particulier) ; la présence constatée **avant** de retirer un créneau passé ; le contact du chercheur jamais gardé au-delà de la visite.
-- [ ] **Notifications** : appareil déclaré à la connexion, retiré à la déconnexion ; `type: "immo_visit"` ouvre la bonne visite.
+- [ ] **Notifications** : appareil déclaré à la connexion, retiré **avant** la déconnexion ; `type: "immo_visit"` ouvre la bonne visite, **relue** avant d'afficher ses boutons.
+- [ ] 🆕 **Téléphone — la porte** relue à chaque retour au premier plan (un détachement n'est pas notifié).
+- [ ] 🆕 **Téléphone — les photos** : réduites à 1 600 px sur le grand côté (jamais sous 480 px sur le petit) ; le HEIC converti en JPEG ; un envoi sans réponse vérifié par la liste avant d'être refait ; cache indexé par `id`, jamais par `url`.
+- [ ] 🆕 **Téléphone — la position** : précision affichée, épingle déplaçable, aucune position par défaut ; le particulier voit le cercle que verra le public.
+- [ ] 🆕 **Téléphone — appeler** : `tel:` sur une visite `confirmed` / `attended` seulement ; rien dans le carnet de contacts ; « appeler » au-dessus de « absent ».
+- [ ] 🆕 **Téléphone — partager** : `share_url` lu sur la vue publique d'une annonce **en ligne** ; aucune adresse fabriquée.
+- [ ] 🆕 **Téléphone — hors ligne** : aucune décision de visite, présence, changement d'état ni rattachement mis en file ; un bien envoyé sans réponse vérifié par la liste avant d'être refait.
 - [ ] **Réglages** : aucun solde, aucun quota, aucun écran de paiement.
 - [ ] **Erreurs** : le `message` de `validation_failed` jamais montré ; `fields` souligne les cases.
 
@@ -1740,6 +1900,18 @@ côté application.
 ---
 
 ## 15. Journal
+
+### 4.122.0 — 10 novembre 2026
+
+🟢 **SUR LE TÉLÉPHONE DE L'AGENT** (§10 bis) : l'application des annonceurs
+(`app: "immo_pro"`) — l'ouverture en trois appels, le téléphone retiré **avant** la
+déconnexion, la notification qui ouvre une visite, les photos depuis l'appareil
+photo (réduire à 1 600 px, convertir le HEIC, la seule file permise), la position
+du bien sans position par défaut, l'appel au visiteur jamais gardé dans les
+contacts, le partage d'une annonce en ligne, ce qui attend le réseau et ce qui
+n'attend pas.
+
+🟢 **`share_url`** sur la vue publique (§8.8).
 
 ### 4.121.0 — 10 novembre 2026
 
