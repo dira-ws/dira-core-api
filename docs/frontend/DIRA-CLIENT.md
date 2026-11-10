@@ -1,6 +1,6 @@
 # App CLIENT UNIFIÉE — LIVRAISON **et** COURSES — contrat d'API
 
-> **Version 4.126.0** · 10 novembre 2026
+> **Version 4.127.0** · 10 novembre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Livraison : `…/api/v1/food` · Courses : `…/api/v1/vtc` · Combiné : `…/api/v1/analytics` · Suivi : `wss://tracking-staging.dira.llc`
 
 ---
@@ -3018,7 +3018,7 @@ Détail complet, écran par écran : `VTC-CLIENT` et `FOOD-CLIENT`, section 🆘
 | Livraison | `order_confirmed` · `order_preparing` · `order_ready` · `order_assigned` · `order_delivered` · `order_cancelled` | `type: "order_status"`, `order_id`, `status` |
 | Courses | `ride_accepted` · `ride_driver_on_the_way` · `ride_driver_arrived` · `ride_driver_honked` · `ride_cancelled` · `ride_search_exhausted` · `ride_fare_adjusted` · `ride_rate_prompt` | `type: "ride_status"`, `ride_id`, `status` |
 | Courses partagées | `ride_pool_matched` · `ride_pool_no_match` · `ride_pool_partner_left` | `type: "ride_status"`, `ride_id`, `dispatch_reason` |
-| 🆕 Logement (Dira Immo) | `immo_visit_*` · `immo_saved_search_match` | `type: "immo_visit"` ou `"immo_saved_search"` → ⚠️ **ici, n'ouvrez rien** : ils appartiennent à l'application Dira Immo (§10). Affichez-les, ou proposez de l'ouvrir |
+| 🆕 Logement (Dira Immo) | `immo_visit_*` · `immo_saved_search_match` · `immo_thread_message` | `type: "immo_visit"`, `"immo_saved_search"` ou `"immo_thread"` → ⚠️ **ici, n'ouvrez rien** : ils appartiennent à l'application Dira Immo (§10). Affichez-les, ou proposez de l'ouvrir |
 | Transverse | `ticket_reply` · `ticket_resolved` · `session_superseded` | selon le gabarit |
 
 ⚠️ **ROUTEZ SUR `data.type`, PAS SUR LA CLÉ.** `type` dit quel écran ouvrir,
