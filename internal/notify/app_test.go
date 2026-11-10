@@ -229,3 +229,28 @@ func TestTheImmoThreadMessageGoesToDiraImmoAndIsAMessage(t *testing.T) {
 		assert.Equal(t, "[body]", tmpl.Locales[loc].Body)
 	}
 }
+
+// ⚠️ #72, point 21 : CE QUI PRÉVIENT ENFIN L'ANNONCEUR va à Dira Immo, se range
+// avec les mises à jour — sauf un changement d'ACCÈS (rattaché, détaché), qui
+// ne se coupe pas — et ne promet aucune variable qu'il n'écrit pas.
+func TestTheImmoPublisherNoticesAreRoutedAndRanked(t *testing.T) {
+	updates := []string{KeyImmoListingPublished, KeyImmoListingReturned, KeyImmoListingModerated,
+		KeyImmoVisitExpired, KeyImmoVisitExpiredHost}
+	access := []string{KeyImmoMemberAttached, KeyImmoMemberDetached}
+	for _, key := range append(append([]string{}, updates...), access...) {
+		assert.Equal(t, AppImmo, AppOfKey(key), key)
+		tmpl, ok := defaults[key]
+		require.True(t, ok, key)
+		for _, loc := range []string{LocaleFR, LocaleEN} {
+			assert.NotEmpty(t, tmpl.Locales[loc].Title, "%s/%s", key, loc)
+			assert.NotEmpty(t, tmpl.Locales[loc].Body, "%s/%s", key, loc)
+		}
+	}
+	for _, key := range updates {
+		assert.Equal(t, CategoryOrderUpdates, categoryOf(key), key)
+	}
+	for _, key := range access {
+		assert.Equal(t, CategorySecurity, categoryOf(key), key)
+		assert.False(t, Muteable(categoryOf(key)), "%s : un changement d'accès ne se coupe pas", key)
+	}
+}

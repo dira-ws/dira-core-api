@@ -112,10 +112,16 @@ func categoryOf(key string) string {
 		// promotions aurait fait disparaître l'annonce la plus attendue du mois.
 		return CategorySupport
 	case KeyImmoVisitRequested, KeyImmoVisitConfirmed, KeyImmoVisitDeclined, KeyImmoVisitCancelled,
-		KeyImmoVisitReminder:
+		KeyImmoVisitReminder, KeyImmoVisitExpired, KeyImmoVisitExpiredHost,
+		KeyImmoListingPublished, KeyImmoListingReturned, KeyImmoListingModerated:
 		// Rangées avec les mises à jour, comme la nouvelle commande d'un
 		// marchand : une visite est une affaire en cours, pas une promotion.
 		return CategoryOrderUpdates
+	case KeyImmoMemberAttached, KeyImmoMemberDetached:
+		// ⚠️ NON COUPABLE : un changement d'ACCÈS — publier au nom d'une
+		// agence, ou ne plus le pouvoir — se dit toujours, comme une alerte de
+		// sécurité. Le couper laisserait quelqu'un publier sans savoir pour qui.
+		return CategorySecurity
 	case KeyImmoSavedSearchMatch:
 		// ⚠️ COUPABLE, ET C'EST VOULU : c'est une alerte qu'on a DEMANDÉE, pas
 		// une réponse qu'on attend. Rangée avec les mises à jour (et non dans

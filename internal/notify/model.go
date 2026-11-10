@@ -442,6 +442,18 @@ const (
 	// `chat_message` — et le corps est déjà MASQUÉ par l'immobilier (un numéro
 	// écrit avant une visite confirmée ne passe pas).
 	KeyImmoThreadMessage = "immo_thread_message"
+	// CE QUI PRÉVIENT ENFIN L'ANNONCEUR (dira-immo-api#72, point 21). ⚠️ Le
+	// texte ne porte ni la note de l'équipe ni le motif d'un retrait : ils se
+	// lisent dans l'application, pas sur un écran verrouillé.
+	KeyImmoListingPublished = "immo_listing_published" // l'équipe a publié
+	KeyImmoListingReturned  = "immo_listing_returned"  // l'équipe renvoie en brouillon
+	KeyImmoListingModerated = "immo_listing_moderated" // l'équipe a retiré
+	KeyImmoMemberAttached   = "immo_member_attached"   // au collaborateur rattaché
+	KeyImmoMemberDetached   = "immo_member_detached"   // au collaborateur détaché
+	// Une demande de visite jamais tranchée, close par le serveur à l'heure :
+	// une phrase par côté — le chercheur a attendu, l'annonceur a oublié.
+	KeyImmoVisitExpired     = "immo_visit_expired"      // → le chercheur
+	KeyImmoVisitExpiredHost = "immo_visit_expired_host" // → l'annonceur
 )
 
 // defaults sont les gabarits COMPILÉS, servis tant que la base n'en porte pas.
@@ -1273,6 +1285,62 @@ var defaults = map[string]Template{
 			LocaleEN: {Title: "Message about “[listing_title]”", Body: "[body]"},
 		},
 	},
+	KeyImmoListingPublished: {
+		Key: KeyImmoListingPublished, Enabled: true,
+		Description: "Immobilier — l'équipe Dira a publié l'annonce (au compte qui l'a saisie, ou au porteur s'il est détaché).",
+		Locales: map[string]Text{
+			LocaleFR: {Title: "Annonce en ligne", Body: "« [listing_title] » est publiée : les chercheurs la voient."},
+			LocaleEN: {Title: "Listing online", Body: "“[listing_title]” is published: seekers can see it."},
+		},
+	},
+	KeyImmoListingReturned: {
+		Key: KeyImmoListingReturned, Enabled: true,
+		Description: "Immobilier — l'équipe Dira renvoie l'annonce en brouillon, avec une note (lue dans l'application).",
+		Locales: map[string]Text{
+			LocaleFR: {Title: "Annonce à revoir", Body: "L'équipe Dira vous renvoie « [listing_title] » : ouvrez-la pour lire sa note."},
+			LocaleEN: {Title: "Listing to review", Body: "The Dira team sent “[listing_title]” back to you: open it to read their note."},
+		},
+	},
+	KeyImmoListingModerated: {
+		Key: KeyImmoListingModerated, Enabled: true,
+		Description: "Immobilier — l'équipe Dira a retiré l'annonce après examen (le motif se lit dans l'application).",
+		Locales: map[string]Text{
+			LocaleFR: {Title: "Annonce retirée", Body: "L'équipe Dira a retiré « [listing_title] ». Ouvrez-la pour lire le motif."},
+			LocaleEN: {Title: "Listing withdrawn", Body: "The Dira team withdrew “[listing_title]”. Open it to read why."},
+		},
+	},
+	KeyImmoMemberAttached: {
+		Key: KeyImmoMemberAttached, Enabled: true,
+		Description: "Immobilier — le compte a été rattaché à une agence (au collaborateur).",
+		Locales: map[string]Text{
+			LocaleFR: {Title: "Bienvenue chez [publisher_name]", Body: "Vous publiez désormais au nom de « [publisher_name] »."},
+			LocaleEN: {Title: "Welcome to [publisher_name]", Body: "You now publish on behalf of “[publisher_name]”."},
+		},
+	},
+	KeyImmoMemberDetached: {
+		Key: KeyImmoMemberDetached, Enabled: true,
+		Description: "Immobilier — le compte a été détaché de son agence (au collaborateur).",
+		Locales: map[string]Text{
+			LocaleFR: {Title: "Rattachement terminé", Body: "Vous ne faites plus partie de « [publisher_name] »."},
+			LocaleEN: {Title: "No longer attached", Body: "You are no longer part of “[publisher_name]”."},
+		},
+	},
+	KeyImmoVisitExpired: {
+		Key: KeyImmoVisitExpired, Enabled: true,
+		Description: "Immobilier — la demande de visite n'a pas été tranchée à temps (au chercheur).",
+		Locales: map[string]Text{
+			LocaleFR: {Title: "Visite sans réponse", Body: "L'annonceur n'a pas répondu à temps pour « [listing_title] » le [date] à [time]. D'autres créneaux sont peut-être libres."},
+			LocaleEN: {Title: "Visit not answered", Body: "The publisher did not answer in time for “[listing_title]” on [date] at [time]. Other slots may be free."},
+		},
+	},
+	KeyImmoVisitExpiredHost: {
+		Key: KeyImmoVisitExpiredHost, Enabled: true,
+		Description: "Immobilier — une demande de visite a expiré sans réponse (à l'annonceur).",
+		Locales: map[string]Text{
+			LocaleFR: {Title: "Demande expirée", Body: "La demande de visite de « [listing_title] » du [date] à [time] a expiré sans réponse."},
+			LocaleEN: {Title: "Request expired", Body: "The visit request for “[listing_title]” on [date] at [time] expired unanswered."},
+		},
+	},
 	KeyImmoVisitReminder: {
 		Key:         KeyImmoVisitReminder,
 		Description: "Immobilier — rappel deux heures avant une visite confirmée (aux deux parties).",
@@ -1427,6 +1495,14 @@ var provided = map[string][]string{
 	KeyImmoVisitReminder:  {"listing_title", "date", "time"},
 	// Le titre de l'annonce (public), et l'aperçu du message — déjà masqué.
 	KeyImmoThreadMessage: {"listing_title", "body"},
+	// Le titre de l'annonce (public) ; le nom PUBLIC de la fiche.
+	KeyImmoListingPublished: {"listing_title"},
+	KeyImmoListingReturned:  {"listing_title"},
+	KeyImmoListingModerated: {"listing_title"},
+	KeyImmoMemberAttached:   {"publisher_name"},
+	KeyImmoMemberDetached:   {"publisher_name"},
+	KeyImmoVisitExpired:     {"listing_title", "date", "time"},
+	KeyImmoVisitExpiredHost: {"listing_title", "date", "time"},
 }
 
 // Provided rend les variables que la plateforme remplit pour une clé.
