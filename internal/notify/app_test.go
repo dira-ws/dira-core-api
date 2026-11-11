@@ -235,7 +235,7 @@ func TestTheImmoThreadMessageGoesToDiraImmoAndIsAMessage(t *testing.T) {
 // ne se coupe pas — et ne promet aucune variable qu'il n'écrit pas.
 func TestTheImmoPublisherNoticesAreRoutedAndRanked(t *testing.T) {
 	updates := []string{KeyImmoListingPublished, KeyImmoListingReturned, KeyImmoListingModerated,
-		KeyImmoVisitExpired, KeyImmoVisitExpiredHost}
+		KeyImmoVisitExpired, KeyImmoVisitExpiredHost, KeyImmoVisitUnanswered}
 	access := []string{KeyImmoMemberAttached, KeyImmoMemberDetached}
 	for _, key := range append(append([]string{}, updates...), access...) {
 		assert.Equal(t, AppImmo, AppOfKey(key), key)
