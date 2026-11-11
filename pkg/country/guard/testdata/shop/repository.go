@@ -68,3 +68,14 @@ func (r *Repository) Page(ctx context.Context, cursor string) {
 	filter["_id"] = bson.M{"$lt": cursor}
 	_, _ = r.orders.Find(ctx, filter)
 }
+
+// NON bornée (#65) : un COMPTE traverse les pays — `user_id` désigne une
+// personne, et ses commandes de TOUS les pays.
+func (r *Repository) OfUser(ctx context.Context, user string) {
+	_, _ = r.orders.Find(ctx, bson.M{"user_id": user})
+}
+
+// Bornée : une commande précise, avec le compte en plus.
+func (r *Repository) OneOfUser(ctx context.Context, id, user string) {
+	_, _ = r.orders.FindOne(ctx, bson.M{"order_id": id, "user_id": user})
+}
