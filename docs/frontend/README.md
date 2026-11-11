@@ -1,6 +1,6 @@
 # Specs frontend — par rôle
 
-> **Version 4.133.0** · 11 novembre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics` + `dira-immo-api`
+> **Version 4.134.0** · 11 novembre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics` + `dira-immo-api`
 
 **Cinq** documents, un par application. Chacun est **autonome** : tout ce qu'un frontend doit savoir pour son rôle, sans avoir à ouvrir les vingt specs de modules.
 
@@ -395,6 +395,15 @@ Chaque document porte la même version en en-tête, et son propre journal des ch
 - [ ] ⚠️ **`TRACKING_JWT_SECRET` renseigné dans chaque environnement déployé.** Vide, l'authentification du service de suivi est **désactivée** : n'importe qui connaissant un `delivery_id` suit la course. Le secret doit valoir **exactement** le `JWT_SECRET` de `dira-food-api`.
 
 ## Journal
+
+### 4.134.0 — 11 novembre 2026
+
+🟢 **LE DIRECT EN OPUS** — `DIRA-CLIENT.md` §8 quater.4 (dira-ws/dira-llm#20).
+`live.input.encodings` liste `opus` : un paquet brut par trame binaire, ≈ 20 kbit/s
+en montée au lieu de 256. **Le serveur décide par session** et le dit dans
+`session.ready.input` (toujours présent) : envoyez ce qu'il dit, `pcm16` compris
+quand vous avez proposé `opus`. Une application qui envoie du PCM16 ne voit rien
+changer.
 
 ### 4.133.0 — 11 novembre 2026
 

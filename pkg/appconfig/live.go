@@ -30,11 +30,12 @@ import (
 //
 // ⚠️ ELLE NE DIT PAS LES FORMATS AUDIO. Les encodages et la fréquence
 // d'échantillonnage sont des CAPACITÉS DU RELAIS, pas des réglages : annoncer
-// `opus` à une application alors que le relais ne sait pas le décoder
+// un encodage que le relais ne sait pas faire entendre à un fournisseur
 // donnerait un micro qui part et un serveur qui n'entend rien — une panne
 // muette, du côté de l'app, pour un réglage posé du côté du serveur. Ils
 // viennent donc du code (`LiveInputEncodings`), et une épreuve du relais
-// vérifie qu'il sait décoder tout ce qui est annoncé ici.
+// (`dira-analytics`, `live/contract_test.go`) vérifie qu'il accepte tout ce qui
+// est annoncé ici, et qu'un fournisseur au moins l'entend.
 type LiveRule struct {
 	// MaxSessionSeconds borne UNE session, pour le coût. Zéro = le défaut.
 	//
@@ -71,24 +72,41 @@ type LiveInput struct {
 const (
 	// LiveEncodingPCM16 : PCM signé 16 bits, petit-boutien, mono.
 	//
-	// ⚠️ C'EST CE QUE LE FOURNISSEUR EXIGE, et donc ce que le relais passe
-	// sans y toucher. 16 kHz × 16 bits = 256 kbit/s : utilisable en 4G et en
-	// Wi-Fi, pas sur la 3G de N'Djamena. L'Opus demandé par #267 §3 exige un
-	// décodeur dans le relais ; tant qu'il n'y est pas, il n'est pas annoncé.
+	// ⚠️ C'EST CE QUE TOUT FOURNISSEUR ENTEND, et donc ce que le relais passe
+	// sans y toucher — et le repli de tous les autres encodages. 16 kHz × 16
+	// bits = 256 kbit/s : utilisable en 4G et en Wi-Fi, pas sur la 3G de
+	// N'Djamena.
 	LiveEncodingPCM16 = "pcm16"
+	// LiveEncodingOpus : un paquet Opus brut par trame binaire, sans
+	// conteneur — ≈ 20 kbit/s en montée au lieu de 256 (#267 §3,
+	// dira-ws/dira-llm#20).
+	//
+	// ⚠️⚠️ ANNONCÉ NE VEUT PAS DIRE RETENU. Le relais ne décode pas l'Opus : il
+	// le passe tel quel au seul fournisseur qui l'entend (dira-llm), et répond
+	// `pcm16` dans `session.ready.input` partout ailleurs (Gemini, OpenAI).
+	// L'application propose, le relais décide par session, et le dit — c'est
+	// ce qui rend sûr de l'annoncer dans tous les pays, quel que soit leur
+	// fournisseur.
+	LiveEncodingOpus = "opus"
 	// LiveInputSampleRate : la fréquence attendue de l'entrée.
 	LiveInputSampleRate = 16000
-	// LiveOutputSampleRate : celle de la sortie du fournisseur.
+	// LiveOutputSampleRate : celle de la sortie du fournisseur, en PCM16.
 	LiveOutputSampleRate = 24000
+	// LiveOpusOutputSampleRate : celle de la sortie quand l'entrée retenue est
+	// l'Opus — des paquets à 48 kHz, ce que rend tout décodeur Opus.
+	LiveOpusOutputSampleRate = 48000
 )
 
-// LiveInputEncodings : ce que le relais sait décoder AUJOURD'HUI.
+// LiveInputEncodings : ce qu'une application peut PROPOSER au relais.
 //
 // ⚠️ UNE SEULE LISTE, LUE PAR LES DEUX CÔTÉS. Le socle l'annonce aux
 // applications, le relais s'y mesure dans une épreuve de parité : c'est ce qui
-// empêche d'annoncer un format que personne ne décode. Cette plateforme a déjà
-// écrit cinq fois une promesse dans un contrat sans l'exécuter.
-var LiveInputEncodings = []string{LiveEncodingPCM16}
+// empêche d'annoncer un format que personne ne fait entendre. Cette plateforme
+// a déjà écrit cinq fois une promesse dans un contrat sans l'exécuter.
+//
+// ⚠️⚠️ `pcm16` EN TÊTE, ET TOUJOURS LÀ : c'est le repli de tous les
+// fournisseurs, et une application qui ne sait rien d'autre doit le trouver.
+var LiveInputEncodings = []string{LiveEncodingPCM16, LiveEncodingOpus}
 
 // Les défauts, quand l'exploitation ne dit rien.
 const (

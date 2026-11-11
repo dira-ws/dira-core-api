@@ -96,10 +96,12 @@ func TestTheLiveLanguagesComeFromTheCatalogueNotTheCountry(t *testing.T) {
 	assert.False(t, on, "le pays décide toujours si le micro existe chez lui")
 }
 
-// ⚠️⚠️ LE BLOC N'ANNONCE QUE DES ENCODAGES QUE LE RELAIS SAIT DÉCODER. La
-// liste est dans le code pour cette raison : annoncer `opus` sans décodeur
-// donnerait un micro qui part et un serveur qui n'entend rien — une panne
-// muette côté application, pour un réglage posé côté serveur.
+// ⚠️⚠️ LE BLOC N'ANNONCE QUE DES ENCODAGES QUE LE RELAIS SAIT FAIRE ENTENDRE.
+// La liste est dans le code pour cette raison : annoncer un format qu'aucun
+// fournisseur n'entend donnerait un micro qui part et un serveur qui n'entend
+// rien — une panne muette côté application, pour un réglage posé côté serveur.
+// (C'est l'épreuve du relais, `live/contract_test.go`, qui vérifie l'autre
+// moitié.)
 func TestOnlyTheRelaysOwnEncodingsAreAnnounced(t *testing.T) {
 	r := &Registry{Live: map[string]LiveRule{"TD": {}}}
 	block, _ := r.LiveFor("TD", "lite")
@@ -109,6 +111,21 @@ func TestOnlyTheRelaysOwnEncodingsAreAnnounced(t *testing.T) {
 	}
 }
 
+// ⚠️⚠️ L'OPUS EST ANNONCÉ, ET LE PCM16 RESTE EN TÊTE (dira-ws/dira-llm#20).
+// L'Opus ouvre le direct en 3G ; le PCM16 est ce que tout fournisseur entend,
+// et ce que le relais répond quand celui du pays n'entend pas l'Opus — une
+// application qui ne sait rien d'autre doit toujours le trouver.
+func TestOpusIsAnnouncedAndPCM16StaysFirst(t *testing.T) {
+	r := &Registry{Live: map[string]LiveRule{"TD": {}}}
+	block, on := r.LiveFor("TD", "lite")
+	require.True(t, on)
+	assert.Contains(t, block.Input.Encodings, LiveEncodingOpus)
+	require.NotEmpty(t, block.Input.Encodings)
+	assert.Equal(t, LiveEncodingPCM16, block.Input.Encodings[0])
+	assert.Equal(t, "opus", LiveEncodingOpus, "le nom que Dira Lite et dira-llm lisent")
+	assert.Equal(t, 48000, LiveOpusOutputSampleRate, "la fréquence que rend un décodeur Opus")
+}
+
 // ⚠️ ET LA LISTE SERVIE EST UNE COPIE. Rendre la tranche du paquet aurait
 // laissé n'importe quel appelant écraser les capacités du relais pour tout le
 // processus — un `block.Input.Encodings[0] = "opus"` quelque part, et le socle
@@ -116,7 +133,7 @@ func TestOnlyTheRelaysOwnEncodingsAreAnnounced(t *testing.T) {
 func TestTheAnnouncedEncodingsCannotBeMutatedFromOutside(t *testing.T) {
 	r := &Registry{Live: map[string]LiveRule{"TD": {}}}
 	block, _ := r.LiveFor("TD", "lite")
-	block.Input.Encodings[0] = "opus"
+	block.Input.Encodings[0] = "flac"
 	assert.Equal(t, LiveEncodingPCM16, LiveInputEncodings[0],
 		"les capacités du relais ont été réécrites depuis la réponse servie")
 }
