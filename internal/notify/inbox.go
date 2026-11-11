@@ -112,7 +112,7 @@ func categoryOf(key string) string {
 		// promotions aurait fait disparaître l'annonce la plus attendue du mois.
 		return CategorySupport
 	case KeyImmoVisitRequested, KeyImmoVisitConfirmed, KeyImmoVisitDeclined, KeyImmoVisitCancelled,
-		KeyImmoVisitReminder, KeyImmoVisitExpired, KeyImmoVisitExpiredHost,
+		KeyImmoVisitReminder, KeyImmoVisitExpired, KeyImmoVisitExpiredHost, KeyImmoVisitUnanswered,
 		KeyImmoListingPublished, KeyImmoListingReturned, KeyImmoListingModerated:
 		// Rangées avec les mises à jour, comme la nouvelle commande d'un
 		// marchand : une visite est une affaire en cours, pas une promotion.

@@ -454,6 +454,10 @@ const (
 	// une phrase par côté — le chercheur a attendu, l'annonceur a oublié.
 	KeyImmoVisitExpired     = "immo_visit_expired"      // → le chercheur
 	KeyImmoVisitExpiredHost = "immo_visit_expired_host" // → l'annonceur
+	// KeyImmoVisitUnanswered : une demande qu'un agent laisse sans réponse,
+	// signalée au porteur et aux `manager` de l'agence (4 h, ou à mi-chemin du
+	// créneau si c'est plus tôt).
+	KeyImmoVisitUnanswered = "immo_visit_unanswered"
 )
 
 // defaults sont les gabarits COMPILÉS, servis tant que la base n'en porte pas.
@@ -1341,6 +1345,14 @@ var defaults = map[string]Template{
 			LocaleEN: {Title: "Request expired", Body: "The visit request for “[listing_title]” on [date] at [time] expired unanswered."},
 		},
 	},
+	KeyImmoVisitUnanswered: {
+		Key: KeyImmoVisitUnanswered, Enabled: true,
+		Description: "Immobilier — une demande de visite attend toujours une réponse (au porteur et aux responsables de l'agence).",
+		Locales: map[string]Text{
+			LocaleFR: {Title: "Demande sans réponse", Body: "La demande de visite de « [listing_title] » du [date] à [time] attend toujours une réponse de votre équipe."},
+			LocaleEN: {Title: "Request not answered", Body: "The visit request for “[listing_title]” on [date] at [time] is still waiting for an answer from your team."},
+		},
+	},
 	KeyImmoVisitReminder: {
 		Key:         KeyImmoVisitReminder,
 		Description: "Immobilier — rappel deux heures avant une visite confirmée (aux deux parties).",
@@ -1503,6 +1515,7 @@ var provided = map[string][]string{
 	KeyImmoMemberDetached:   {"publisher_name"},
 	KeyImmoVisitExpired:     {"listing_title", "date", "time"},
 	KeyImmoVisitExpiredHost: {"listing_title", "date", "time"},
+	KeyImmoVisitUnanswered:  {"listing_title", "date", "time"},
 }
 
 // Provided rend les variables que la plateforme remplit pour une clé.
