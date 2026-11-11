@@ -1,6 +1,6 @@
 # IMMOBILIER — ANNONCEUR (agence ou particulier) — contrat d'API
 
-> **Version 4.128.0** · 10 novembre 2026
+> **Version 4.129.0** · 11 novembre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Immobilier : `https://api-staging.dira.llc/api/v1/immo`
 
 ---
@@ -382,9 +382,12 @@ le rattachement lui est refusé (`409 publisher_exists`), et il n'existe aucune
 route pour supprimer une fiche. C'est l'erreur la plus probable du premier
 jour : écrivez la seconde porte aussi lisiblement que la première.
 
-⚠️ **RIEN NE PRÉVIENT UN COLLABORATEUR QU'IL A ÉTÉ RATTACHÉ OU DÉTACHÉ** :
-aucune notification ne part. Relisez la porte à chaque ouverture de
-l'application.
+🆕 **UN RATTACHEMENT ET UN DÉTACHEMENT PRÉVIENNENT LE COLLABORATEUR**
+(v4.129.0) : `immo_member_attached` / `immo_member_detached` (section 10).
+Jusqu'au 11 novembre, rien ne partait — il découvrait qu'il publiait pour une
+agence en rouvrant l'application. ⚠️ **Relisez quand même la porte à chaque
+ouverture** : une notification peut ne pas arriver (téléphone éteint, jeton
+périmé), et la porte, elle, dit toujours vrai.
 
 ⚠️ **AILLEURS, LE MÊME CAS PORTE UN AUTRE CODE.** Un compte sans fiche qui
 appelle les biens, les annonces ou les visites reçoit `403 not_a_publisher`
@@ -1339,9 +1342,12 @@ biens vous-même.
   n'envoyez **jamais** `note` depuis l'application : retirer sa soumission
   (`in_review` → `draft`) **écrase la note de relecture** par ce que vous
   envoyez — par du vide si vous n'envoyez rien.
-- ⚠️ **RIEN NE PRÉVIENT L'ANNONCEUR QUE SON ANNONCE EST PUBLIÉE OU RENVOYÉE** :
-  aucune notification ne part pour la relecture. Relisez la liste à
-  l'ouverture de l'application et au retour au premier plan.
+- 🆕 **LA DÉCISION DE L'ÉQUIPE PRÉVIENT L'ANNONCEUR** (v4.129.0) : publiée
+  (`immo_listing_published`), renvoyée (`immo_listing_returned`), retirée
+  (`immo_listing_moderated`) — section 10. ⚠️ **La note n'est pas dans la
+  notification** (un écran verrouillé se lit par-dessus l'épaule) : ouvrez
+  l'annonce et affichez `review_note`. Relisez aussi la liste au retour au
+  premier plan : une notification peut se perdre.
 - `published_at` est posé à la **première** publication et ne bouge plus (une
   reprise après pause le garde). `closed_at` et `closed_reason` sont posés à la
   clôture.
@@ -1527,7 +1533,10 @@ filtrez dans l'application (à venir / à trancher / passées).
 
 - ⚠️ **TOUJOURS AVANT L'HEURE** : à partir de `starts_at`, toute décision rend
   `409 visit_too_late`. Une demande restée sans réponse à l'heure devient
-  `expired` toute seule — et le chercheur a attendu pour rien. **Mettez les
+  `expired` toute seule — et le chercheur a attendu pour rien. 🆕 Les deux en
+  sont prévenus (v4.129.0) : `immo_visit_expired` au chercheur,
+  `immo_visit_expired_host` à vous — dans les dix minutes qui suivent l'heure
+  du créneau (le passage est planifié toutes les dix minutes). **Mettez les
   demandes à trancher en tête de l'écran.**
 - Depuis un autre état : `409 visit_status_transition` (relisez la liste :
   l'autre partie a peut-être annulé entre-temps).
@@ -1625,8 +1634,21 @@ détaché de l'agence (v4.128.0, section 5.3) :
 | `immo_visit_cancelled` | **le chercheur** annule | « Visite annulée » — « La visite de « [titre] » du [date] à [heure] est annulée. » |
 | `immo_visit_reminder` | **deux heures avant** une visite confirmée (envoyé entre 1 h 50 et 2 h avant, jamais après le début) | « Visite à [heure] » — « Rappel : visite de « [titre] » aujourd'hui à [heure]. » |
 | `immo_thread_message` 🆕 | un chercheur vous écrit (9.7) | « Message sur « [titre] » » — le message, **déjà masqué**. `data` : `type: "immo_thread"`, `thread_id`, `listing_id` → ouvrez le fil |
+| `immo_visit_expired_host` 🆕 | une demande **jamais tranchée** a expiré à l'heure du créneau | « Demande expirée » — « La demande de visite de « [titre] » du [date] à [heure] a expiré sans réponse. » |
+| `immo_listing_published` 🆕 | **l'équipe** a publié l'annonce soumise | « Annonce en ligne » — « « [titre] » est publiée : les chercheurs la voient. » |
+| `immo_listing_returned` 🆕 | **l'équipe** l'a renvoyée en brouillon | « Annonce à revoir » — « L'équipe Dira vous renvoie « [titre] » : ouvrez-la pour lire sa note. » |
+| `immo_listing_moderated` 🆕 | **l'équipe** l'a retirée (`closed_reason: "moderated"`) | « Annonce retirée » — « L'équipe Dira a retiré « [titre] ». Ouvrez-la pour lire le motif. » |
+| `immo_member_attached` 🆕 | **ce compte** est rattaché à une agence | « Bienvenue chez [nom de l'agence] » — « Vous publiez désormais au nom de « [nom] ». » |
+| `immo_member_detached` 🆕 | **ce compte** est détaché de son agence | « Rattachement terminé » — « Vous ne faites plus partie de « [nom] ». » |
 
-**Les données**, identiques pour les trois :
+🆕 (v4.129.0) Les trois clés `immo_listing_*` ne partent que pour une décision
+**de l'équipe** : ce que l'annonceur fait lui-même (retirer sa soumission,
+mettre en pause, clôturer « louée ») ne lui revient pas, pas plus qu'une pause
+ou une clôture « louée » faite par l'équipe à sa demande. Les deux
+`immo_member_*` partent au **collaborateur**, pas au porteur — c'est lui qui
+vient de faire le geste.
+
+**Les données** des visites, identiques pour les clés `immo_visit_*` :
 
 ```json
 { "type": "immo_visit", "visit_id": "6b4e5f6a7b8c9d0e1f2a3b01", "listing_id": "6b2c3d4e5f6a7b8c9d0e1f01" }
@@ -1635,13 +1657,31 @@ détaché de l'agence (v4.128.0, section 5.3) :
 Routez `type: "immo_visit"` vers l'écran des visites, et ouvrez celle dont
 l'`id` est `visit_id` (9.4).
 
+🆕 (v4.129.0) Les deux autres familles :
+
+```json
+{ "type": "immo_listing", "listing_id": "6b2c3d4e5f6a7b8c9d0e1f01", "status": "draft" }
+{ "type": "immo_membership", "publisher_id": "6b1a2b3c4d5e6f7a8b9c0d01" }
+```
+
+| `data.type` | Ouvrir |
+|---|---|
+| `immo_listing` | **l'annonce** — `GET /immo/publishers/me/listings/{listing_id}` (8.5), `review_note` en tête si elle est renvoyée ou retirée. `status` dit l'état **au moment de l'envoi** : relisez l'annonce, c'est elle qui fait foi |
+| `immo_membership` | **la porte** — `GET /immo/publishers/me` (section 3), puis l'accueil qu'elle désigne. ⚠️ Après un détachement, les écrans de l'ancienne agence sont **fermés** : videz-les avant de rouvrir |
+
+⚠️ **ROUTEZ SUR `data.type`, JAMAIS SUR LA CLÉ** — la clé est un gabarit que
+l'exploitation peut renommer. Une valeur inconnue s'affiche dans la boîte sans
+rien ouvrir.
+
 - ⚠️ **L'HEURE DU TEXTE EST L'HEURE LOCALE DU PAYS** de la visite (date en
   `JJ/MM`, heure en `HH:MM`), composée par le serveur. Dans l'application,
   affichez `starts_at` dans ce même fuseau : un agent qui lit « 15:00 » dans la
   notification et « 14:00 » dans l'écran ne sait plus à quelle heure venir.
 - ⚠️ **AUCUNE NOTIFICATION NE PORTE D'ADRESSE NI DE TÉLÉPHONE** : un écran
   verrouillé se lit par-dessus l'épaule.
-- Elles sont rangées avec les **mises à jour** (catégorie `order_updates`).
+- Elles sont rangées avec les **mises à jour** (catégorie `order_updates`) —
+  🆕 sauf `immo_member_attached` / `immo_member_detached`, rangées en
+  **sécurité** (`security`) : un changement d'accès **ne se coupe pas**.
   ⚠️ **Une catégorie coupée n'est ni poussée ni gardée dans la boîte** : un
   annonceur qui la coupe ne voit plus arriver **aucune** demande de visite, et
   elles expirent sans qu'il le sache. Si vous exposez ce réglage, dites-le à
@@ -1651,10 +1691,13 @@ l'`id` est `visit_id` (9.4).
 
 | Événement | Où le voir |
 |---|---|
-| une demande **expirée** (jamais tranchée) | `GET /immo/publishers/me/visits`, `status: expired` |
-| son annonce **publiée** ou **renvoyée** par l'équipe | `GET /immo/publishers/me/listings`, `status` et `review_note` |
-| son **rattachement** ou **détachement** d'une agence | `GET /immo/publishers/me` |
 | une demande sur l'annonce d'un **collègue** (pour le porteur et les `manager`) | la liste des visites |
+
+🆕 (v4.129.0) Les trois autres lignes de ce tableau — demande **expirée**,
+annonce **publiée / renvoyée** par l'équipe, **rattachement / détachement** —
+préviennent désormais (tableau ci-dessus). Jusqu'au 11 novembre, un annonceur
+dont l'annonce était renvoyée la laissait en brouillon des jours, croyant la
+relecture en cours.
 
 ---
 
@@ -1680,9 +1723,9 @@ ouvrir) l'y envoie s'il se trompe de porte.
 2. **La porte** — `GET /immo/publishers/me` : elle dit s'il faut créer la fiche,
    attendre une invitation d'agence ou ouvrir l'accueil, et **quel rang** porte
    ce compte (section 3). ⚠️ **Relisez-la à chaque retour au premier plan** :
-   un détachement d'agence n'est **pas** notifié (section 10), et un agent
-   détaché qui garde l'écran de son ancienne agence se fait refuser geste après
-   geste.
+   🆕 un détachement d'agence est notifié (`immo_member_detached`, section 10)
+   **mais une notification peut se perdre**, et un agent détaché qui garde
+   l'écran de son ancienne agence se fait refuser geste après geste.
 3. **Le téléphone** — `POST /me/devices { "token": "…", "platform":
    "android" | "ios" }` après **chaque** connexion — **sans** `app` : ce champ
    ne sert qu'à séparer Dira Immo de l'application cliente, qui partagent un
@@ -1904,7 +1947,8 @@ côté application.
 - [ ] 🆕 **Créneaux** : « retirer » masqué sur un créneau commencé.
 - [ ] **Visites** : les demandes à trancher en tête ; l'heure affichée dans le fuseau du pays ; « Confirmer » dit qu'il donne le téléphone de la fiche (et l'adresse, pour un particulier) ; la présence constatée **avant** de retirer un créneau passé ; le contact du chercheur jamais gardé au-delà de la visite.
 - [ ] **Notifications** : appareil déclaré à la connexion, retiré **avant** la déconnexion ; `type: "immo_visit"` ouvre la bonne visite, **relue** avant d'afficher ses boutons.
-- [ ] 🆕 **Téléphone — la porte** relue à chaque retour au premier plan (un détachement n'est pas notifié).
+- [ ] 🆕 **Téléphone — la porte** relue à chaque retour au premier plan (un détachement notifié peut ne pas arriver).
+- [ ] 🆕 **Notifications de l'annonceur** : `immo_listing` ouvre l'annonce (`review_note` en tête, l'annonce relue), `immo_membership` relit la porte ; routage sur `data.type`, jamais sur la clé.
 - [ ] 🆕 **Téléphone — les photos** : réduites à 1 600 px sur le grand côté (jamais sous 480 px sur le petit) ; le HEIC converti en JPEG ; un envoi sans réponse vérifié par la liste avant d'être refait ; cache indexé par `id`, jamais par `url`.
 - [ ] 🆕 **Téléphone — la position** : précision affichée, épingle déplaçable, aucune position par défaut ; le particulier voit le cercle que verra le public.
 - [ ] 🆕 **Téléphone — appeler** : `tel:` sur une visite `confirmed` / `attended` seulement ; rien dans le carnet de contacts ; « appeler » au-dessus de « absent ».
