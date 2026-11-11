@@ -1,6 +1,6 @@
 # IMMOBILIER — ANNONCEUR (agence ou particulier) — contrat d'API
 
-> **Version 4.129.0** · 11 novembre 2026
+> **Version 4.130.0** · 11 novembre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Immobilier : `https://api-staging.dira.llc/api/v1/immo`
 
 ---
@@ -1024,6 +1024,12 @@ un fichier, ni en base, ni dans un journal :
   l'envoi** : posez la position du bien **avant** d'ajouter ses photos.
 - Dites à l'annonceur, sur `mismatch` ou `absent`, pourquoi la photo n'a pas le
   badge — et que ce n'est pas un refus.
+- 🆕 ⚠️ **DEUX PHOTOS `mismatch` SUR UN MÊME BIEN METTENT SES ANNONCES DANS LA
+  FILE DE L'ÉQUIPE** (v4.130.0). Une seule ne fait rien. L'annonce **reste en
+  ligne** : un humain regarde, et ne la retire que s'il y a une fraude — une vue
+  du quartier honnête se garde. Dès la deuxième, dites-le à l'annonceur
+  (« l'équipe Dira regardera ces photos ») et proposez de **reprendre la photo
+  sur place** ou de la retirer ; s'il la garde, il n'a rien d'autre à faire.
 
 - **Deux tailles** : `url` (le plus grand côté ramené à **1 600 px**) et
   `thumb_url` (**480 px**). Une photo n'est jamais agrandie. `width` et
@@ -1938,7 +1944,7 @@ côté application.
 - [ ] **Biens** : seule la provenance `declared` proposée à la saisie ; aucune position par défaut ; `(0, 0)` jamais envoyé ; « meublé » n'est pas un équipement.
 - [ ] **Biens** : `verified: null` ne s'écrit jamais « refusé » ; un agent voit **tous** les biens, et l'écran ne dit pas le contraire.
 - [ ] **Archivage** : la confirmation propose de clôturer les annonces du bien, et dit qu'on ne désarchive pas.
-- [ ] 🆕 **Photos — « prise sur place »** : la position du bien posée **avant** les photos ; la photo réduite **garde ses étiquettes GPS** ; `mismatch` / `absent` expliqués, jamais présentés comme un refus.
+- [ ] 🆕 **Photos — « prise sur place »** : la position du bien posée **avant** les photos ; la photo réduite **garde ses étiquettes GPS** ; `mismatch` / `absent` expliqués, jamais présentés comme un refus ; à la **deuxième** `mismatch`, l'annonceur sait que l'équipe regardera (l'annonce reste en ligne).
 - [ ] **Photos** : envoyées une à une ; les adresses signées jamais gardées plus d'une heure ; l'ordre lu dans le tableau, pas dans `order`.
 - [ ] **Annonces** : `price_period` omis ; le montant formaté avec monnaie et périodicité avant validation ; `title` ≤ 140 caractères et `pitch` ≤ 2 000 caractères tenus côté application ; aucun bouton « publier » ; `review_note` en tête du brouillon ; `note` jamais envoyé.
 - [ ] **Listes** : la fin d'une liste — biens comme annonces — = `next_cursor` **absent** ; `items` vaut `[]`, jamais `null`.

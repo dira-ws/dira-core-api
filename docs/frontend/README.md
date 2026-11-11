@@ -1,6 +1,6 @@
 # Specs frontend — par rôle
 
-> **Version 4.129.0** · 11 novembre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics` + `dira-immo-api`
+> **Version 4.130.0** · 11 novembre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics` + `dira-immo-api`
 
 **Cinq** documents, un par application. Chacun est **autonome** : tout ce qu'un frontend doit savoir pour son rôle, sans avoir à ouvrir les vingt specs de modules.
 
@@ -395,6 +395,13 @@ Chaque document porte la même version en en-tête, et son propre journal des ch
 - [ ] ⚠️ **`TRACKING_JWT_SECRET` renseigné dans chaque environnement déployé.** Vide, l'authentification du service de suivi est **désactivée** : n'importe qui connaissant un `delivery_id` suit la course. Le secret doit valoir **exactement** le `JWT_SECRET` de `dira-food-api`.
 
 ## Journal
+
+### 4.130.0 — 11 novembre 2026
+
+🔧 **L'ANNONCEUR** (`IMMO-PUBLISHER.md` §7.1) : **deux** photos prises loin de
+l'adresse (`on_site: mismatch`) sur un même bien mettent ses annonces dans la
+file de l'équipe — elles **restent en ligne**. Aucun champ ne change ; ce que
+l'application dit à l'annonceur, si.
 
 ### 4.129.0 — 11 novembre 2026
 
