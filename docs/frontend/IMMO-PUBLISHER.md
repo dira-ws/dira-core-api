@@ -1,6 +1,6 @@
 # IMMOBILIER — ANNONCEUR (agence ou particulier) — contrat d'API
 
-> **Version 4.130.0** · 11 novembre 2026
+> **Version 4.131.0** · 11 novembre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Immobilier : `https://api-staging.dira.llc/api/v1/immo`
 
 ---
@@ -512,11 +512,12 @@ PATCH /immo/publishers/me
 | Modifier la fiche | oui | ⚠️ non (`403`) | non (`403`) | oui (sans `sites`) |
 | Lire l'équipe | oui | oui | oui | oui (liste vide) |
 | Rattacher, modifier, détacher | oui | ⚠️ **non** (`403`) | non (`403`) | non (`422 members_need_an_agency`) |
-| Biens et photos | **tous** ceux de la fiche | tous | ⚠️ **tous** | tous |
+| Biens et photos — **lire** | **tous** ceux de la fiche | tous | **tous** (le stock de l'agence) | tous |
+| 🆕 Biens et photos — **modifier, archiver, ajouter/ordonner/retirer/décrire une photo** | tous | tous | ⚠️ **ceux qu'il a saisis** (`403 property_edit_reserved`) | tous |
 | Annonces (lire, modifier, changer d'état, historique) | toutes | toutes | **les siennes** | toutes |
 | Créneaux d'une annonce | toutes | toutes | ceux de ses annonces | toutes |
 | Visites (lire, décider, constater) | toutes | toutes | celles de ses annonces | toutes |
-| **Notifications de visite** | ⚠️ seulement pour les annonces **qu'il a saisies** | idem | idem | toutes |
+| **Notifications de visite** | ⚠️ seulement pour les annonces **qu'il a saisies** — 🆕 **plus** `immo_visit_unanswered` pour toute demande de la fiche restée sans réponse | idem | ⚠️ seulement les siennes | toutes |
 
 - ⚠️ **UN `manager` NE GÈRE PAS L'ÉQUIPE**, et ce n'est pas un oubli : ajouter
   quelqu'un, c'est lui donner le droit de publier au nom de l'agence. C'est un
@@ -524,8 +525,18 @@ PATCH /immo/publishers/me
   autres.
 - ⚠️⚠️ **LA NOTIFICATION VA À QUI A SAISI L'ANNONCE**, pas à l'agence. Si un
   agent saisit une annonce, lui seul est prévenu des demandes de visite ; le
-  porteur et les `manager` les **voient** dans la liste, mais rien ne sonne chez
-  eux. Écrivez-le sur l'écran des visites d'un `manager`.
+  porteur et les `manager` les **voient** dans la liste. 🆕 (v4.131.0) Et si
+  l'agent ne tranche pas à temps — **4 h après la demande, ou à mi-chemin du
+  créneau si c'est plus tôt** —, le porteur et les `manager` reçoivent
+  `immo_visit_unanswered`, une seule fois (section 10).
+- 🆕 ⚠️ **UN `agent` VOIT TOUS LES BIENS, NE MODIFIE QUE LES SIENS** (v4.131.0,
+  décision du 11 nov.). Il pose ses annonces sur le stock de l'agence, mais ne
+  peut ni modifier, ni archiver, ni toucher aux photos d'un bien qu'un collègue
+  a saisi : `403 property_edit_reserved`. Le bien porte `created_by` (le compte
+  qui l'a saisi) : sur un bien dont `created_by` n'est pas ce compte, **masquez**
+  « modifier », « archiver » et les gestes de photo pour un `agent`. ⚠️ Un bien
+  saisi avant le 11 novembre n'a pas de `created_by` : seuls le porteur et les
+  `manager` le modifient.
 - **Un collaborateur voit ses collègues**, et c'est voulu : il travaille avec
   eux. Il ne peut pas modifier la liste.
 
@@ -673,6 +684,7 @@ n'existent pas.
 {
   "id":           "6b1a0e5f2c3d4e5f6a7b8c01",
   "publisher_id": "6b0f3c1a9e2d4f5a6b7c8d90",
+  "created_by":   "6b0f3c1a9e2d4f5a6b7c8d91",
   "country":      "TG",
   "type":         "apartment",
   "address":      { "label": "12 rue des Hydrocarbures", "neighborhood": "Tokoin Doumassesse",
@@ -928,6 +940,8 @@ la même requête les surfaces et les pièces qui vont avec.
 - ⚠️ **`PATCH {}` EST REFUSÉ** : `422 nothing_to_update`. Accepté, il aurait
   répondu « enregistré » à celui dont le champ s'était perdu en route.
 - ⚠️ **UN BIEN ARCHIVÉ NE SE MODIFIE PLUS** : `409 property_archived`.
+- 🆕 **Un `agent` ne modifie que les biens qu'il a saisis** : `403
+  property_edit_reserved` (section 5.1). Il en va de même pour archiver.
 - → `200`, le bien à jour. Ses annonces en ligne sont réindexées par le
   serveur : la recherche voit la nouvelle surface sans délai.
 
@@ -980,6 +994,7 @@ alt  = "Salon, vue sur le jardin" ← facultatif, 160 caractères au plus
 | Pas de champ `file` | — | `422 validation_failed`, `fields: ["file"]` |
 | `alt` trop long | — | `422 validation_failed`, `fields: ["alt"]` |
 | Bien d'une autre fiche | — | `404 property_not_found` |
+| 🆕 Bien saisi par un collègue (pour un `agent`) | ajout, ordre, retrait, description | `403 property_edit_reserved` |
 
 → `201`, la photo :
 
@@ -1641,6 +1656,7 @@ détaché de l'agence (v4.128.0, section 5.3) :
 | `immo_visit_reminder` | **deux heures avant** une visite confirmée (envoyé entre 1 h 50 et 2 h avant, jamais après le début) | « Visite à [heure] » — « Rappel : visite de « [titre] » aujourd'hui à [heure]. » |
 | `immo_thread_message` 🆕 | un chercheur vous écrit (9.7) | « Message sur « [titre] » » — le message, **déjà masqué**. `data` : `type: "immo_thread"`, `thread_id`, `listing_id` → ouvrez le fil |
 | `immo_visit_expired_host` 🆕 | une demande **jamais tranchée** a expiré à l'heure du créneau | « Demande expirée » — « La demande de visite de « [titre] » du [date] à [heure] a expiré sans réponse. » |
+| `immo_visit_unanswered` 🆕 v4.131.0 | au **porteur** et aux **`manager`** : une demande de la fiche est toujours sans réponse **4 h** après avoir été faite, ou à **mi-chemin** du créneau si c'est plus tôt — une fois, jamais à celui qui devait répondre | « Demande sans réponse » — « La demande de visite de « [titre] » du [date] à [heure] attend toujours une réponse de votre équipe. » `data` comme les autres visites |
 | `immo_listing_published` 🆕 | **l'équipe** a publié l'annonce soumise | « Annonce en ligne » — « « [titre] » est publiée : les chercheurs la voient. » |
 | `immo_listing_returned` 🆕 | **l'équipe** l'a renvoyée en brouillon | « Annonce à revoir » — « L'équipe Dira vous renvoie « [titre] » : ouvrez-la pour lire sa note. » |
 | `immo_listing_moderated` 🆕 | **l'équipe** l'a retirée (`closed_reason: "moderated"`) | « Annonce retirée » — « L'équipe Dira a retiré « [titre] ». Ouvrez-la pour lire le motif. » |
@@ -1695,9 +1711,11 @@ rien ouvrir.
 
 ⚠️ **CE QUI NE PRÉVIENT PAS L'ANNONCEUR — à compenser par une relecture :**
 
-| Événement | Où le voir |
-|---|---|
-| une demande sur l'annonce d'un **collègue** (pour le porteur et les `manager`) | la liste des visites |
+🆕 (v4.131.0) **Plus rien.** La dernière ligne — une demande sur l'annonce d'un
+**collègue**, pour le porteur et les `manager` — est couverte par
+`immo_visit_unanswered` : ils ne sont pas prévenus de **chaque** demande (une
+agence de dix agents recevrait tout), mais de celle qu'un agent laisse sans
+réponse.
 
 🆕 (v4.129.0) Les trois autres lignes de ce tableau — demande **expirée**,
 annonce **publiée / renvoyée** par l'équipe, **rattachement / détachement** —
@@ -1914,7 +1932,7 @@ côté application.
 | **Se publier soi-même** | la relecture est faite par l'équipe (0.3) |
 | **La mise en avant payée** (`sponsored`, `boost_*`) | pas servie : `sponsored` est toujours `false`, aucune route ne l'achète |
 | **Le paiement, les jetons, le quota gratuit** | annoncés, jamais appliqués (section 11) |
-| **Les séjours courte durée et le séquestre** | ⚠️ le genre `stay` **est accepté** à la création, mais **rien d'autre n'existe** : ni calendrier de nuits, ni réservation, ni paiement. Tenir l'argent d'un voyageur jusqu'à son arrivée est une activité réglementée, dont le cadre n'est pas tranché. **Ne proposez pas `stay`** tant qu'il n'y a rien derrière : un chercheur ne pourrait que demander une visite |
+| **Les séjours courte durée — réservation et paiement** | 🆕 (v4.131.0) **`stay` est ouvert** : une annonce à la nuit se crée, se publie, se cherche, se visite et se discute comme les autres. Ce qui n'existe **pas encore** : le calendrier des nuits, la réservation et le paiement. Proposez `stay` en le disant : « le voyageur vous contacte ; la réservation en ligne arrive ». |
 | **La gestion locative** — bail, échéancier, loyers, quittances | pas encore ouverte |
 | **La capture 3D, les mesures LiDAR, le contour de terrain au GPS** | l'**application de capture**, à venir. C'est elle qui écrira `has_3d` et les surfaces `measured_*` / `gps_polygon` ; cette application ne les saisit pas (6.4) |
 | **La vidéo de visite** — filmée, envoyée, montrée | pas servie. Le mode de créneau `video` n'est qu'une étiquette : aucun lien, aucune salle (9.1) |
