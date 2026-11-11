@@ -7,6 +7,8 @@ import (
 	"time"
 
 	"go.mongodb.org/mongo-driver/bson/primitive"
+
+	"github.com/kgtech-org/dira-core-api/pkg/country"
 )
 
 // --- faux dépôt et fausse flotte ---
@@ -36,7 +38,7 @@ func persisted(d *Document) Document {
 	out := Document{
 		ID: d.ID, OwnerID: d.OwnerID, Kind: d.Kind,
 		VehicleID: d.VehicleID, FleetID: d.FleetID,
-		FileURL: d.FileURL, ExpiresAt: d.ExpiresAt,
+		FileURL: d.FileURL, ExpiresAt: d.ExpiresAt, Country: d.Country,
 		Status: d.Status, CreatedAt: d.CreatedAt, UpdatedAt: d.UpdatedAt,
 	}
 	return out
@@ -60,6 +62,10 @@ func (f *fakeStore) UpsertDocument(_ context.Context, d *Document) (*Document, e
 			// correction, et le double doit le refléter.
 			if d.FleetID != nil {
 				f.documents[i].FleetID = d.FleetID
+			}
+			// Le pays aussi, en `$set` et seulement s'il est connu.
+			if d.Country != "" {
+				f.documents[i].Country = d.Country
 			}
 			out := f.documents[i]
 			return &out, nil
@@ -92,9 +98,9 @@ func (f *fakeStore) DocumentByID(_ context.Context, id primitive.ObjectID) (*Doc
 	return nil, nil
 }
 
-func (f *fakeStore) ReviewDocument(_ context.Context, id, reviewer primitive.ObjectID, status, reason string) (*Document, error) {
+func (f *fakeStore) ReviewDocument(ctx context.Context, id, reviewer primitive.ObjectID, status, reason string) (*Document, error) {
 	for i := range f.documents {
-		if f.documents[i].ID != id {
+		if f.documents[i].ID != id || !inCountry(ctx, f.documents[i]) {
 			continue
 		}
 		now := time.Now().UTC()
@@ -107,9 +113,12 @@ func (f *fakeStore) ReviewDocument(_ context.Context, id, reviewer primitive.Obj
 	return nil, errDocumentNotFound
 }
 
-func (f *fakeStore) PendingOrExpiredDocuments(_ context.Context, now time.Time, limit int) ([]Document, error) {
+func (f *fakeStore) PendingOrExpiredDocuments(ctx context.Context, now time.Time, limit int) ([]Document, error) {
 	var out []Document
 	for _, d := range f.documents {
+		if !inCountry(ctx, d) {
+			continue
+		}
 		st := d.State(now)
 		if st == DocPending || st == DocExpired || st == DocExpiring {
 			out = append(out, d)
@@ -119,6 +128,40 @@ func (f *fakeStore) PendingOrExpiredDocuments(_ context.Context, now time.Time, 
 		}
 	}
 	return out, nil
+}
+
+// inCountry : la borne de `country.Restrict`, telle que la base l'applique —
+// ⚠️ une pièce SANS pays n'est rendue à aucune requête qui en porte un. Une
+// doublure qui la laisserait passer serait plus généreuse que la base.
+func inCountry(ctx context.Context, d Document) bool {
+	c := country.FromContext(ctx)
+	return c == "" || d.Country == c
+}
+
+// DocumentsWithoutCountry et SetCountry font de cette doublure un
+// `CountryStore`, comme le dépôt réel.
+func (f *fakeStore) DocumentsWithoutCountry(_ context.Context, after primitive.ObjectID, limit int) ([]Document, error) {
+	var out []Document
+	for _, d := range f.documents {
+		if d.Country != "" || (!after.IsZero() && d.ID.Hex() <= after.Hex()) {
+			continue
+		}
+		out = append(out, d)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].ID.Hex() < out[j].ID.Hex() })
+	if len(out) > limit {
+		out = out[:limit]
+	}
+	return out, nil
+}
+
+func (f *fakeStore) SetCountry(_ context.Context, id primitive.ObjectID, code string) error {
+	for i := range f.documents {
+		if f.documents[i].ID == id && f.documents[i].Country == "" {
+			f.documents[i].Country = code
+		}
+	}
+	return nil
 }
 
 // DocumentsOf et DeleteDocumentsOf font de cette doublure un `Purger` — ce

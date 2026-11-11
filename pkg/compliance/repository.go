@@ -11,6 +11,7 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 
+	"github.com/kgtech-org/dira-core-api/pkg/country"
 	"github.com/kgtech-org/dira-core-api/pkg/db"
 )
 
@@ -65,6 +66,13 @@ func upsertUpdate(d *Document, now time.Time) bson.M {
 	// a aucun risque de marquer la pièce de quelqu'un d'autre.)
 	if d.FleetID != nil {
 		set["fleet_id"] = *d.FleetID
+	}
+	// ⚠️ LE PAYS EN `$set` LUI AUSSI, pour la même raison : une pièce d'avant
+	// le champ le reçoit à son prochain dépôt. Et la file le LIT
+	// (`queueFilter`) — un champ sur lequel une lecture filtre est un champ
+	// qu'une écriture doit poser.
+	if d.Country != "" {
+		set["country"] = d.Country
 	}
 	unset := bson.M{"reviewed_by": "", "reviewed_at": "", "rejected_reason": ""}
 	if d.ExpiresAt == nil {
@@ -151,6 +159,26 @@ func (r *Repository) DocumentByID(ctx context.Context, id primitive.ObjectID) (*
 	return &d, nil
 }
 
+// reviewFilter : la pièce qu'un exploitant arbitre — dans le pays de la requête.
+//
+// ⚠️ Hors du pays, la pièce n'existe pas (`document_not_found`) — la même
+// réponse qu'un identifiant inconnu, pour ne rien dire de ce qui existe
+// ailleurs.
+func reviewFilter(ctx context.Context, id primitive.ObjectID) bson.M {
+	return country.Restrict(ctx, bson.M{"_id": id})
+}
+
+// queueFilter : ce que la file montre — dans le pays de la requête.
+//
+// ⚠️ Le filtre est posé par le DÉPÔT, comme partout ailleurs
+// (`country.Restrict`) : un écran oublié ne peut rien montrer de trop.
+func queueFilter(ctx context.Context, now time.Time) bson.M {
+	return country.Restrict(ctx, bson.M{"$or": []bson.M{
+		{"status": bson.M{"$in": []string{DocPending, DocRejected}}},
+		{"status": DocValid, "expires_at": bson.M{"$lte": now.AddDate(0, 0, ExpiryWarningDays)}},
+	}})
+}
+
 // ReviewDocument records an administrator's decision.
 func (r *Repository) ReviewDocument(ctx context.Context, id, reviewer primitive.ObjectID, status, reason string) (*Document, error) {
 	now := time.Now().UTC()
@@ -169,7 +197,7 @@ func (r *Repository) ReviewDocument(ctx context.Context, id, reviewer primitive.
 	}
 	opts := options.FindOneAndUpdate().SetReturnDocument(options.After)
 	var out Document
-	err := r.documents.FindOneAndUpdate(ctx, bson.M{"_id": id}, update, opts).Decode(&out)
+	err := r.documents.FindOneAndUpdate(ctx, reviewFilter(ctx, id), update, opts).Decode(&out)
 	if err == mongo.ErrNoDocuments {
 		return nil, nil
 	}
@@ -190,11 +218,7 @@ func (r *Repository) ReviewDocument(ctx context.Context, id, reviewer primitive.
 // application coûterait une lecture de toute la collection à chaque ouverture
 // du tableau de bord.
 func (r *Repository) PendingOrExpiredDocuments(ctx context.Context, now time.Time, limit int) ([]Document, error) {
-	filter := bson.M{"$or": []bson.M{
-		{"status": bson.M{"$in": []string{DocPending, DocRejected}}},
-		{"status": DocValid, "expires_at": bson.M{"$lte": now.AddDate(0, 0, ExpiryWarningDays)}},
-	}}
-	cur, err := r.documents.Find(ctx, filter,
+	cur, err := r.documents.Find(ctx, queueFilter(ctx, now),
 		options.Find().SetSort(bson.D{{Key: "expires_at", Value: 1}, {Key: "created_at", Value: 1}}).
 			SetLimit(int64(limit)))
 	if err != nil {
@@ -267,5 +291,36 @@ func (r *Repository) SetFileURL(ctx context.Context, d *Document, fileURL string
 	_, err := r.documents.UpdateOne(ctx,
 		bson.M{"_id": d.ID, "file_url": d.FileURL},
 		bson.M{"$set": bson.M{"file_url": fileURL}})
+	return err
+}
+
+// DocumentsWithoutCountry rend, par identifiant croissant après `after`, les
+// pièces déposées avant que les pièces portent leur pays.
+func (r *Repository) DocumentsWithoutCountry(ctx context.Context, after primitive.ObjectID, limit int) ([]Document, error) {
+	if limit <= 0 || limit > 1000 {
+		limit = 1000
+	}
+	filter := bson.M{country.Field: bson.M{"$in": []any{nil, ""}}}
+	if !after.IsZero() {
+		filter["_id"] = bson.M{"$gt": after}
+	}
+	cur, err := r.documents.Find(ctx, filter,
+		options.Find().SetSort(bson.D{{Key: "_id", Value: 1}}).SetLimit(int64(limit)))
+	if err != nil {
+		return nil, fmt.Errorf("compliance: documents without country: %w", err)
+	}
+	var out []Document
+	if err := cur.All(ctx, &out); err != nil {
+		return nil, fmt.Errorf("compliance: decode documents without country: %w", err)
+	}
+	return out, nil
+}
+
+// SetCountry pose le pays d'UNE pièce — seulement si elle n'en a toujours pas :
+// un dépôt survenu entre-temps l'a posé lui-même, et il fait foi.
+func (r *Repository) SetCountry(ctx context.Context, id primitive.ObjectID, code string) error {
+	_, err := r.documents.UpdateOne(ctx,
+		bson.M{"_id": id, country.Field: bson.M{"$in": []any{nil, ""}}},
+		bson.M{"$set": bson.M{country.Field: code}})
 	return err
 }

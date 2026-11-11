@@ -7,6 +7,7 @@ import (
 	"go.mongodb.org/mongo-driver/bson/primitive"
 
 	"github.com/kgtech-org/dira-core-api/pkg/apperr"
+	"github.com/kgtech-org/dira-core-api/pkg/country"
 )
 
 // SubmitDocumentRequest is the driver's upload of one compliance paper.
@@ -287,6 +288,12 @@ type Service struct {
 	// vault RANGE chaque pièce sous son genre au dépôt, et la SIGNE à la
 	// lecture — voir `vault.go`. Facultatif.
 	vault Vault
+	// req : les pièces que la verticale reçoit et attend — voir
+	// `requirements.go`. Facultatif : sans elle, la règle du transport.
+	req Requirements
+	// countries rattrape le pays des pièces déposées avant qu'elles le portent
+	// — voir `countries.go`. Facultatif.
+	countries Countries
 }
 
 // Watcher est prévenu d'un DÉPÔT : la verticale en fait une alerte au staff
@@ -353,6 +360,9 @@ func (s *Service) SubmitDocument(ctx context.Context, userID string, req SubmitD
 		}
 		vehicleOID = &vid
 	}
+	if err := s.accepts(req.Kind); err != nil {
+		return nil, err
+	}
 	if err := CheckOwner(req.Kind, vehicleOID); err != nil {
 		return nil, err
 	}
@@ -376,6 +386,7 @@ func (s *Service) SubmitDocument(ctx context.Context, userID string, req SubmitD
 	doc, err := s.repo.UpsertDocument(ctx, &Document{
 		OwnerID: ownerOID, VehicleID: vehicleOID, Kind: req.Kind,
 		FileURL: fileURL, ExpiresAt: req.ExpiresAt,
+		Country: country.FromContext(ctx),
 	})
 	if err != nil {
 		return nil, err
@@ -453,7 +464,13 @@ func (s *Service) complianceOf(ctx context.Context, driverID string) (*Complianc
 			covered[docKey(d.Kind, d.VehicleID)] = true
 		}
 	}
-	for _, kind := range PersonKindsFor(vehicles) {
+	// ⚠️ LA LISTE EST CELLE DE LA VERTICALE — voir `requirements.go`. Sans
+	// déclaration, `PersonKindsFor` et `KindsFor`, exactement comme avant.
+	exp, err := s.requirements().Expected(ctx, driverID, vehicles)
+	if err != nil {
+		return nil, err
+	}
+	for _, kind := range exp.Subject {
 		if !covered[docKey(kind, nil)] {
 			out.Missing = append(out.Missing, kind)
 			out.Compliant = false
@@ -464,7 +481,7 @@ func (s *Service) complianceOf(ctx context.Context, driverID string) (*Complianc
 		if err != nil {
 			continue
 		}
-		for _, kind := range KindsFor(v) {
+		for _, kind := range exp.Assets[v.ID] {
 			if covered[docKey(kind, &vid)] {
 				continue
 			}
@@ -552,6 +569,9 @@ func (s *Service) SubmitFleetDocument(ctx context.Context, fleetID string, req S
 	if owner == "" || owner != fleetID {
 		return nil, errNotYourFleetVehicle
 	}
+	if err := s.accepts(req.Kind); err != nil {
+		return nil, err
+	}
 	if err := CheckOwner(req.Kind, &vid); err != nil {
 		return nil, err
 	}
@@ -581,6 +601,7 @@ func (s *Service) SubmitFleetDocument(ctx context.Context, fleetID string, req S
 		// ainsi du dépôt d'un conducteur sur la même voiture.
 		OwnerID: fleetOID, FleetID: &fleetOID, VehicleID: &vid, Kind: req.Kind,
 		FileURL: fileURL, ExpiresAt: req.ExpiresAt,
+		Country: country.FromContext(ctx),
 	})
 	if err != nil {
 		return nil, err
@@ -636,6 +657,10 @@ func (s *Service) FleetCompliance(ctx context.Context, fleetID string) (*FleetCo
 			covered[docKey(d.Kind, d.VehicleID)] = true
 		}
 	}
+	exp, err := s.requirements().Expected(ctx, fleetID, vehicles)
+	if err != nil {
+		return nil, err
+	}
 	out := &FleetComplianceResponse{
 		Vehicles: make([]FleetVehicleCompliance, 0, len(vehicles)), Compliant: true,
 	}
@@ -648,7 +673,7 @@ func (s *Service) FleetCompliance(ctx context.Context, fleetID string) (*FleetCo
 			VehicleID: v.ID, Plate: v.Plate,
 			Documents: byVehicle[v.ID], Compliant: true,
 		}
-		for _, kind := range KindsFor(v) {
+		for _, kind := range exp.Assets[v.ID] {
 			if !covered[docKey(kind, &vid)] {
 				row.Missing = append(row.Missing, kind)
 				row.Compliant = false
