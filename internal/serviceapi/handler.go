@@ -574,7 +574,17 @@ func (h *Handler) purchaseForOwner(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) createWallet(w http.ResponseWriter, r *http.Request) {
-	var req walletRequest
+	// ⚠️⚠️ SA PROPRE STRUCTURE. Elle décodait `walletRequest`, celle des
+	// débits, dont `amount` est OBLIGATOIRE : ouvrir un portefeuille sans
+	// montant était refusé en `422`, et la livraison envoyait un `amount: 1`
+	// de contournement. L'immobilier, qui ne l'envoyait pas, voyait chaque
+	// lecture de portefeuille échouer en préprod (11 nov. 2026).
+	// `amount` reste ACCEPTÉ (et ignoré) : ceux qui l'envoient ne cassent pas.
+	var req struct {
+		OwnerID string `json:"owner_id" validate:"required,len=24,hexadecimal"`
+		Type    string `json:"type" validate:"required,oneof=driver merchant client publisher"`
+		Amount  int    `json:"amount"`
+	}
 	if err := httpx.DecodeService(r, &req); err != nil {
 		httpx.Error(w, r, err)
 		return
