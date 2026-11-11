@@ -1,6 +1,6 @@
 # IMMOBILIER — CHERCHEUR (louer, acheter) — contrat d'API
 
-> **Version 4.135.0** · 11 novembre 2026
+> **Version 4.136.0** · 11 novembre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Immobilier : `https://api-staging.dira.llc/api/v1/immo`
 > Site public en service : `https://immo-staging.dira.llc`
 
@@ -668,10 +668,22 @@ Elles arrivent par le socle (poussée + boîte, `GET /me/notifications`). Les
 | `immo_visit_reminder` | **deux heures avant** une visite confirmée | idem |
 | `immo_visit_expired` 🆕 | l'annonceur n'a **pas répondu** avant l'heure du créneau : la demande est close (`status: expired`) — « D'autres créneaux sont peut-être libres » | idem |
 | `immo_thread_message` 🆕 | l'annonceur vous a répondu (§9 ter) | `type: "immo_thread"`, `thread_id`, `listing_id` — le texte est le message, **déjà masqué** |
+| `immo_rent_notice` 🆕 | un loyer tombe **dans 5 jours** (§9 quater) | `type: "immo_lease"`, `lease_id`, `due` (`AAAA-MM-JJ`) |
+| `immo_rent_due` 🆕 | un loyer tombe **aujourd'hui** | idem |
+| `immo_rent_late` 🆕 | un loyer n'est **pas encore marqué payé** par le bailleur, à J+3, J+10 et J+30 | idem |
 
 Le texte porte l'**heure locale du pays** de la visite. ⚠️ **Aucune notification
 ne porte d'adresse ni de téléphone** : un écran verrouillé se lit par-dessus
 l'épaule. Ouvrez la visite pour les lire.
+
+🆕 (v4.136.0) **Les loyers** : ⚠️ **aucun argent ne passe par Dira** — c'est le
+bailleur qui marque un loyer payé. Une relance (`immo_rent_late`) peut donc
+arriver pour un loyer **déjà réglé** que le bailleur n'a pas encore marqué : son
+texte dit « Déjà réglé ? Dites-le à votre bailleur ». Ouvrez le bail
+(`lease_id`) et montrez l'échéance `due` ; **ne dessinez aucun bouton
+« payer »** — le paiement en ligne des loyers n'est pas servi. Les messages
+partent entre 8 h et 20 h, heure du pays, au plus un par bail et par heure ; un
+loyer sous échéancier négocié n'est pas relancé, et rien ne part après J+30.
 
 ---
 
@@ -938,6 +950,12 @@ GET /immo/listings/{ref}
 ---
 
 ## 13. Journal
+
+### 4.136.0 — 11 novembre 2026
+
+🟢 **LES AVIS ET RELANCES DE LOYER** (§10) : `immo_rent_notice` (J-5),
+`immo_rent_due` (J0), `immo_rent_late` (J+3, J+10, J+30), `data.type:
+"immo_lease"`. Aucun bouton « payer » : le bailleur marque les loyers payés.
 
 ### 4.134.0 — 11 novembre 2026
 

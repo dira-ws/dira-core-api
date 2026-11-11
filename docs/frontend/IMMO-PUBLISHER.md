@@ -1,6 +1,6 @@
 # IMMOBILIER — ANNONCEUR (agence ou particulier) — contrat d'API
 
-> **Version 4.135.0** · 11 novembre 2026
+> **Version 4.136.0** · 11 novembre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Immobilier : `https://api-staging.dira.llc/api/v1/immo`
 
 ---
@@ -1709,6 +1709,14 @@ active"`). L'historique (`history`) garde chaque passage.
   mars sans février est en retard **depuis février**. Affichez « retard N
   jours » à partir de cette échéance-là.
 - « À l'heure » = payé au plus tard **5 jours** après l'échéance.
+- 🆕 (v4.136.0) ⚠️ **LE LOCATAIRE EST PRÉVENU AUTOMATIQUEMENT** : un avis
+  **5 jours avant** l'échéance, un rappel **le jour même**, puis des relances à
+  **J+3, J+10 et J+30** tant que le loyer n'est pas **marqué payé** — entre 8 h et
+  20 h, heure du pays. **Marquez un loyer payé dès que vous l'avez reçu** :
+  sinon votre locataire reçoit une relance pour un loyer déjà réglé. Un loyer
+  **sous échéancier** (`plan`) n'est pas relancé ; après J+30, plus rien
+  d'automatique. La relance ne nomme ni vous ni l'adresse (« bail BAIL-… », le
+  montant), et dit au locataire de vous prévenir s'il a déjà payé.
 
 ### 9 quater.4 Qui voit quoi
 
@@ -2420,6 +2428,12 @@ côté application.
 ---
 
 ## 15. Journal
+
+### 4.136.0 — 11 novembre 2026
+
+🟢 **LES RELANCES DE LOYER** (§9 quater.3) : le locataire reçoit l'avis J-5, le
+rappel J0, les relances J+3, J+10, J+30 tant que le loyer n'est pas marqué
+payé — marquez-le dès réception.
 
 ### 4.135.0 — 11 novembre 2026
 

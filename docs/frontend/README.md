@@ -1,6 +1,6 @@
 # Specs frontend — par rôle
 
-> **Version 4.135.0** · 11 novembre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics` + `dira-immo-api`
+> **Version 4.136.0** · 11 novembre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics` + `dira-immo-api`
 
 **Cinq** documents, un par application. Chacun est **autonome** : tout ce qu'un frontend doit savoir pour son rôle, sans avoir à ouvrir les vingt specs de modules.
 
@@ -395,6 +395,13 @@ Chaque document porte la même version en en-tête, et son propre journal des ch
 - [ ] ⚠️ **`TRACKING_JWT_SECRET` renseigné dans chaque environnement déployé.** Vide, l'authentification du service de suivi est **désactivée** : n'importe qui connaissant un `delivery_id` suit la course. Le secret doit valoir **exactement** le `JWT_SECRET` de `dira-food-api`.
 
 ## Journal
+
+### 4.136.0 — 11 novembre 2026
+
+🟢 **L'IMMOBILIER — les avis et relances de loyer** (`IMMO-SEEKER.md` §10,
+`IMMO-PUBLISHER.md` §9 quater.3) : au locataire, J-5, J0, J+3, J+10, J+30 tant
+que le bailleur n'a pas marqué le loyer payé — entre 8 h et 20 h locales, sans
+adresse ni nom du bailleur, sans accuser.
 
 ### 4.135.0 — 11 novembre 2026
 
