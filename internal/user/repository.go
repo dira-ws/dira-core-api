@@ -367,6 +367,19 @@ func (r *Repository) SetDevice(ctx context.Context, userID primitive.ObjectID, d
 // tôt, et réécrire quinze champs à cette occasion ferait perdre ce qu'une
 // requête concurrente vient de poser — un nom corrigé par la console, une
 // photo, un pays réaligné.
+// AddInterest pose un badge d'intérêt. Idempotent (`$addToSet`).
+//
+// ⚠️ PAR L'IDENTIFIANT SEUL, SANS PAYS : un compte client traverse les pays
+// (le voyageur qui commande une course à Libreville avec son compte de
+// Lomé) — c'est le même compte, et le même badge.
+func (r *Repository) AddInterest(ctx context.Context, userID primitive.ObjectID, interest string) error {
+	if _, err := r.users.UpdateOne(ctx, bson.M{"_id": userID},
+		bson.M{"$addToSet": bson.M{"interests": interest}}); err != nil {
+		return fmt.Errorf("user: add interest: %w", err)
+	}
+	return nil
+}
+
 func (r *Repository) SetAgentApp(ctx context.Context, userID primitive.ObjectID, app string) error {
 	update := bson.M{"$set": bson.M{"agent_app": app}}
 	if app == "" {
