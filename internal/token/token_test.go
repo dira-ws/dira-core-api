@@ -1072,3 +1072,24 @@ func TestAPublisherWalletPaysAListingOnce(t *testing.T) {
 	require.Error(t, err)
 	assert.Equal(t, 1, repo.balanceOf(oid), "un solde insuffisant ne débite rien")
 }
+
+// ⚠️ UNE MISE EN AVANT SE PAIE SOUS SON PROPRE IDENTIFIANT : l'annonce est déjà
+// payée sous le sien, et mettre deux fois la même annonce en avant fait deux
+// débits — alors que la même mise en avant, rejouée, n'en fait qu'un.
+func TestABoostIsPaidUnderItsOwnReference(t *testing.T) {
+	repo := newFakeRepo()
+	svc, _, _, _ := newTestService(repo)
+	fiche := primitive.NewObjectID().Hex()
+	require.NoError(t, svc.CreateWallet(context.Background(), fiche, WalletTypePublisher))
+	oid, _ := primitive.ObjectIDFromHex(fiche)
+	require.NoError(t, svc.Credit(context.Background(), fiche, 10, "test"))
+
+	listing := primitive.NewObjectID().Hex()
+	require.NoError(t, svc.Consume(context.Background(), fiche, 1, "immo_listing", RefListing, listing, nil))
+	first, second := primitive.NewObjectID().Hex(), primitive.NewObjectID().Hex()
+	require.NoError(t, svc.Consume(context.Background(), fiche, 3, "immo_boost", RefListingBoost, first, nil))
+	require.NoError(t, svc.Consume(context.Background(), fiche, 3, "immo_boost", RefListingBoost, first, nil))
+	assert.Equal(t, 6, repo.balanceOf(oid), "la même mise en avant, rejouée, ne paie qu'une fois")
+	require.NoError(t, svc.Consume(context.Background(), fiche, 3, "immo_boost", RefListingBoost, second, nil))
+	assert.Equal(t, 3, repo.balanceOf(oid), "une seconde mise en avant est un second débit")
+}
