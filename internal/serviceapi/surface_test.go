@@ -166,6 +166,9 @@ var declaredSurface = []string{
 	// sinon — la commission d'une course en espèces, un paiement refusé.
 	"/internal/wallets/owe",
 	"/internal/wallets/pay",
+	// L'ACHAT de jetons pour un portefeuille que seule la verticale attribue :
+	// la fiche d'un annonceur de l'immobilier. Au nom de celui qui paie.
+	"/internal/wallets/purchase",
 	"/internal/wallets/refund",
 	// ⚠️ DE LA MONNAIE CRÉÉE, comme `credit` crée des jetons : recharger un
 	// portefeuille en ARGENT sans qu'un prestataire ait encaissé. Pour les
