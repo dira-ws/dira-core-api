@@ -1,6 +1,6 @@
 # App CLIENT UNIFIÉE — LIVRAISON **et** COURSES — contrat d'API
 
-> **Version 4.133.0** · 11 novembre 2026
+> **Version 4.134.0** · 11 novembre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Livraison : `…/api/v1/food` · Courses : `…/api/v1/vtc` · Combiné : `…/api/v1/analytics` · Suivi : `wss://tracking-staging.dira.llc`
 
 ---
@@ -242,7 +242,7 @@ GET /app/config          # SANS jeton — lu AVANT l'écran de connexion
   "live": {
     "max_session_seconds": 300, "idle_timeout_seconds": 20,
     "languages": ["fr"],
-    "input": { "encodings": ["pcm16"], "sample_rate": 16000 }
+    "input": { "encodings": ["pcm16", "opus"], "sample_rate": 16000 }   // 🆕 opus v4.134.0
   },
   "voice": {                                              // 🆕 v4.107.0
     "max_audio_seconds": 60, "max_audio_bytes": 2097152,
@@ -1955,7 +1955,7 @@ GET /app/config          # SANS jeton, à l'ouverture
     "max_session_seconds": 300,
     "idle_timeout_seconds": 20,
     "languages": ["fr"],
-    "input": { "encodings": ["pcm16"], "sample_rate": 16000 }
+    "input": { "encodings": ["pcm16", "opus"], "sample_rate": 16000 }
   } }
 ```
 
@@ -2021,6 +2021,10 @@ Les trames **binaires** portent l'audio. Les trames **texte** portent des
   "input": { "encoding": "pcm16", "sample_rate": 16000 } }
 ```
 
+`input` est ce que vous **proposez** : `pcm16`, ou 🆕 `opus` (v4.134.0) quand
+`live.input.encodings` le liste **et** que le téléphone sait l'encoder. C'est
+`session.ready.input` qui dit ce que vous envoyez (§8 quater.4).
+
 🆕 **`origin` EST DÉSORMAIS LU** (v4.112.0) — envoyez-le. Il était
 documenté et ignoré : « un taxi pour l'aéroport », sans départ nommé, n'avait
 pas de départ en direct, et la recherche d'un lieu ou d'un plat ne savait pas
@@ -2053,6 +2057,7 @@ une session payante ouverte.
 
 ```json
 { "type": "session.ready", "session_id": "…", "resume_token": "…",
+  "input":  { "encoding": "pcm16", "sample_rate": 16000 },
   "output": { "encoding": "pcm16", "sample_rate": 24000 },
   "limits": { "max_session_seconds": 300, "idle_timeout_seconds": 20,
               "minutes_left_today": 5 } }
@@ -2060,7 +2065,7 @@ une session payante ouverte.
 
 | `type` | Contenu | Ce que vous faites |
 |---|---|---|
-| `session.ready` | voir ci-dessus | ouvrez la lecture au format `output` ; gardez `resume_token` |
+| `session.ready` | voir ci-dessus | 🆕 ouvrez le micro au format **`input`** (v4.134.0), la lecture au format `output` ; gardez `resume_token` |
 | trames **binaires** | l'audio de la réponse | jouez-les en flux (≈ 200 ms de tampon) |
 | `transcript` | `role`, `text`, `final` | affichez ; `final` absent = partielle |
 | **`interrupted`** | — | **videz immédiatement votre lecture** |
@@ -2082,22 +2087,44 @@ d'un `false` explicite aurait coûté de la bande sur de la 3G.
 
 ### 8 quater.4 ⚠️⚠️ L'audio : ce que nous prenons, et ce que nous rendons
 
-| Sens | Format | Débit |
-|---|---|---|
-| **vous → nous** | PCM **16 bits signé**, **16 000 Hz**, mono, petit-boutien, trames de 100 ms (3 200 octets) | ≈ 256 kbit/s |
-| **nous → vous** | PCM **16 bits signé**, **24 000 Hz**, mono | ≈ 384 kbit/s |
+| Format | Sens | Ce qui passe | Débit |
+|---|---|---|---|
+| **`pcm16`** | vous → nous | PCM **16 bits signé**, **16 000 Hz**, mono, petit-boutien, trames de 100 ms (3 200 octets) | ≈ 256 kbit/s |
+| | nous → vous | PCM **16 bits signé**, **24 000 Hz**, mono | ≈ 384 kbit/s |
+| 🆕 **`opus`** (v4.134.0) | vous → nous | **un paquet Opus brut par trame binaire**, sans conteneur ni en-tête, encodé à 16 kHz mono (≈ 20 kbit/s : Android `MediaCodec`, trames de 20 ms) | ≈ 20 kbit/s |
+| | nous → vous | **un paquet Opus brut par trame binaire**, 48 000 Hz mono (trames de 20 ms) | ≈ 32 kbit/s |
 
-**⚠️⚠️ `encodings` ne liste QUE ce que le serveur sait décoder.** Aujourd'hui :
-`pcm16`, et rien d'autre. **N'envoyez pas d'Opus** même si votre encodeur le
-propose : le micro partirait et le serveur n'entendrait rien — une panne muette.
-Quand l'Opus sera accepté, il **apparaîtra dans `encodings`**, et c'est la seule
-chose à regarder.
+**⚠️⚠️ VOUS PROPOSEZ, LE SERVEUR DÉCIDE — ET IL LE DIT DANS `session.ready.input`.**
+Le direct de votre pays peut être servi par un fournisseur qui n'entend que du
+PCM16 : le serveur le sait, pas vous. Donc :
 
-> ⚠️ **Conséquence à assumer dès maintenant** : à ce débit, le direct est
-> utilisable en **Wi-Fi et en 4G**, pas sur la 3G de N'Djamena. C'est aussi
-> pourquoi il reste éteint par défaut. Mesurez le débit et la file d'envoi ; si
-> elle gonfle, proposez **Messages vocaux** (le tour par tour) plutôt que de
-> laisser la personne parler dans le vide.
+1. **Proposez `opus`** dans `session.start.input` seulement si
+   `live.input.encodings` le liste **et** que le téléphone sait l'**encoder et
+   le décoder** (Android : encodeur `MediaCodec` à partir d'Android 10).
+   Sinon, `pcm16`.
+2. **Envoyez ce que dit `session.ready.input`**, et rien d'autre — même si
+   vous avez proposé `opus` : `input.encoding: "pcm16"` veut dire « envoyez du
+   PCM16 ». Le serveur l'envoie **toujours** ; un relais plus ancien ne
+   l'envoyait pas, et son absence vaut ce que vous avez proposé.
+3. **Jouez ce que dit `session.ready.output`.** Quand l'entrée retenue est
+   `opus`, la sortie l'est aussi, à 48 kHz : préparez votre décodeur.
+4. **Le format ne change jamais au cours d'une connexion**, et peut changer
+   d'une connexion à l'autre : relisez `session.ready` à **chaque**
+   reconnexion, et rouvrez le micro au format qu'il annonce.
+
+⚠️ **Un paquet par trame, jamais deux.** Le serveur décode chaque trame binaire
+comme un paquet : deux paquets collés se décodent en un, et le second est
+perdu. Un paquet illisible est jeté sans couper la session — et il n'est pas
+compté.
+
+⚠️ **Le quota se compte en durée, pas en octets** : un paquet Opus de 20 ms
+coûte 20 ms de minutes, quelle que soit sa taille.
+
+> ⚠️ **En PCM16, le direct est utilisable en Wi-Fi et en 4G, pas sur la 3G de
+> N'Djamena.** En Opus, le débit tombe à ≈ 20 kbit/s en montée et ≈ 32 en
+> descente : c'est ce qui doit ouvrir la 3G. Mesurez le débit et la file
+> d'envoi dans les deux cas ; si elle gonfle, proposez **Messages vocaux** (le
+> tour par tour) plutôt que de laisser la personne parler dans le vide.
 
 **Annulation d'écho, côté téléphone** : capturez sur `VOICE_COMMUNICATION`
 (Android) avec `AcousticEchoCanceler`, sinon la voix de Dira dans le haut-parleur
@@ -2107,8 +2134,8 @@ déclenche son propre barge-in.
 
 Le direct peut être servi par Gemini **ou** par OpenAI, pays par pays, et le
 choix se fait à la console. **Vous ne le voyez pas et vous n'avez rien à
-changer** : mêmes événements, 16 kHz en entrée, 24 kHz en sortie, et aucun champ
-ne nomme le fournisseur. N'écrivez aucun code qui en dépende.
+changer** : mêmes événements, les formats que dit `session.ready` (§8 quater.4),
+et aucun champ ne nomme le fournisseur. N'écrivez aucun code qui en dépende.
 
 Le rythme, lui, change. Voici ce qui a été mesuré sur OpenAI, et ce qu'une
 application correcte doit déjà tenir :
@@ -2123,7 +2150,13 @@ application correcte doit déjà tenir :
 
 ⚠️ **Le refus d'un fournisseur ne vous arrive pas.** S'il n'a plus de crédit ou
 s'il refuse la session, le relais passe sur l'autre, et votre session reste
-ouverte : vous recevez `session.ready`, comme d'habitude.
+ouverte : vous recevez `session.ready`, comme d'habitude — avec, peut-être, un
+autre `input` que celui que vous avez proposé.
+
+🆕 (v4.134.0) **Une exception, en Opus.** Si le fournisseur tombe **en cours de
+session** alors que vous envoyez de l'Opus, l'autre ne l'entendrait pas : vous
+recevez `live_unavailable` (réessayable). Reconnectez-vous avec `resume_token`,
+comme pour toute coupure ; la nouvelle `session.ready` vous dira `pcm16`.
 
 ### 8 quater.5 ⚠️⚠️ Confirmer : ce que le modèle NE PEUT PAS faire
 
@@ -2236,7 +2269,7 @@ quelques centaines de millisecondes comme une panne.
 | `live_disabled` | non | pas ouvert ici — montrez le tour par tour |
 | `live_quota_reached` | non (aujourd'hui) | minutes du jour épuisées |
 | `live_language_unavailable` | non | cette langue n'est pas ouverte ; `message` liste celles qui le sont |
-| `live_encoding_unsupported` | non | envoyez `pcm16` |
+| `live_encoding_unsupported` | non | un encodage que `live.input.encodings` ne liste pas — proposez `pcm16` |
 | `live_unavailable` | oui | le fournisseur ne répond pas |
 | `live_bad_event` | oui | trame inattendue ou inconnue — la session continue |
 
@@ -3086,7 +3119,7 @@ direct n'existe pas :
 | `403 live_disabled` | **n'essayez plus ici** — montrez l'assistant tour par tour |
 | `403 live_quota_reached` | **plus aujourd'hui** — repli, et reproposez demain |
 | `403 live_language_unavailable` | `message` liste les langues ouvertes — proposez-en une, ou un vocal |
-| `422 live_encoding_unsupported` | envoyez `pcm16` (c'est le seul format accepté) |
+| `422 live_encoding_unsupported` | proposez un encodage de `live.input.encodings` — `pcm16` est toujours accepté |
 | `503 live_unavailable` | **réessayez une fois**, puis repli |
 | `live_bad_event` (événement) | trame inattendue — **la session continue**, corrigez l'envoi |
 
@@ -3132,19 +3165,33 @@ du métier.
 - [ ] 🆕 **Le direct** (§8 quater) : l'entrée « En direct » n'existe que si `features.assistant_live` **et** le bloc `live` sont servis ; jamais la seule sortie d'un écran.
 - [ ] 🆕 Le jeton du direct part dans l'en-tête `Authorization`, **jamais** dans l'URL de la socket.
 - [ ] 🆕 `session.start` envoyé dans les 15 s, avec `language` **pris dans `live.languages`** — sinon `live_language_unavailable`.
-- [ ] 🆕 **`pcm16` 16 kHz mono seulement** : rien d'autre n'est décodé, et un Opus envoyé part dans le vide sans erreur.
+- [ ] 🆕 **`opus` proposé seulement s'il est listé ET que le téléphone l'encode et le décode** ; le micro s'ouvre au format de **`session.ready.input`**, relu à chaque reconnexion — `pcm16` même quand vous avez proposé `opus` (v4.134.0).
+- [ ] 🆕 En Opus : **un paquet par trame binaire**, sans conteneur ; la voix de Dira arrive de même, à 48 kHz.
 - [ ] 🆕 `interrupted` **vide la lecture immédiatement** ; sans annulation d'écho (`VOICE_COMMUNICATION`), la voix de Dira déclenche son propre barge-in.
 - [ ] 🆕 `mic.mute` pendant un appel téléphonique : l'audio n'est **ni envoyé ni compté**, et la session n'est pas fermée.
 - [ ] 🆕 La confirmation passe par `ui.confirm` **ou** par un « oui » que **le serveur** relie au jeton — aucun chemin ne doit exécuter sur la parole du modèle.
 - [ ] 🆕 Le prix affiché vient de `card.summary.price_xof`, **jamais** de ce que le modèle a dit.
 - [ ] 🆕 `resume_token` gardé et renvoyé après une coupure réseau ; un silence de quelques centaines de millisecondes n'est **pas** une panne.
 - [ ] 🆕 Les cinq `session.end.reason` écrivent cinq phrases différentes, et `live_quota_reached` **ne propose pas de réessayer**.
-- [ ] 🆕 Le réseau faible propose **Messages vocaux**, pas un direct qui saccade : 256 kbit/s en montée, 384 en descente.
+- [ ] 🆕 Le réseau faible propose **Messages vocaux**, pas un direct qui saccade : 256 kbit/s en montée, 384 en descente en PCM16 (≈ 20 et 32 en Opus).
 - [ ] Suppression de compte : écran de conséquences **avant** la preuve d'identité, `erase_at` affiché, « les courses et commandes passées restent » dit **avant** le bouton, `409 wallet_not_empty` renvoyé vers le solde, `403 account_closed` traité à la connexion **et** à l'inscription.
 
 ---
 
 ## 15. Journal
+
+### 4.134.0 — 11 novembre 2026
+
+🟢 **LE DIRECT EN OPUS** (§8 quater.3, §8 quater.4, dira-ws/dira-llm#20).
+`live.input.encodings` liste désormais `opus` : un paquet brut par trame
+binaire, 16 kHz en montée (≈ 20 kbit/s au lieu de 256), 48 kHz en descente
+(≈ 32 au lieu de 384) — de quoi ouvrir le direct à la 3G. 🟠 **Le serveur
+décide par session** : `session.ready.input` dit ce que vous envoyez (toujours
+présent), `output` ce que vous jouez ; un `opus` proposé peut recevoir
+`pcm16`, là où le direct n'est pas servi par un fournisseur qui l'entend. 🟠 En Opus, une panne
+du fournisseur en cours de session arrive en `live_unavailable` : reconnectez,
+et relisez `session.ready`. Rien d'obligatoire : une application qui envoie du
+PCM16 ne voit rien changer.
 
 ### 4.123.0 — 10 novembre 2026
 
