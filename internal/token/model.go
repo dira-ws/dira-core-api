@@ -152,6 +152,13 @@ const (
 	// fois, et la référence rend le débit idempotent (une soumission rejouée
 	// ne paie pas deux fois).
 	RefListing = "listing"
+	// RefListingBoost : une MISE EN AVANT d'annonce de l'immobilier. Un genre à
+	// part, et son PROPRE identifiant (celui de la mise en avant, pas de
+	// l'annonce) — exactement comme `RefRideAdjustment` : l'annonce est déjà
+	// payée sous la sienne, et chaque mise en avant est un mouvement distinct.
+	// Deux mises en avant de la même annonce sont deux débits ; la même, rejouée,
+	// n'en est qu'un.
+	RefListingBoost = "listing_boost"
 	// RefChallenge : un OBJECTIF (`internal/challenge`). La référence rend le
 	// versement idempotent — un bonus payé deux fois est de l'argent perdu que
 	// personne ne réclame.

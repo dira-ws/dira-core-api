@@ -542,7 +542,7 @@ type walletRequest struct {
 	CommissionXOF int            `json:"commission_xof" validate:"omitempty,min=0"`
 	Reason        string         `json:"reason" validate:"omitempty,max=60"`
 	RefID         string         `json:"ref_id" validate:"omitempty,len=24,hexadecimal"`
-	RefKind       string         `json:"ref_kind" validate:"omitempty,oneof=order ride tip ride_adjustment listing"`
+	RefKind       string         `json:"ref_kind" validate:"omitempty,oneof=order ride tip ride_adjustment listing listing_boost"`
 	Ref           map[string]any `json:"ref"`
 	Type          string         `json:"type" validate:"omitempty,oneof=driver merchant client publisher"`
 }
