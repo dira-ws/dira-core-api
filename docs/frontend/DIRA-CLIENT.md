@@ -2022,8 +2022,10 @@ Les trames **binaires** portent l'audio. Les trames **texte** portent des
 ```
 
 `input` est ce que vous **proposez** : `pcm16`, ou 🆕 `opus` (v4.134.0) quand
-`live.input.encodings` le liste **et** que le téléphone sait l'encoder. C'est
-`session.ready.input` qui dit ce que vous envoyez (§8 quater.4).
+`live.input.encodings` le liste **et** que le téléphone sait l'encoder **et le
+décoder** : la sortie suit l'entrée, en Opus à 48 kHz. C'est
+`session.ready.input` qui dit ce qui est retenu, donc ce que vous envoyez
+(§8 quater.4).
 
 🆕 **`origin` EST DÉSORMAIS LU** (v4.112.0) — envoyez-le. Il était
 documenté et ignoré : « un taxi pour l'aéroport », sans départ nommé, n'avait
@@ -2041,7 +2043,7 @@ Puis :
 
 | Trame | Quand |
 |---|---|
-| trames **binaires** de 100 ms | l'audio du micro, au format négocié |
+| trames **binaires** : 100 ms de PCM16, ou **un** paquet Opus par trame (§8 quater.4) | l'audio du micro, au format que dit `session.ready.input` |
 | `{"type":"mic.mute"}` / `{"type":"mic.unmute"}` | la personne coupe son micro, ou un appel arrive |
 | `{"type":"text","message":"…"}` | elle tape pendant le direct |
 | `{"type":"ui.confirm","confirmation_token":"…"}` | elle appuie sur **Confirmer** |
@@ -2066,7 +2068,7 @@ une session payante ouverte.
 | `type` | Contenu | Ce que vous faites |
 |---|---|---|
 | `session.ready` | voir ci-dessus | 🆕 ouvrez le micro au format **`input`** (v4.134.0), la lecture au format `output` ; gardez `resume_token` |
-| trames **binaires** | l'audio de la réponse | jouez-les en flux (≈ 200 ms de tampon) |
+| trames **binaires** | l'audio de la réponse, au format `output` — en Opus, **un** paquet par trame | jouez-les en flux (≈ 200 ms de tampon) |
 | `transcript` | `role`, `text`, `final` | affichez ; `final` absent = partielle |
 | **`interrupted`** | — | **videz immédiatement votre lecture** |
 | `turn.complete` | — | le tour est fini |
@@ -2156,7 +2158,9 @@ autre `input` que celui que vous avez proposé.
 🆕 (v4.134.0) **Une exception, en Opus.** Si le fournisseur tombe **en cours de
 session** alors que vous envoyez de l'Opus, l'autre ne l'entendrait pas : vous
 recevez `live_unavailable` (réessayable). Reconnectez-vous avec `resume_token`,
-comme pour toute coupure ; la nouvelle `session.ready` vous dira `pcm16`.
+comme pour toute coupure, et rouvrez le micro au format de la **nouvelle**
+`session.ready` : `pcm16` si le direct est repris par un fournisseur qui
+n'entend pas l'Opus, `opus` si le premier répond de nouveau.
 
 ### 8 quater.5 ⚠️⚠️ Confirmer : ce que le modèle NE PEUT PAS faire
 
@@ -3192,6 +3196,12 @@ présent), `output` ce que vous jouez ; un `opus` proposé peut recevoir
 du fournisseur en cours de session arrive en `live_unavailable` : reconnectez,
 et relisez `session.ready`. Rien d'obligatoire : une application qui envoie du
 PCM16 ne voit rien changer.
+
+🟡 **`opus` se propose si le téléphone l'encode ET le décode** (§8 quater.3) :
+la sortie suit l'entrée, en Opus à 48 kHz. En Opus, le micro part en **un**
+paquet par trame binaire — les 100 ms sont celles du PCM16 —, et après un
+`live_unavailable`, c'est la nouvelle `session.ready` qui dit le format
+(§8 quater.4 bis).
 
 ### 4.123.0 — 10 novembre 2026
 
