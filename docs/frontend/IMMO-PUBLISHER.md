@@ -1,6 +1,6 @@
 # IMMOBILIER — ANNONCEUR (agence ou particulier) — contrat d'API
 
-> **Version 4.131.0** · 11 novembre 2026
+> **Version 4.132.0** · 11 novembre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Immobilier : `https://api-staging.dira.llc/api/v1/immo`
 
 ---
@@ -1304,7 +1304,7 @@ les passages** :
 
 | De | Vers | Qui | Ce que l'écran propose |
 |---|---|---|---|
-| `draft` | `in_review` | **l'annonceur** | « Soumettre à la relecture » |
+| `draft` | `in_review` | **l'annonceur** | « Soumettre à la relecture » — 🆕 ⚠️ **c'est ici que la publication se règle** (section 11) : gratuite dans le quota du mois, sinon 1 jeton du portefeuille de la fiche, ou `402 insufficient_tokens` |
 | `in_review` | `published` | ⚠️ **l'équipe Dira seulement** | rien : attendre |
 | `in_review` | `draft` | l'équipe (renvoi, avec une note) **ou** l'annonceur (retirer sa soumission) | « Retirer de la relecture » |
 | `published` | `paused` | l'annonceur | « Mettre en pause » |
@@ -1882,39 +1882,106 @@ la notification et « 14:00 » dans l'écran ne sait plus à quelle heure venir.
 
 ---
 
-## 11. Les réglages de publication — `GET /immo/settings/publication`
+## 11. 🆕 Ce que coûte une annonce, et le portefeuille qui la paie (v4.132.0)
 
-Ce que publier coûte **annoncé** dans le pays du compte. Lisible par tout
-compte connecté.
+Décision du propriétaire du 11 nov. 2026 : **N annonces gratuites par mois,
+puis des jetons** — tout réglé par pays dans la console. Valeurs de départ :
+**10 gratuites par mois** (particulier comme agence), puis **1 jeton** par
+annonce.
+
+### 11.1 ⚠️⚠️ Le portefeuille est celui de la FICHE
+
+Une agence a **un** portefeuille, commun à tous ses collaborateurs : le
+porteur (ou un `manager`) le recharge, chacun y puise en soumettant. Un
+particulier a le sien. Il n'existe **aucun** portefeuille par collaborateur.
+
+```
+GET  /immo/publishers/me/wallet
+POST /immo/publishers/me/wallet/purchase     { "tokens": 20 }
+```
 
 ```json
 → 200 {
-  "free_listings":  2,      // annonces gratuites d'un PARTICULIER
-  "listing_tokens": 500,    // prix d'une annonce au-delà, en jetons
-  "boost_tokens":   1000,   // prix d'une mise en avant
-  "boost_days":     7,      // durée d'une mise en avant
-  "twin_tokens":    2000,   // prix du traitement 3D
-  "updated_at":     "2026-11-02T09:00:00Z"
+  "balance":        12,         // jetons de la FICHE
+  "token_price_xof": 100,       // prix d'un jeton
+  "month":          "2026-11",  // le mois du quota, à l'heure du pays
+  "free_quota":     10,         // gratuites ce mois-ci (selon agence / particulier)
+  "free_used":      7,
+  "free_left":      3,          // ce qui part encore sans payer — jamais négatif
+  "listing_tokens": 1,          // ce que coûte une annonce au-delà
+  "can_purchase":   true        // ce compte peut-il recharger ?
 }
 ```
 
-- Le quota gratuit ne vise que les **particuliers** : une agence paie dès la
-  première annonce — c'est son métier.
-- Un pays qui n'a rien réglé suit le réglage commun, puis les valeurs de
-  départ ci-dessus. Le serveur relit toutes les trente secondes.
-- ⚠️ **`updated_at` PEUT VALOIR `0001-01-01T00:00:00Z`** quand aucun réglage
-  n'a jamais été écrit (les valeurs de départ). Ne l'affichez pas.
+- **Tout collaborateur le lit** : un `agent` doit savoir, avant de soumettre,
+  si l'annonce partira. Affichez « 3 annonces gratuites ce mois-ci, puis 1
+  jeton (solde : 12) » à côté du bouton « Soumettre ».
+- **Seuls le porteur et un `manager` achètent** (`can_purchase`). Pour un
+  `agent`, ⚠️ **masquez « Recharger »** et écrivez « demandez au responsable de
+  l'agence » : `POST …/purchase` lui rend `403 wallet_purchase_reserved`.
+- **Acheter** → `201 { "payment_id": "…", "tokens": 20, "amount_xof": 2000 }`.
+  C'est un paiement mobile money **au nom de celui qui achète** : suivez
+  `GET /payments/{id}` (socle) jusqu'à `succeeded`. ⚠️ **Les jetons tombent sur
+  la fiche à la confirmation**, pas à la réponse : relisez
+  `GET /immo/publishers/me/wallet` ensuite. Ne créditez jamais l'écran
+  d'avance.
+- `tokens` : de 1 à 10 000. `token_price_xof` vient du serveur — ne recopiez
+  aucun prix dans l'application.
 
-> ⚠️⚠️ **CE SONT DES PRIX ANNONCÉS, PAS DES PRIX APPLIQUÉS.** Vérifié dans le
-> code au 10 novembre 2026 : **aucune route ne compte les annonces gratuites,
-> aucune ne débite de jetons** — ni à la création, ni à la soumission, ni à la
-> publication. La mise en avant et la 3D ne sont pas servies (section 12), et
-> l'inscription d'un annonceur n'ouvre aucun portefeuille de jetons.
->
-> **Ne dessinez donc ni solde, ni « il vous reste 1 annonce gratuite », ni
-> écran de paiement.** Si vous montrez la grille, écrivez qu'il s'agit des
-> tarifs annoncés — un annonceur qui lit « 500 jetons » et n'est jamais débité
-> croira à une dette qui l'attend.
+### 11.2 La soumission règle — une fois par annonce
+
+C'est **`draft → in_review`** (« Soumettre à la relecture », section 8.6) qui
+règle :
+
+| Cas | Ce qui se passe |
+|---|---|
+| il reste des annonces gratuites ce mois-ci | la soumission passe, `billing.free: true` |
+| le quota est pris, le solde suffit | `listing_tokens` jetons sont débités du portefeuille de la fiche, `billing.tokens` |
+| le quota est pris, le solde ne suffit pas | ⚠️ **`402 insufficient_tokens`** — l'annonce **reste en brouillon** ; `reason` vaut `"1 / 0"` (il faut / il y a) |
+| le portefeuille est injoignable et le quota est pris | `503 billing_unavailable` — réessayez plus tard ; rien n'est débité |
+
+L'annonce porte son règlement :
+
+```json
+"billing": { "free": false, "tokens": 1, "month": "2026-11", "at": "2026-11-11T09:12:00Z" }
+```
+
+- ⚠️ **UNE FOIS PAR ANNONCE.** Renvoyée en brouillon par l'équipe et
+  resoumise, elle **ne repaie pas** ; une soumission rejouée (réseau qui
+  bégaie) non plus. Retirée ensuite, elle **n'est pas remboursée** : le jeton
+  paie la relecture et la mise en ligne.
+- `billing` est **absent** sur une annonce jamais soumise, et sur une annonce
+  soumise avant le 11 novembre 2026.
+- Sur `402 insufficient_tokens` : proposez « Recharger » (si `can_purchase`)
+  ou « Demander au responsable de l'agence » (sinon), **dans le même écran**,
+  et laissez le brouillon intact.
+- Le quota est **mensuel, à l'heure du pays** : il repart le 1er à minuit,
+  heure locale.
+
+### 11.3 La grille annoncée — `GET /immo/settings/publication`
+
+Lisible par tout compte connecté — ce que la console a réglé pour le pays :
+
+```json
+→ 200 {
+  "free_listings":        10,   // gratuites PAR MOIS — particulier
+  "free_listings_agency": 10,   // 🆕 gratuites PAR MOIS — agence
+  "listing_tokens":       1,    // prix d'une annonce au-delà, en jetons
+  "boost_tokens":         1000, // mise en avant — pas encore servie (section 12)
+  "boost_days":           7,
+  "twin_tokens":          2000, // 3D — pas encore servie
+  "updated_at":           "2026-11-11T09:00:00Z"
+}
+```
+
+- Pour le compte qui soumet, préférez **`GET /immo/publishers/me/wallet`** : il
+  dit le quota de **sa** fiche, déjà décompté.
+- Un pays qui n'a rien réglé suit le réglage commun, puis les valeurs de
+  départ. Le serveur relit toutes les trente secondes.
+- ⚠️ **`updated_at` PEUT VALOIR `0001-01-01T00:00:00Z`** quand aucun réglage
+  n'a jamais été écrit. Ne l'affichez pas.
+- ⚠️ La mise en avant et la 3D restent **annoncées, pas servies** : ne
+  dessinez aucun bouton d'achat pour elles.
 
 ---
 
@@ -1931,7 +1998,6 @@ côté application.
 | **Poser le badge `verified`** (fiche ou bien) | il dit qu'un humain de Dira a regardé l'identité, le mandat, le titre ; une case à cocher en ferait une affirmation de plus |
 | **Se publier soi-même** | la relecture est faite par l'équipe (0.3) |
 | **La mise en avant payée** (`sponsored`, `boost_*`) | pas servie : `sponsored` est toujours `false`, aucune route ne l'achète |
-| **Le paiement, les jetons, le quota gratuit** | annoncés, jamais appliqués (section 11) |
 | **Les séjours courte durée — réservation et paiement** | 🆕 (v4.131.0) **`stay` est ouvert** : une annonce à la nuit se crée, se publie, se cherche, se visite et se discute comme les autres. Ce qui n'existe **pas encore** : le calendrier des nuits, la réservation et le paiement. Proposez `stay` en le disant : « le voyageur vous contacte ; la réservation en ligne arrive ». |
 | **La gestion locative** — bail, échéancier, loyers, quittances | pas encore ouverte |
 | **La capture 3D, les mesures LiDAR, le contour de terrain au GPS** | l'**application de capture**, à venir. C'est elle qui écrira `has_3d` et les surfaces `measured_*` / `gps_polygon` ; cette application ne les saisit pas (6.4) |
@@ -2048,6 +2114,9 @@ côté application.
 | `media_too_large` | 413 | Cette photo est trop lourde ou trop grande |
 | `media_too_small` | 422 | Cette photo est trop petite : 480 pixels au moins sur le petit côté |
 | **Annonces** | | |
+| `insufficient_tokens` 🆕 | 402 | Les annonces gratuites du mois sont épuisées et le portefeuille de l'agence ne peut pas en payer une de plus. Rechargez-le pour soumettre cette annonce. (affichez `reason` : « il faut / il y a ») |
+| `billing_unavailable` 🆕 | 503 | Le portefeuille est momentanément injoignable : une annonce au-delà du quota gratuit ne peut pas être soumise pour l'instant. |
+| `wallet_purchase_reserved` 🆕 | 403 | Seuls le responsable de l'agence ou un manager peuvent acheter des jetons. |
 | `listing_not_found` | 404 | Annonce introuvable |
 | ~~`listing_not_yours`~~ | — | 🆕 v4.124.0 — **n'est plus émis** : un bien d'une autre fiche rend `property_not_found`, l'auto-publication `listing_published_by_staff`, le motif `moderated` `listing_moderated_by_staff` |
 | `listing_published_by_staff` 🆕 | 403 | La publication est faite par l'équipe Dira, après relecture |

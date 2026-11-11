@@ -1,6 +1,6 @@
 # Specs frontend — par rôle
 
-> **Version 4.131.0** · 11 novembre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics` + `dira-immo-api`
+> **Version 4.132.0** · 11 novembre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics` + `dira-immo-api`
 
 **Cinq** documents, un par application. Chacun est **autonome** : tout ce qu'un frontend doit savoir pour son rôle, sans avoir à ouvrir les vingt specs de modules.
 
@@ -395,6 +395,16 @@ Chaque document porte la même version en en-tête, et son propre journal des ch
 - [ ] ⚠️ **`TRACKING_JWT_SECRET` renseigné dans chaque environnement déployé.** Vide, l'authentification du service de suivi est **désactivée** : n'importe qui connaissant un `delivery_id` suit la course. Le secret doit valoir **exactement** le `JWT_SECRET` de `dira-food-api`.
 
 ## Journal
+
+### 4.132.0 — 11 novembre 2026
+
+🟢 **L'ANNONCEUR — publier se paie** (`IMMO-PUBLISHER.md` §11, §8.6, §14) :
+décision du 11 novembre — N annonces gratuites **par mois** (particulier et
+agence, `free_listings_agency` 🆕), puis des jetons, **du portefeuille de la
+FICHE** (commun à l'agence). `GET /immo/publishers/me/wallet`,
+`POST /immo/publishers/me/wallet/purchase` (porteur et `manager`), la
+soumission qui règle (`402 insufficient_tokens`, `billing` sur l'annonce),
+une fois par annonce.
 
 ### 4.131.0 — 11 novembre 2026
 
