@@ -1,6 +1,6 @@
 # IMMOBILIER — ANNONCEUR (agence ou particulier) — contrat d'API
 
-> **Version 4.132.0** · 11 novembre 2026
+> **Version 4.133.0** · 11 novembre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Immobilier : `https://api-staging.dira.llc/api/v1/immo`
 
 ---
@@ -1628,6 +1628,94 @@ POST /immo/publishers/me/threads/{id}/read            → { "marked": 1 }
 
 ---
 
+## 9 quater. 🆕 Les baux (v4.133.0)
+
+Ouvert le 11 nov. 2026. Un **bail** lie un bien de la fiche à un **compte
+client** (le locataire) ; il porte son cycle et l'**échéancier** de ses loyers.
+
+⚠️ **CE QUI N'EXISTE PAS ENCORE** : la signature électronique, les avenants et
+révisions, l'encaissement en ligne, les quittances. Un loyer est **marqué payé
+par l'annonceur** — aucun argent ne passe par Dira. Ne dessinez ni bouton
+« payer », ni « signer » en ligne.
+
+```
+POST /immo/leases
+GET  /immo/publishers/me/leases[?status=&limit=&cursor=]
+GET  /immo/publishers/me/leases/{id}
+POST /immo/publishers/me/leases/{id}/status          { "status": "sent", "notice_on"?: "2026-11-11" }
+POST /immo/publishers/me/leases/{id}/rents/{due}     { "paid_on"?: "2026-11-04" } | { "plan": true }
+```
+
+### 9 quater.1 Créer — un brouillon
+
+```json
+POST /immo/leases
+{ "property_id": "6b1a0e5f2c3d4e5f6a7b8c01", "listing_id"?: "…",
+  "tenant_id": "6b0f3c1a9e2d4f5a6b7c8d95",
+  "rent_minor": 150000, "charges_minor": 10000, "deposit_minor": 300000,
+  "start_on": "2026-12-01", "end_on"?: "2027-12-01", "payment_day"?: 5 }
+→ 201, le bail (status: "draft")
+```
+
+- `tenant_id` est un **compte client du pays** (le chercheur avec qui la visite
+  a eu lieu) ; un chauffeur, un compte d'un autre pays ou un identifiant
+  inconnu → `422 lease_tenant_invalid`.
+- Le bien doit être **de la fiche** (`404 property_not_found` sinon).
+- Dates `YYYY-MM-DD`, **jours locaux** ; `end_on` après `start_on` ;
+  `payment_day` de 1 à 28 (par défaut le jour du début, ramené à 28) →
+  `422 lease_dates_invalid`. Loyer positif, charges et caution ≥ 0 →
+  `422 lease_amounts_invalid`. La monnaie est celle du pays (`currency`).
+- `property_label` (quartier, ville) et `tenant_name` sont **figés** au bail :
+  c'est ce qui figure au contrat.
+- ⚠️ **Un brouillon n'est visible que de l'annonceur** : le locataire ne le voit
+  qu'à partir de `sent`.
+
+### 9 quater.2 Le cycle
+
+```
+draft ─► sent ─► signed ─► active ─► notice ─► ended ─► closed
+           └─► draft (correction)   └────────────► ended
+```
+
+| Passage | Geste |
+|---|---|
+| `draft → sent` | « Envoyer au locataire » |
+| `sent → signed` / `sent → draft` | signé / à corriger |
+| `signed → active` | « Commencer le bail » — ⚠️ **c'est ici que l'échéancier est généré** : 12 mois (ou jusqu'à `end_on`), loyer + charges |
+| `active → notice` | « Préavis » — `notice_on` (par défaut aujourd'hui, heure du pays) |
+| `active` / `notice` → `ended` | « Fin du bail » |
+| `ended → closed` | « Clore » — rien ne bouge plus |
+
+Tout autre passage → `409 lease_status_transition` (`reason` : `"draft →
+active"`). L'historique (`history`) garde chaque passage.
+
+### 9 quater.3 L'échéancier — `rents`
+
+```json
+"rents": [
+  { "due": "2026-12-05", "amount_minor": 160000, "paid_on": "2026-12-04" },
+  { "due": "2027-01-05", "amount_minor": 160000, "plan": true },
+  { "due": "2027-02-05", "amount_minor": 160000 }
+]
+```
+
+- **Marquer payé** : `POST …/rents/2027-01-05 {"paid_on": "2027-01-07"}` (sans
+  `paid_on` : aujourd'hui). **Mettre sous échéancier** : `{"plan": true}` — en
+  retard, mais suivi. ⚠️ Seulement sur un bail `active` ou `notice`
+  (`409 lease_not_running`) ; une échéance inconnue → `404 lease_rent_not_found`.
+- ⚠️ **LA PLUS ANCIENNE ÉCHÉANCE IMPAYÉE COMMANDE** : un locataire qui a payé
+  mars sans février est en retard **depuis février**. Affichez « retard N
+  jours » à partir de cette échéance-là.
+- « À l'heure » = payé au plus tard **5 jours** après l'échéance.
+
+### 9 quater.4 Qui voit quoi
+
+Comme les annonces : le porteur et les `manager` voient **tous** les baux de la
+fiche ; un `agent` **les siens** (`404 lease_not_found` sur celui d'un
+collègue). Le locataire voit le sien dans **Dira Immo** (`GET /immo/me/leases`).
+
+---
+
 ## 10. Les notifications
 
 Elles arrivent par le socle : **poussée** sur le téléphone, et **boîte**
@@ -1999,7 +2087,7 @@ côté application.
 | **Se publier soi-même** | la relecture est faite par l'équipe (0.3) |
 | **La mise en avant payée** (`sponsored`, `boost_*`) | pas servie : `sponsored` est toujours `false`, aucune route ne l'achète |
 | **Les séjours courte durée — réservation et paiement** | 🆕 (v4.131.0) **`stay` est ouvert** : une annonce à la nuit se crée, se publie, se cherche, se visite et se discute comme les autres. Ce qui n'existe **pas encore** : le calendrier des nuits, la réservation et le paiement. Proposez `stay` en le disant : « le voyageur vous contacte ; la réservation en ligne arrive ». |
-| **La gestion locative** — bail, échéancier, loyers, quittances | pas encore ouverte |
+| **La gestion locative au-delà du bail** — encaissement en ligne, quittances, révision et avenants, signature électronique | 🆕 le **bail** et son **échéancier** sont servis (section 9 quater, v4.133.0) ; le reste viendra. Aucun argent ne passe par Dira : un loyer est **marqué** payé par l'annonceur |
 | **La capture 3D, les mesures LiDAR, le contour de terrain au GPS** | l'**application de capture**, à venir. C'est elle qui écrira `has_3d` et les surfaces `measured_*` / `gps_polygon` ; cette application ne les saisit pas (6.4) |
 | **La vidéo de visite** — filmée, envoyée, montrée | pas servie. Le mode de créneau `video` n'est qu'une étiquette : aucun lien, aucune salle (9.1) |
 | **L'envoi et la vérification des titres de propriété** | le champ `documents` existe, aucune porte d'envoi ni aucune vérification (6.8) |
@@ -2113,6 +2201,14 @@ côté application.
 | `media_format` | 415 | Envoyez une photographie en JPEG, PNG ou WebP |
 | `media_too_large` | 413 | Cette photo est trop lourde ou trop grande |
 | `media_too_small` | 422 | Cette photo est trop petite : 480 pixels au moins sur le petit côté |
+| **Baux** 🆕 | | |
+| `lease_not_found` | 404 | Ce bail n'existe pas. |
+| `lease_status_transition` | 409 | Ce bail ne peut pas passer à cet état depuis son état actuel. (affichez `reason`) |
+| `lease_tenant_invalid` | 422 | Le locataire doit être un compte client existant de ce pays. |
+| `lease_dates_invalid` | 422 | Les dates s'écrivent AAAA-MM-JJ, la fin vient après le début, et le jour du loyer va de 1 à 28. |
+| `lease_amounts_invalid` | 422 | Le loyer doit être positif ; les charges et la caution ne peuvent pas être négatives. |
+| `lease_rent_not_found` | 404 | Aucun loyer de ce bail ne tombe ce jour-là. |
+| `lease_not_running` | 409 | Les loyers ne se marquent que sur un bail en cours ou en préavis. |
 | **Annonces** | | |
 | `insufficient_tokens` 🆕 | 402 | Les annonces gratuites du mois sont épuisées et le portefeuille de l'agence ne peut pas en payer une de plus. Rechargez-le pour soumettre cette annonce. (affichez `reason` : « il faut / il y a ») |
 | `billing_unavailable` 🆕 | 503 | Le portefeuille est momentanément injoignable : une annonce au-delà du quota gratuit ne peut pas être soumise pour l'instant. |

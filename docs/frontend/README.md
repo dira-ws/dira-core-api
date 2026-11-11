@@ -1,6 +1,6 @@
 # Specs frontend — par rôle
 
-> **Version 4.132.0** · 11 novembre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics` + `dira-immo-api`
+> **Version 4.133.0** · 11 novembre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics` + `dira-immo-api`
 
 **Cinq** documents, un par application. Chacun est **autonome** : tout ce qu'un frontend doit savoir pour son rôle, sans avoir à ouvrir les vingt specs de modules.
 
@@ -395,6 +395,15 @@ Chaque document porte la même version en en-tête, et son propre journal des ch
 - [ ] ⚠️ **`TRACKING_JWT_SECRET` renseigné dans chaque environnement déployé.** Vide, l'authentification du service de suivi est **désactivée** : n'importe qui connaissant un `delivery_id` suit la course. Le secret doit valoir **exactement** le `JWT_SECRET` de `dira-food-api`.
 
 ## Journal
+
+### 4.133.0 — 11 novembre 2026
+
+🟢 **L'IMMOBILIER — les baux** (`IMMO-PUBLISHER.md` §9 quater,
+`IMMO-SEEKER.md` §9 quater) : un bail lie un bien à un compte client ; cycle
+`draft → sent → signed → active → notice → ended → closed`, échéancier généré à
+l'activation (12 mois), loyers **marqués** payés ou mis sous échéancier par
+l'annonceur — aucun argent ne passe par Dira. Le locataire lit le sien
+(`GET /immo/me/leases`), brouillons exclus.
 
 ### 4.132.0 — 11 novembre 2026
 
