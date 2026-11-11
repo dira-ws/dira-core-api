@@ -1,6 +1,6 @@
 # Specs frontend — par rôle
 
-> **Version 4.134.0** · 11 novembre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics` + `dira-immo-api`
+> **Version 4.135.0** · 11 novembre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics` + `dira-immo-api`
 
 **Cinq** documents, un par application. Chacun est **autonome** : tout ce qu'un frontend doit savoir pour son rôle, sans avoir à ouvrir les vingt specs de modules.
 
@@ -395,6 +395,14 @@ Chaque document porte la même version en en-tête, et son propre journal des ch
 - [ ] ⚠️ **`TRACKING_JWT_SECRET` renseigné dans chaque environnement déployé.** Vide, l'authentification du service de suivi est **désactivée** : n'importe qui connaissant un `delivery_id` suit la course. Le secret doit valoir **exactement** le `JWT_SECRET` de `dira-food-api`.
 
 ## Journal
+
+### 4.135.0 — 11 novembre 2026
+
+🟢 **L'IMMOBILIER — la mise en avant payée** (`IMMO-PUBLISHER.md` §11.4,
+`IMMO-SEEKER.md` §4) : `POST /immo/publishers/me/listings/{id}/boost`, payée
+du portefeuille de la fiche (genre de débit `listing_boost`, sous l'identifiant
+de la mise en avant) ; dernier départage du classement, toujours marquée, une
+annonce sur cinq au plus.
 
 ### 4.134.0 — 11 novembre 2026
 

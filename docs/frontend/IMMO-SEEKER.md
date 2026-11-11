@@ -1,6 +1,6 @@
 # IMMOBILIER — CHERCHEUR (louer, acheter) — contrat d'API
 
-> **Version 4.134.0** · 11 novembre 2026
+> **Version 4.135.0** · 11 novembre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Immobilier : `https://api-staging.dira.llc/api/v1/immo`
 > Site public en service : `https://immo-staging.dira.llc`
 
@@ -285,7 +285,7 @@ adresse renseignerait un concurrent.
 | `deposit_months` | caution, en **mois de loyer** ; `0` hors location |
 | `negotiable` | `null` = l'annonceur n'a rien dit — ce n'est pas « non » |
 | `available_from` | **un jour local**, pas un instant : ne le convertissez pas de fuseau |
-| `sponsored` | ⚠️ **affichez « Annonce sponsorisée »** sur une annonce à `true` : la mise en avant payée remonte dans le classement, et sans la mention le chercheur prendrait le mieux payé pour le plus pertinent |
+| `sponsored` | ⚠️ **affichez « Annonce sponsorisée »** sur une annonce à `true` : la mise en avant payée remonte dans le classement, et sans la mention le chercheur prendrait le mieux payé pour le plus pertinent. 🆕 (v4.135.0) Elle est **servie** : elle ne départage que des annonces aussi pertinentes et complètes, et une annonce en ligne sur cinq au plus l'est à la fois |
 | `property.address` | **vide pour un particulier** (règle 2 de la section 0) |
 | `property.geo` | `null` si le bien n'a pas de position ; `approx_m: 0` = position exacte, sinon **un cercle** de ce rayon |
 | `areas[].source` | `declared` (dit par l'annonceur) ou une **mesure** (`measured_lidar`, `measured_ar`, `measured_photogrammetry`, `surveyed`, `gps_polygon`) — dites laquelle : « 120 m² (déclarés) » n'est pas « 120 m² (mesurés) » |
