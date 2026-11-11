@@ -135,6 +135,11 @@ type Wallets interface {
 	// verticale demande avant d'engager un chauffeur sur une course que le
 	// solde devra payer à l'acceptation.
 	WalletOf(ctx context.Context, ownerID string) (token.WalletResponse, error)
+	// PurchaseForOwner lance l'achat de jetons POUR un portefeuille désigné
+	// par son propriétaire, au nom de `actorID` (celui qui paie, et qui lira
+	// son paiement) — le chemin d'une verticale dont le socle ne connaît pas
+	// les propriétaires (la fiche d'un annonceur).
+	PurchaseForOwner(ctx context.Context, actorID, ownerID string, tokens int) (token.PurchaseResponse, error)
 }
 
 // Payments starts a mobile-money payment ON BEHALF OF a person.
@@ -336,6 +341,7 @@ func (h *Handler) Mount(r chi.Router, serviceMW func(http.Handler) http.Handler)
 		// pose de l'ARGENT. Une seule route avec un champ « unité » aurait
 		// fini par créditer des francs à qui demandait des jetons.
 		g.Post("/internal/wallets/topup", h.topUp)
+		g.Post("/internal/wallets/purchase", h.purchaseForOwner)
 		g.Post("/internal/wallets/pay", h.payRef)
 		g.Post("/internal/wallets/refund", h.refundRef)
 		g.Post("/internal/wallets/balance", h.balance)
@@ -514,9 +520,35 @@ type walletRequest struct {
 	CommissionXOF int            `json:"commission_xof" validate:"omitempty,min=0"`
 	Reason        string         `json:"reason" validate:"omitempty,max=60"`
 	RefID         string         `json:"ref_id" validate:"omitempty,len=24,hexadecimal"`
-	RefKind       string         `json:"ref_kind" validate:"omitempty,oneof=order ride tip ride_adjustment"`
+	RefKind       string         `json:"ref_kind" validate:"omitempty,oneof=order ride tip ride_adjustment listing"`
 	Ref           map[string]any `json:"ref"`
-	Type          string         `json:"type" validate:"omitempty,oneof=driver merchant client"`
+	Type          string         `json:"type" validate:"omitempty,oneof=driver merchant client publisher"`
+}
+
+// purchaseForOwner : une verticale achète des jetons pour un portefeuille
+// qu'elle seule sait attribuer (la fiche d'un annonceur), au nom de celui qui
+// paie. Le paiement est le sien : il le suit par `GET /payments/{id}`, et le
+// portefeuille est crédité à la confirmation, comme tout achat.
+//
+// ⚠️ LA VERTICALE A VÉRIFIÉ LE DROIT D'ACHETER (le porteur, un `manager`) —
+// le socle ne connaît ni la fiche ni ses rangs. Le secret de service garde la
+// route.
+func (h *Handler) purchaseForOwner(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		OwnerID string `json:"owner_id" validate:"required,len=24,hexadecimal"`
+		ActorID string `json:"actor_id" validate:"required,len=24,hexadecimal"`
+		Tokens  int    `json:"tokens" validate:"required,gt=0,lte=100000"`
+	}
+	if err := httpx.DecodeService(r, &req); err != nil {
+		httpx.Error(w, r, err)
+		return
+	}
+	out, err := h.wallets.PurchaseForOwner(r.Context(), req.ActorID, req.OwnerID, req.Tokens)
+	if err != nil {
+		httpx.Error(w, r, err)
+		return
+	}
+	httpx.JSON(w, http.StatusCreated, out)
 }
 
 func (h *Handler) createWallet(w http.ResponseWriter, r *http.Request) {

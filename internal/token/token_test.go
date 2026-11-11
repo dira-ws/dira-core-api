@@ -1043,3 +1043,32 @@ func TestAWithdrawalLeavesATrailBothWays(t *testing.T) {
 	assert.Equal(t, 10000, repo.moneyOf(owner).BalanceXOF,
 		"et le solde est revenu à l'identique")
 }
+
+// ⚠️ LE PORTEFEUILLE D'UN ANNONCEUR (décision du 11 nov. 2026) : il s'ouvre au
+// nom de la FICHE, et la publication d'une annonce se paie UNE fois — une
+// soumission rejouée ne débite pas deux fois.
+func TestAPublisherWalletPaysAListingOnce(t *testing.T) {
+	repo := newFakeRepo()
+	svc, _, _, _ := newTestService(repo)
+	fiche := primitive.NewObjectID().Hex()
+	require.NoError(t, svc.CreateWallet(context.Background(), fiche, WalletTypePublisher))
+	require.NoError(t, svc.CreateWallet(context.Background(), fiche, WalletTypePublisher), "idempotent")
+	w, err := svc.WalletOf(context.Background(), fiche)
+	require.NoError(t, err)
+	assert.Equal(t, WalletTypePublisher, w.Type)
+
+	oid, _ := primitive.ObjectIDFromHex(fiche)
+	require.NoError(t, svc.Credit(context.Background(), fiche, 3, "test"))
+	listing := primitive.NewObjectID().Hex()
+	require.NoError(t, svc.Consume(context.Background(), fiche, 1, "immo_listing", RefListing, listing, nil))
+	require.NoError(t, svc.Consume(context.Background(), fiche, 1, "immo_listing", RefListing, listing, nil))
+	assert.Equal(t, 2, repo.balanceOf(oid), "une annonce se paie une fois")
+
+	other := primitive.NewObjectID().Hex()
+	require.NoError(t, svc.Consume(context.Background(), fiche, 1, "immo_listing", RefListing, other, nil))
+	assert.Equal(t, 1, repo.balanceOf(oid), "une autre annonce, un autre jeton")
+
+	err = svc.Consume(context.Background(), fiche, 5, "immo_listing", RefListing, primitive.NewObjectID().Hex(), nil)
+	require.Error(t, err)
+	assert.Equal(t, 1, repo.balanceOf(oid), "un solde insuffisant ne débite rien")
+}

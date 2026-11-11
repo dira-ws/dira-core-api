@@ -25,6 +25,14 @@ const (
 	// aucun usage. `Balance` y reste donc à zéro, et c'est `BalanceXOF` qui
 	// vit.
 	WalletTypeClient = "client"
+	// WalletTypePublisher : le portefeuille de JETONS d'un annonceur de
+	// l'immobilier. ⚠️ owner_id = la FICHE d'annonceur (l'agence, ou le
+	// particulier), PAS le compte : les collaborateurs d'une agence dépensent
+	// un solde COMMUN que le porteur recharge — décision du propriétaire du
+	// 11 nov. 2026 (« toute agence, comme la flotte, a son portefeuille »).
+	// Le socle ne connaît pas les fiches : seule la verticale l'ouvre et y
+	// achète, par `/internal/wallets/*`.
+	WalletTypePublisher = "publisher"
 )
 
 // Transaction kinds.
@@ -140,6 +148,10 @@ const (
 	// RefEquipment : un CONTRAT de matériel (`internal/equipment`). Chaque
 	// prélèvement et chaque remboursement de caution s'y rattache.
 	RefEquipment = "equipment"
+	// RefListing : une ANNONCE de l'immobilier — sa publication se paie une
+	// fois, et la référence rend le débit idempotent (une soumission rejouée
+	// ne paie pas deux fois).
+	RefListing = "listing"
 	// RefChallenge : un OBJECTIF (`internal/challenge`). La référence rend le
 	// versement idempotent — un bonus payé deux fois est de l'argent perdu que
 	// personne ne réclame.
