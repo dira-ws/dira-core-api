@@ -1,6 +1,6 @@
 # Specs frontend — par rôle
 
-> **Version 4.130.0** · 11 novembre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics` + `dira-immo-api`
+> **Version 4.131.0** · 11 novembre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics` + `dira-immo-api`
 
 **Cinq** documents, un par application. Chacun est **autonome** : tout ce qu'un frontend doit savoir pour son rôle, sans avoir à ouvrir les vingt specs de modules.
 
@@ -395,6 +395,17 @@ Chaque document porte la même version en en-tête, et son propre journal des ch
 - [ ] ⚠️ **`TRACKING_JWT_SECRET` renseigné dans chaque environnement déployé.** Vide, l'authentification du service de suivi est **désactivée** : n'importe qui connaissant un `delivery_id` suit la course. Le secret doit valoir **exactement** le `JWT_SECRET` de `dira-food-api`.
 
 ## Journal
+
+### 4.131.0 — 11 novembre 2026
+
+🔧 **L'ANNONCEUR** (`IMMO-PUBLISHER.md` §5.1, §6.11, §10, §12) — décisions du
+11 novembre :
+- un `agent` **voit** tous les biens de l'agence et ne **modifie / archive /
+  photographie** que ceux qu'il a saisis (`403 property_edit_reserved`, champ
+  `created_by` sur le bien) ;
+- `immo_visit_unanswered` : une demande laissée sans réponse est signalée au
+  porteur et aux `manager` (4 h, ou à mi-chemin du créneau) ;
+- `stay` est **ouvert** (sans réservation ni paiement pour l'instant).
 
 ### 4.130.0 — 11 novembre 2026
 
