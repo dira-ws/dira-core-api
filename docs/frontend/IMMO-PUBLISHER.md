@@ -2098,7 +2098,8 @@ et met l'annonce en avant pendant `boost_days` jours.
   « Annonce sponsorisée » partout chez le chercheur.
 - ⚠️ **Au plus une annonce en ligne sur cinq** du pays est mise en avant en
   même temps (une au moins, sur un petit marché) : au-delà, `409
-  boost_slots_full` (`meta.sponsored`, `meta.allowed`). Réessayer plus tard.
+  boost_slots_full`, dont `reason` dit « prises / places » (`"3 / 3"`).
+  Réessayer plus tard.
 - **Seulement une annonce en ligne** (`409 listing_not_published`), **de la
   fiche** (`404 listing_not_found` sinon), et **par le porteur ou un
   `manager`** (`403 listing_boost_reserved`) — mettre en avant dépense le solde
@@ -2106,8 +2107,9 @@ et met l'annonce en avant pendant `boost_days` jours.
 - **Prolonger** : appeler à nouveau pendant une mise en avant en cours ajoute
   `boost_days` jours **à sa fin** (`until` repart de là, pas d'aujourd'hui), et
   ne prend pas de place supplémentaire. Chaque appel est un débit.
-- **Pas assez de jetons** : `402 boost_insufficient_tokens` (`meta.needed`,
-  `meta.balance`) — rien n'est débité ; proposez la recharge (11.1).
+- **Pas assez de jetons** : `402 boost_insufficient_tokens`, dont `reason`
+  dit « il faut / il y a » (`"1000 / 20"`) — rien n'est débité ; proposez la
+  recharge (11.1).
 - ⚠️ **`503 boost_unavailable` : RÉESSAYEZ, vous ne paierez pas deux fois.** Le
   débit a peut-être eu lieu : la mise en avant reste réservée un quart d'heure,
   et un nouvel appel reprend **le même** débit au lieu d'en faire un second. Ne
