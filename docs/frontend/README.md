@@ -1,6 +1,6 @@
 # Specs frontend — par rôle
 
-> **Version 4.128.0** · 10 novembre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics` + `dira-immo-api`
+> **Version 4.129.0** · 11 novembre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics` + `dira-immo-api`
 
 **Cinq** documents, un par application. Chacun est **autonome** : tout ce qu'un frontend doit savoir pour son rôle, sans avoir à ouvrir les vingt specs de modules.
 
@@ -395,6 +395,18 @@ Chaque document porte la même version en en-tête, et son propre journal des ch
 - [ ] ⚠️ **`TRACKING_JWT_SECRET` renseigné dans chaque environnement déployé.** Vide, l'authentification du service de suivi est **désactivée** : n'importe qui connaissant un `delivery_id` suit la course. Le secret doit valoir **exactement** le `JWT_SECRET` de `dira-food-api`.
 
 ## Journal
+
+### 4.129.0 — 11 novembre 2026
+
+🟢 **L'IMMOBILIER — ce qui prévient enfin l'annonceur** (`IMMO-PUBLISHER.md`
+§10, `IMMO-SEEKER.md` §10) : la décision de l'équipe sur une annonce
+(`immo_listing_published` / `_returned` / `_moderated`, `data.type:
+"immo_listing"`), le rattachement et le détachement d'un collaborateur
+(`immo_member_attached` / `_detached`, `data.type: "immo_membership"`, rangés en
+sécurité), et la demande de visite expirée — des deux côtés
+(`immo_visit_expired` au chercheur, `immo_visit_expired_host` à l'annonceur).
+Ajout seulement : aucune route ne change, une clé inconnue s'affiche déjà dans
+la boîte.
 
 ### 4.128.0 — 10 novembre 2026
 

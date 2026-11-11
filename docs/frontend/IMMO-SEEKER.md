@@ -1,6 +1,6 @@
 # IMMOBILIER — CHERCHEUR (louer, acheter) — contrat d'API
 
-> **Version 4.128.0** · 10 novembre 2026
+> **Version 4.129.0** · 11 novembre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Immobilier : `https://api-staging.dira.llc/api/v1/immo`
 > Site public en service : `https://immo-staging.dira.llc`
 
@@ -636,6 +636,7 @@ Elles arrivent par le socle (poussée + boîte, `GET /me/notifications`). Les
 | `immo_visit_declined` | l'annonceur a refusé | idem |
 | `immo_visit_cancelled` | l'annonceur a annulé, ou retiré le créneau | idem |
 | `immo_visit_reminder` | **deux heures avant** une visite confirmée | idem |
+| `immo_visit_expired` 🆕 | l'annonceur n'a **pas répondu** avant l'heure du créneau : la demande est close (`status: expired`) — « D'autres créneaux sont peut-être libres » | idem |
 | `immo_thread_message` 🆕 | l'annonceur vous a répondu (§9 ter) | `type: "immo_thread"`, `thread_id`, `listing_id` — le texte est le message, **déjà masqué** |
 
 Le texte porte l'**heure locale du pays** de la visite. ⚠️ **Aucune notification
@@ -749,7 +750,7 @@ l'exploitation peut renommer :
 
 | `data.type` | Clés | Ouvrir |
 |---|---|---|
-| `immo_visit` | `immo_visit_confirmed` · `immo_visit_declined` · `immo_visit_cancelled` · `immo_visit_reminder` | **la visite** `visit_id` |
+| `immo_visit` | `immo_visit_confirmed` · `immo_visit_declined` · `immo_visit_cancelled` · `immo_visit_reminder` · 🆕 `immo_visit_expired` | **la visite** `visit_id` — 🆕 expirée : proposez les autres créneaux de l'annonce |
 | `immo_saved_search` | `immo_saved_search_match` | **l'annonce** `slug` — avec, à côté, « voir toute la recherche » (`saved_search_id`) |
 | `immo_thread` 🆕 | `immo_thread_message` | **le fil** `thread_id` (`GET /immo/me/threads/{id}/messages`) |
 
