@@ -113,7 +113,8 @@ func categoryOf(key string) string {
 		return CategorySupport
 	case KeyImmoVisitRequested, KeyImmoVisitConfirmed, KeyImmoVisitDeclined, KeyImmoVisitCancelled,
 		KeyImmoVisitReminder, KeyImmoVisitExpired, KeyImmoVisitExpiredHost, KeyImmoVisitUnanswered,
-		KeyImmoListingPublished, KeyImmoListingReturned, KeyImmoListingModerated:
+		KeyImmoListingPublished, KeyImmoListingReturned, KeyImmoListingModerated,
+		KeyImmoRentNotice, KeyImmoRentDue, KeyImmoRentLate:
 		// Rangées avec les mises à jour, comme la nouvelle commande d'un
 		// marchand : une visite est une affaire en cours, pas une promotion.
 		return CategoryOrderUpdates
