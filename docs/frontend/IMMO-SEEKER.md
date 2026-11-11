@@ -1,6 +1,6 @@
 # IMMOBILIER — CHERCHEUR (louer, acheter) — contrat d'API
 
-> **Version 4.132.0** · 11 novembre 2026
+> **Version 4.133.0** · 11 novembre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Immobilier : `https://api-staging.dira.llc/api/v1/immo`
 > Site public en service : `https://immo-staging.dira.llc`
 
@@ -621,6 +621,29 @@ insulte part, marquée pour l'équipe.
 - `404 thread_not_found` : le fil n'existe pas, n'est pas le vôtre, ou appartient
   à un autre pays. `409 threads_full` : 100 fils ouverts dans ce pays — reprendre
   un fil existant reste permis.
+
+---
+
+## 9 quater. 🆕 Mes baux — compte `client` (v4.133.0)
+
+Quand l'annonceur établit un bail à son nom et le lui envoie, le locataire le
+retrouve ici (un **brouillon** n'y figure pas).
+
+```
+GET /immo/me/leases[?limit=&cursor=]
+→ 200 { "items": [ <bail> ], "next_cursor"?: "…" }
+```
+
+- Le bail : `property_label`, `status` (`sent`, `signed`, `active`, `notice`,
+  `ended`, `closed`), `rent_minor` + `charges_minor` (dans `currency`),
+  `deposit_minor`, `start_on`, `end_on`, et **`rents`** — l'échéancier (`due`,
+  `amount_minor`, `paid_on` quand l'annonceur l'a marqué reçu, `plan` sous
+  échéancier).
+- ⚠️ **AUCUN PAIEMENT EN LIGNE** pour l'instant : n'affichez pas « payer ». Un
+  loyer est marqué reçu par l'annonceur ; dites « en attente de confirmation
+  par l'agence » sur une échéance passée sans `paid_on`.
+- Les dates sont des **jours locaux** `YYYY-MM-DD` : affichez-les tels quels.
+- Pagination de la plateforme : `next_cursor` **absent** = fin.
 
 ---
 
