@@ -106,6 +106,11 @@ type User struct {
 	// quand un magasin est lent à valider, et une application pas encore mise
 	// à jour ne doit pas voir ses utilisateurs enfermés dehors.
 	AgentApp string `bson:"agent_app,omitempty"`
+	// Interests : les BADGES D'INTÉRÊT d'un client — `food`, `vtc`, `immo`
+	// (`pkg/interest`), posés par l'usage de chaque verticale. ⚠️ Jamais
+	// retirés : un client qui a cherché un logement une fois reste visible de
+	// la console de l'immobilier.
+	Interests []string `bson:"interests,omitempty"`
 }
 
 // Device est l'appareil qui détient la session d'un chauffeur ou d'un livreur.

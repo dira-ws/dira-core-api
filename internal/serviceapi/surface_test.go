@@ -44,6 +44,9 @@ var declaredSurface = []string{
 	"/internal/accounts/ensure",
 	"/internal/accounts/ensure-merchant",
 	"/internal/accounts/get",
+	// Le BADGE D'INTÉRÊT d'un client (`pkg/interest`) : la verticale qu'il
+	// vient d'utiliser le dit au socle, une fois.
+	"/internal/accounts/interests",
 	"/internal/accounts/names",
 	"/internal/accounts/rows",
 	// La RECHERCHE de comptes par nom ou téléphone : des identifiants

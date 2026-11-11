@@ -17,6 +17,7 @@ import (
 	"github.com/kgtech-org/dira-core-api/pkg/audit"
 	"github.com/kgtech-org/dira-core-api/pkg/auth"
 	"github.com/kgtech-org/dira-core-api/pkg/country"
+	"github.com/kgtech-org/dira-core-api/pkg/interest"
 	"github.com/kgtech-org/dira-core-api/pkg/phone"
 )
 
@@ -40,6 +41,7 @@ type Repo interface {
 	// UN CHAUFFEUR VTC N'EST JAMAIS LIVREUR : l'appartenance métier du
 	// compte, réclamée par les verticales — voir `agentapp.go`.
 	SetAgentApp(ctx context.Context, userID primitive.ObjectID, app string) error
+	AddInterest(ctx context.Context, userID primitive.ObjectID, interest string) error
 
 	// LA SUPPRESSION D'UN COMPTE — fermer, lister ce qui est dû, anonymiser,
 	// et le carnet d'adresses qui part avec. Voir `erasure.go`.
@@ -1174,7 +1176,31 @@ func (s *Service) EnsureAccount(ctx context.Context, role, phone, name, email, p
 
 // ListAccounts searches accounts for an administration screen.
 func (s *Service) ListAccounts(ctx context.Context, f AccountFilter, cursor string, limit int) ([]AccountRow, string, error) {
+	for name, v := range map[string]string{"interest": f.Interest, "not_only": f.NotOnly} {
+		if v != "" && !interest.Valid(v) {
+			return nil, "", apperr.Validation("unknown interest").
+				WithMeta(map[string]any{"fields": []string{name}, "reason": v})
+		}
+	}
 	return s.repo.ListAccounts(ctx, f, cursor, limit)
+}
+
+// AddInterest pose un badge d'intérêt sur un compte (`pkg/interest`) —
+// ce qu'une verticale rapporte au premier usage d'un client. Implémente
+// `serviceapi.Accounts`.
+func (s *Service) AddInterest(ctx context.Context, userID, value string) error {
+	if !interest.Valid(value) {
+		return apperr.Validation("unknown interest").
+			WithMeta(map[string]any{"fields": []string{"interest"}, "reason": value})
+	}
+	oid, err := primitive.ObjectIDFromHex(userID)
+	if err != nil {
+		return apperr.Validation("invalid user id").WithMeta(map[string]any{"fields": []string{"user_id"}})
+	}
+	if err := s.repo.AddInterest(ctx, oid, value); err != nil {
+		return apperr.Internal(err)
+	}
+	return nil
 }
 
 // SearchAccounts rend les identifiants des comptes dont le nom ou le

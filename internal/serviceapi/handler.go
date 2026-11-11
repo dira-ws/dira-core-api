@@ -107,6 +107,9 @@ type Accounts interface {
 	// comptes de la recette ont fini par être chauffeur ET livreur. Cette
 	// route est l'endroit où l'autre verticale peut dire non.
 	ClaimAgentApp(ctx context.Context, userID, app string, fromProfile bool) (string, error)
+	// AddInterest pose un badge d'intérêt (`pkg/interest`) : la verticale
+	// le rapporte au premier usage d'un client.
+	AddInterest(ctx context.Context, userID, interest string) error
 }
 
 // Wallets is the money a vertical moves on a person's behalf.
@@ -333,6 +336,7 @@ func (h *Handler) Mount(r chi.Router, serviceMW func(http.Handler) http.Handler)
 		// UN CHAUFFEUR VTC N'EST JAMAIS LIVREUR : la verticale réclame
 		// l'appartenance du compte au moment où elle garantit son profil.
 		g.Post("/internal/accounts/agent-app", h.claimAgentApp)
+		g.Post("/internal/accounts/interests", h.addInterest)
 
 		g.Post("/internal/wallets/create", h.createWallet)
 		g.Post("/internal/wallets/consume", h.consume)
@@ -487,6 +491,24 @@ func (h *Handler) claimAgentApp(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httpx.JSON(w, http.StatusOK, map[string]string{"agent_app": app})
+}
+
+// addInterest : un client vient d'utiliser une verticale — elle pose son
+// badge (`pkg/interest.Reporter`). Idempotent.
+func (h *Handler) addInterest(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		UserID   string `json:"user_id" validate:"required,len=24,hexadecimal"`
+		Interest string `json:"interest" validate:"required,oneof=food vtc immo"`
+	}
+	if err := httpx.DecodeService(r, &req); err != nil {
+		httpx.Error(w, r, err)
+		return
+	}
+	if err := h.accounts.AddInterest(r.Context(), req.UserID, req.Interest); err != nil {
+		httpx.Error(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (h *Handler) byPhone(w http.ResponseWriter, r *http.Request) {

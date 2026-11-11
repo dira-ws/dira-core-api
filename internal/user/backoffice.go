@@ -52,8 +52,12 @@ type AccountRow struct {
 	// ; sans ce champ sur la fiche, l'opérateur devrait le déclencher à
 	// l'aveugle sur un compte dont il ignore s'il appartient à quelque chose.
 	AgentApp string `bson:"agent_app,omitempty" json:"agent_app,omitempty"`
-	Status   string `bson:"status" json:"status"`
-	Country  string `bson:"country,omitempty" json:"country,omitempty"`
+	// Interests : les badges d'intérêt (`food`, `vtc`, `immo`). ⚠️ TOUJOURS
+	// un tableau, `[]` sans badge : la console affiche « aucun » plutôt que de
+	// confondre l'absence avec un champ oublié.
+	Interests []string `bson:"interests,omitempty" json:"interests"`
+	Status    string   `bson:"status" json:"status"`
+	Country   string   `bson:"country,omitempty" json:"country,omitempty"`
 	// DeletionRequestedAt : quand la personne (ou le support) a demandé la
 	// suppression de ce compte. Présent uniquement sur un compte `closed`.
 	//
@@ -72,13 +76,26 @@ type AccountRow struct {
 	UpdatedAt    time.Time  `bson:"updated_at" json:"updated_at"`
 }
 
-func (a *AccountRow) fill() { a.ID = a.OID.Hex() }
+func (a *AccountRow) fill() {
+	a.ID = a.OID.Hex()
+	if a.Interests == nil {
+		a.Interests = []string{}
+	}
+}
 
 // AccountFilter narrows an account search.
 type AccountFilter struct {
 	Role   string
 	Status string
 	Query  string // nom ou téléphone, sous-chaîne insensible à la casse
+	// Interest : seulement les comptes portant ce badge — la console de
+	// l'immobilier passe `immo`.
+	Interest string
+	// NotOnly : ÉCARTER les comptes dont ce badge est le SEUL — la console mère
+	// passe `immo` : un client qui n'a jamais fait que chercher un logement
+	// n'est pas un client des repas ni des courses. ⚠️ Un compte SANS badge
+	// reste : il n'a rien fait nulle part, il n'est pas « de l'immobilier ».
+	NotOnly string
 }
 
 // AudienceIDs rend les identifiants des comptes ACTIFS de ces rôles, après
@@ -179,6 +196,15 @@ func (r *Repository) ListAccounts(ctx context.Context, f AccountFilter, cursor s
 	}
 	if f.Status != "" {
 		filter["status"] = f.Status
+	}
+	if f.Interest != "" {
+		filter["interests"] = f.Interest
+	}
+	if f.NotOnly != "" {
+		// ⚠️ L'ÉGALITÉ DE TABLEAU EXACTE : `["immo"]` seul est écarté,
+		// `["immo","food"]` reste. Combiné à `interest`, les deux portent sur
+		// le même champ : d'où `$and`.
+		filter["$and"] = bson.A{bson.M{"interests": bson.M{"$ne": bson.A{f.NotOnly}}}}
 	}
 	if f.Query != "" {
 		// QuoteMeta : une recherche est un texte que quelqu'un tape, pas une

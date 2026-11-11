@@ -189,6 +189,22 @@ func (f *fakeUserRepo) SetAgentApp(_ context.Context, userID primitive.ObjectID,
 	return nil
 }
 
+func (f *fakeUserRepo) AddInterest(_ context.Context, userID primitive.ObjectID, interest string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	u, ok := f.users[userID]
+	if !ok {
+		return nil // comme Mongo : aucun document, aucune erreur
+	}
+	for _, v := range u.Interests {
+		if v == interest {
+			return nil
+		}
+	}
+	u.Interests = append(u.Interests, interest)
+	return nil
+}
+
 func (f *fakeUserRepo) userCount() int {
 	f.mu.Lock()
 	defer f.mu.Unlock()
