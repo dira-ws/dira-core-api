@@ -458,6 +458,19 @@ const (
 	// signalée au porteur et aux `manager` de l'agence (4 h, ou à mi-chemin du
 	// créneau si c'est plus tôt).
 	KeyImmoVisitUnanswered = "immo_visit_unanswered"
+	// LES LOYERS DE L'IMMOBILIER (`dira-immo-api`, module `lease`), AU
+	// LOCATAIRE : l'avis cinq jours avant, le rappel le jour même, puis les
+	// relances à J+3, J+10 et J+30 tant que le loyer n'est pas marqué payé.
+	//
+	// ⚠️ AUCUN ARGENT NE PASSE PAR DIRA : c'est le BAILLEUR qui marque un loyer
+	// payé. La relance le dit donc sans accuser — « pas encore marqué payé »,
+	// et « déjà réglé ? dites-le à votre bailleur ».
+	//
+	// ⚠️ NI ADRESSE NI NOM DU BAILLEUR SUR L'ÉCRAN VERROUILLÉ : la référence du
+	// bail suffit à le reconnaître, comme le montant.
+	KeyImmoRentNotice = "immo_rent_notice" // J-5
+	KeyImmoRentDue    = "immo_rent_due"    // le jour même
+	KeyImmoRentLate   = "immo_rent_late"   // J+3, J+10, J+30
 )
 
 // defaults sont les gabarits COMPILÉS, servis tant que la base n'en porte pas.
@@ -1353,6 +1366,33 @@ var defaults = map[string]Template{
 			LocaleEN: {Title: "Request not answered", Body: "The visit request for “[listing_title]” on [date] at [time] is still waiting for an answer from your team."},
 		},
 	},
+	KeyImmoRentNotice: {
+		Key:         KeyImmoRentNotice,
+		Description: "Immobilier — l'avis d'échéance, cinq jours avant un loyer (au locataire).",
+		Enabled:     true,
+		Locales: map[string]Text{
+			LocaleFR: {Title: "Loyer du [date]", Body: "Votre loyer de [amount] (bail [lease_ref]) est dû le [date]."},
+			LocaleEN: {Title: "Rent due on [date]", Body: "Your rent of [amount] (lease [lease_ref]) is due on [date]."},
+		},
+	},
+	KeyImmoRentDue: {
+		Key:         KeyImmoRentDue,
+		Description: "Immobilier — le rappel, le jour où un loyer est dû (au locataire).",
+		Enabled:     true,
+		Locales: map[string]Text{
+			LocaleFR: {Title: "Loyer dû aujourd'hui", Body: "Votre loyer de [amount] (bail [lease_ref]) est dû aujourd'hui."},
+			LocaleEN: {Title: "Rent due today", Body: "Your rent of [amount] (lease [lease_ref]) is due today."},
+		},
+	},
+	KeyImmoRentLate: {
+		Key:         KeyImmoRentLate,
+		Description: "Immobilier — la relance d'un loyer pas encore marqué payé, à J+3, J+10 et J+30 (au locataire).",
+		Enabled:     true,
+		Locales: map[string]Text{
+			LocaleFR: {Title: "Loyer en attente", Body: "Votre loyer de [amount] (bail [lease_ref]), dû le [date], n'est pas encore marqué payé — [days] jours. Déjà réglé ? Dites-le à votre bailleur."},
+			LocaleEN: {Title: "Rent pending", Body: "Your rent of [amount] (lease [lease_ref]), due on [date], is not marked as paid yet — [days] days. Already paid? Tell your landlord."},
+		},
+	},
 	KeyImmoVisitReminder: {
 		Key:         KeyImmoVisitReminder,
 		Description: "Immobilier — rappel deux heures avant une visite confirmée (aux deux parties).",
@@ -1516,6 +1556,12 @@ var provided = map[string][]string{
 	KeyImmoVisitExpired:     {"listing_title", "date", "time"},
 	KeyImmoVisitExpiredHost: {"listing_title", "date", "time"},
 	KeyImmoVisitUnanswered:  {"listing_title", "date", "time"},
+	// Le montant DÉJÀ FORMÉ avec sa monnaie (« 150 000 F CFA »), la référence
+	// courte du bail, le jour d'échéance LOCAL (`JJ/MM`), et pour la relance le
+	// nombre de jours de retard.
+	KeyImmoRentNotice: {"amount", "lease_ref", "date"},
+	KeyImmoRentDue:    {"amount", "lease_ref", "date"},
+	KeyImmoRentLate:   {"amount", "lease_ref", "date", "days"},
 }
 
 // Provided rend les variables que la plateforme remplit pour une clé.

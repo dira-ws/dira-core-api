@@ -235,7 +235,8 @@ func TestTheImmoThreadMessageGoesToDiraImmoAndIsAMessage(t *testing.T) {
 // ne se coupe pas — et ne promet aucune variable qu'il n'écrit pas.
 func TestTheImmoPublisherNoticesAreRoutedAndRanked(t *testing.T) {
 	updates := []string{KeyImmoListingPublished, KeyImmoListingReturned, KeyImmoListingModerated,
-		KeyImmoVisitExpired, KeyImmoVisitExpiredHost, KeyImmoVisitUnanswered}
+		KeyImmoVisitExpired, KeyImmoVisitExpiredHost, KeyImmoVisitUnanswered,
+		KeyImmoRentNotice, KeyImmoRentDue, KeyImmoRentLate}
 	access := []string{KeyImmoMemberAttached, KeyImmoMemberDetached}
 	for _, key := range append(append([]string{}, updates...), access...) {
 		assert.Equal(t, AppImmo, AppOfKey(key), key)
@@ -252,5 +253,44 @@ func TestTheImmoPublisherNoticesAreRoutedAndRanked(t *testing.T) {
 	for _, key := range access {
 		assert.Equal(t, CategorySecurity, categoryOf(key), key)
 		assert.False(t, Muteable(categoryOf(key)), "%s : un changement d'accès ne se coupe pas", key)
+	}
+}
+
+// ⚠️ LES RELANCES DE LOYER N'ACCUSENT PAS ET NE DISENT PAS L'ADRESSE : aucun
+// argent ne passe par Dira (c'est le bailleur qui marque payé), et un écran
+// verrouillé se lit par-dessus l'épaule. Chaque variable écrite est fournie.
+func TestRentRemindersSpeakSoftlyAndOnlyWithWhatIsProvided(t *testing.T) {
+	for _, key := range []string{KeyImmoRentNotice, KeyImmoRentDue, KeyImmoRentLate} {
+		tmpl := defaults[key]
+		for _, loc := range []string{LocaleFR, LocaleEN} {
+			text := tmpl.Locales[loc].Title + " " + tmpl.Locales[loc].Body
+			for _, v := range []string{"[amount]", "[lease_ref]"} {
+				assert.Contains(t, tmpl.Locales[loc].Body, v, "%s/%s", key, loc)
+			}
+			for _, banned := range []string{"[address]", "[property]", "[publisher_name]"} {
+				assert.NotContains(t, text, banned, "%s/%s", key, loc)
+			}
+			for _, v := range bracketVars(text) {
+				assert.Contains(t, provided[key], v, "%s/%s : [%s] n'est fourni par personne", key, loc, v)
+			}
+		}
+	}
+	assert.Contains(t, defaults[KeyImmoRentLate].Locales[LocaleFR].Body, "Dites-le à votre bailleur")
+}
+
+// bracketVars : les variables `[nom]` d'un texte de gabarit.
+func bracketVars(text string) []string {
+	var out []string
+	for {
+		i := strings.IndexByte(text, '[')
+		if i < 0 {
+			return out
+		}
+		j := strings.IndexByte(text[i:], ']')
+		if j < 0 {
+			return out
+		}
+		out = append(out, text[i+1:i+j])
+		text = text[i+j+1:]
 	}
 }
