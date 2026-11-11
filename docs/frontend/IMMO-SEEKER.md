@@ -1,6 +1,6 @@
 # IMMOBILIER — CHERCHEUR (louer, acheter) — contrat d'API
 
-> **Version 4.133.0** · 11 novembre 2026
+> **Version 4.134.0** · 11 novembre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Immobilier : `https://api-staging.dira.llc/api/v1/immo`
 > Site public en service : `https://immo-staging.dira.llc`
 
@@ -33,6 +33,8 @@ manques à contourner :
 3. **Une annonce non vérifiée le dit.** `property.verified` et
    `publisher.verified` sont des booléens servis **toujours** : l'absence de
    badge doit se lire comme « non vérifié », écrit, pas comme un oubli.
+   🆕 (v4.134.0) `property.badges` et `publisher.badges` disent **quelle pièce**
+   l'équipe a regardée — listes **jamais nulles**, vides le plus souvent.
 
 ---
 
@@ -258,10 +260,12 @@ adresse renseignerait un concurrent.
     "amenities": ["generator", "swimming_pool", "security_guard"],
     "furnished": false,
     "verified": true,
+    "badges": ["title", "mandate"],
     "has_3d": false
   },
   "publisher": { "id": "…", "name": "Estuaire Habitat", "kind": "agency",
-                 "verified": true, "verified_at": "2026-10-10T02:33:33Z" },
+                 "verified": true, "verified_at": "2026-10-10T02:33:33Z",
+                 "badges": ["identity", "business"] },
   "media": [
     { "id": "6af2e2c115ec33d946d843e1", "kind": "photo",
       "url": "https://api-staging.dira.llc/api/v1/immo/media/GA/6af2e2c115ec33d946d843e1/display.jpg",
@@ -287,6 +291,9 @@ adresse renseignerait un concurrent.
 | `areas[].source` | `declared` (dit par l'annonceur) ou une **mesure** (`measured_lidar`, `measured_ar`, `measured_photogrammetry`, `surveyed`, `gps_polygon`) — dites laquelle : « 120 m² (déclarés) » n'est pas « 120 m² (mesurés) » |
 | `publisher.kind` | `agency` ou `individual` |
 | `publisher.verified_at` | **toujours présent**, `null` sans badge |
+| `property.verified` | 🆕 (v4.134.0) suit le **titre de propriété** du bien : `true` quand l'équipe l'a validé |
+| `property.badges` 🆕 | ce que les pièces **du bien** validées affirment : `title` (titre de propriété), `mandate` (mandat du propriétaire à l'agence). ⚠️ **Jamais `null`** ; un badge dont la pièce a expiré n'y est plus. Affichez « Titre vérifié », « Mandat vérifié » |
+| `publisher.badges` 🆕 | ce que les pièces **de la fiche** affirment : `identity` (pièce d'identité et visage comparés), `business` (registre du commerce d'une agence). ⚠️ **Jamais `null`**. Distinct de `verified`, l'engagement de l'équipe sur la fiche entière : les deux coexistent |
 | `media` | **jamais `null`** ; la première photo est la **couverture** (section 5) |
 | `completeness` | 0 à 100 ; sert au classement, ne l'affichez pas comme une note |
 | `share_url` 🆕 | l'adresse de l'annonce **sur le site public**, dans la langue de la requête — ce qu'on partage. **Servie par cette route seulement**, et **absente** quand le déploiement ne connaît pas son site : pas de bouton « partager », alors. ⚠️ **Ne la fabriquez pas** (section 10 bis.8) |
@@ -931,6 +938,13 @@ GET /immo/listings/{ref}
 ---
 
 ## 13. Journal
+
+### 4.134.0 — 11 novembre 2026
+
+🟢 **LES BADGES DES PIÈCES** (§0, §4) : `property.badges` (`title`, `mandate`)
+et `publisher.badges` (`identity`, `business`) sur l'annonce publique — ce que
+l'équipe a regardé, et qui tient encore. `property.verified` suit désormais le
+titre du bien.
 
 ### 4.127.0 — 10 novembre 2026
 

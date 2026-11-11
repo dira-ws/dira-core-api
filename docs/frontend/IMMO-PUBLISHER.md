@@ -1,6 +1,6 @@
 # IMMOBILIER — ANNONCEUR (agence ou particulier) — contrat d'API
 
-> **Version 4.133.0** · 11 novembre 2026
+> **Version 4.134.0** · 11 novembre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Immobilier : `https://api-staging.dira.llc/api/v1/immo`
 
 ---
@@ -50,6 +50,7 @@ laisse croire qu'un agent ne voit « que ses biens » : il les voit tous.
 |---|---|
 | le **nom** de la fiche, sa **forme** (`agency` / `individual`) | ⚠️ le **téléphone** et le **courriel** de la fiche, **avant une visite confirmée** |
 | le badge **`verified`** et sa date — posés par l'équipe Dira, **jamais par vous** | le nom du collaborateur qui a saisi l'annonce |
+| 🆕 les **badges** de vos pièces validées — `identity`, `business` (agence) sur la fiche ; `title`, `mandate` (agence) sur le bien (section 11 bis) | ⚠️ vos **pièces** elles-mêmes — carte d'identité, selfie, titre, mandat : **jamais** |
 | pour une **agence** : la rue et la position exacte du bien | ⚠️ pour un **particulier** : la rue et la position exacte |
 | les photos, **réencodées** (section 7) | les métadonnées des photos, dont la position GPS |
 
@@ -882,10 +883,10 @@ caractères chacune ; `422 document_invalid` sinon). ⚠️ **Jamais une image e
 `data:`** : un titre foncier photographié pèse quatre mégaoctets, et le bien
 cesserait de s'enregistrer au sixième.
 
-⚠️ **CETTE SURFACE NE SERT AUCUN ENVOI DE TITRE, ET PERSONNE NE LES LIT
-AUJOURD'HUI.** Le champ existe, rien ne le vérifie. **Laissez-le à `[]`** et ne
-dessinez pas d'écran « joindre votre titre » qui promettrait une vérification
-qui n'a pas lieu (section 12).
+⚠️ **CE CHAMP N'EST PAS LA PORTE D'ENVOI D'UN TITRE, ET PERSONNE NE LE LIT.**
+**Laissez-le à `[]`.** 🆕 (v4.134.0) Le titre d'un bien s'**envoie** comme une
+pièce, au compartiment privé, et l'équipe le **regarde** : section 11 bis
+(`kind: "property_title"`, avec le `property_id` du bien).
 
 ### 6.9 Lister — `GET /immo/properties`
 
@@ -2073,6 +2074,118 @@ Lisible par tout compte connecté — ce que la console a réglé pour le pays :
 
 ---
 
+## 11 bis. 🆕 Les pièces — et les badges qu'elles posent (v4.134.0)
+
+> ⚠️⚠️ **DES BADGES, PAS DES BARRIÈRES.** Aucune pièce n'est exigée pour créer
+> une fiche, un bien ou une annonce, ni pour publier. Une pièce **validée par
+> l'équipe Dira** pose un **badge** que le chercheur voit sur l'annonce. Ne
+> dessinez **aucun** écran qui bloque une publication faute de pièce, et ne
+> dites jamais « obligatoire ».
+
+### 11 bis.1 Ce qui est demandé — selon la forme de la fiche
+
+| Pièce | `kind` | Particulier | Agence | Se rattache à | Badge posé |
+|---|---|---|---|---|---|
+| Pièce d'identité | `id_card` | ✅ | ✅ celle du **gérant** | la fiche | `identity` (avec le selfie) |
+| Photo du visage | `selfie` | ✅ | ✅ celle du **gérant** | la fiche | `identity` (avec la pièce d'identité) |
+| Registre du commerce (RCCM) ou statuts | `business_registration` | — | ✅ | la fiche | `business` |
+| Titre de propriété (titre foncier, attestation) | `property_title` | ✅ chaque bien | ✅ chaque bien | **le bien** (`property_id`) | `title` |
+| Mandat du propriétaire | `mandate` | — | ✅ chaque bien | **le bien** (`property_id`) | `mandate` |
+
+- ⚠️ **LE TITRE APPARTIENT AU BIEN, PAS À LA FICHE.** Il s'envoie avec le
+  `property_id` du bien ; c'est le **bien** qui porte le badge `title` — et sa
+  marque `verified` le suit : titre validé → `true`, titre **refusé** →
+  `false`, rien ou en attente → `null`.
+- ⚠️ **LE SELFIE N'EST PAS LA PHOTO DE PROFIL.** C'est une photo du visage,
+  prise **à l'appareil photo** au moment de l'envoi, qu'un humain compare à la
+  pièce d'identité. Ne proposez pas la galerie pour ce `kind`.
+- Aucune autre pièce n'est reçue : un casier judiciaire, un permis, un
+  registre du commerce envoyé par un particulier ou un mandat sur le bien d'un
+  particulier sont refusés (`422 document_not_expected`).
+
+### 11 bis.2 ⚠️ Qui voit les pièces — le porteur et les `manager`
+
+La pièce d'identité et le selfie d'une agence sont **ceux du gérant** : ce que
+la plateforme détient de plus intime sur lui. **Un `agent` ne les voit pas et
+ne dépose pas** à sa place : ses appels rendent `403
+publisher_documents_reserved`. **N'affichez pas l'écran « Pièces » à un
+`agent`** — son rang se lit dans `membership.role` de `GET
+/immo/publishers/me` (section 3).
+
+### 11 bis.3 Lire le dossier — `GET /immo/publishers/me/documents`
+
+```json
+{
+  "publisher_id": "6af2…",
+  "kind": "agency",
+  "documents": [
+    { "id": "6af4…", "kind": "id_card", "file_url": "https://files.dira.llc/immo-media/documents/tg/…?X-Amz-Signature=…",
+      "state": "valid", "expires_at": "2031-03-31T23:59:59Z", "updated_at": "2026-11-11T14:02:10Z" },
+    { "id": "6af4…", "kind": "property_title", "property_id": "6af3…", "file_url": "https://…",
+      "state": "rejected", "rejected_reason": "Photo illisible : reprenez-la à plat, en pleine lumière",
+      "updated_at": "2026-11-11T14:05:41Z" }
+  ],
+  "missing": [
+    { "kind": "selfie" },
+    { "kind": "mandate", "property_id": "6af3…" }
+  ],
+  "badges": [],
+  "properties": [
+    { "property_id": "6af3…", "label": "Rue 245, Tokoin", "badges": [], "verified": false }
+  ],
+  "complete": false
+}
+```
+
+| Champ | À savoir |
+|---|---|
+| `documents[].state` | `pending` (envoyée, pas encore regardée), `valid`, `rejected`, `expiring` (valide, expire dans moins de 15 jours), `expired`. ⚠️ **C'est lui qu'on affiche** |
+| `documents[].rejected_reason` | ⚠️ **affichez-le tel quel** à côté de la pièce : il dit quoi refaire. Un refus sans motif n'existe pas |
+| `documents[].file_url` | ⚠️ **SIGNÉE, VALABLE 30 MINUTES.** Ne la gardez pas, ne la partagez pas, ne la mettez dans aucun journal : c'est la photo d'une carte d'identité. Passé ce délai, **relisez le dossier** |
+| `documents[].property_id` | le bien d'un titre ou d'un mandat ; absent pour une pièce de la fiche |
+| `missing` | les pièces jamais envoyées (ou qui ne couvrent plus rien). ⚠️ **Jamais `null`** ; une liste vide **et** `complete: true` = tout est validé |
+| `badges` | ceux de la **fiche** qui tiennent **maintenant** : `[{ "kind": "identity", "until": "2031-03-31T23:59:59Z" }]` — `until` est `null` quand aucune pièce ne périme |
+| ⚠️ et ailleurs | `GET /immo/publishers/me` (`publisher.badges`) et un bien (`badges`, `verified`) portent les badges **tels qu'enregistrés**, avec leur `until` : **un badge dont `until` est passé ne tient plus** — ne l'affichez pas. Le dossier, lui, ne rend que ceux qui tiennent |
+| `properties` | chaque bien **en cours** (pas les archivés), ses badges et sa marque `verified` |
+| `complete` | ⚠️ **informatif** : rien n'est bloqué dessus |
+
+### 11 bis.4 Envoyer une pièce — `POST /immo/publishers/me/documents`
+
+`multipart/form-data` :
+
+| Champ | |
+|---|---|
+| `file` | **JPEG, PNG ou PDF**, **10 Mo au plus**. ⚠️ Le format est lu **dans le fichier**, pas dans son nom : un `.pdf` qui n'en est pas un est refusé (`422 document_file_type`) |
+| `kind` | l'un des cinq de 11 bis.1 |
+| `property_id` | **obligatoire** pour `property_title` et `mandate` (`422 document_needs_vehicle`), **refusé** pour les trois autres (`422 document_refuses_vehicle`) ; le bien doit être **le vôtre** (`404 vehicle_not_found`) |
+| `expires_at` | facultatif : `AAAA-MM-JJ` — la pièce vaut **jusqu'au soir** de ce jour. Une date passée est refusée |
+
+`201` → la pièce (`state: "pending"`), même forme qu'une ligne de `documents`.
+
+- ⚠️⚠️ **ENVOYER REMPLACE.** Une pièce du même `kind` (et du même bien) est
+  **remplacée**, son ancien fichier supprimé, et la nouvelle repart en
+  `pending` : **le badge qu'elle fondait tombe** jusqu'à ce que l'équipe la
+  regarde. Dites-le avant d'envoyer par-dessus une pièce `valid`.
+- ⚠️ **Hors ligne, une pièce n'attend pas en file** sur l'appareil : c'est une
+  carte d'identité. Envoyez-la quand le réseau est là, puis **effacez le
+  fichier local**.
+- Une photo de pièce se prend **à plat, en pleine lumière, les quatre coins
+  visibles** : c'est ce qui évite le refus « illisible ».
+
+### 11 bis.5 Ce que voit le chercheur
+
+Sur l'annonce publique (`GET /immo/listings/{ref}` et la recherche) :
+`publisher.badges` (`identity`, `business`) et `property.badges` (`title`,
+`mandate`), en **noms seuls**, et **seulement ceux qui tiennent** — un badge
+dont la pièce a expiré n'y est plus. Le badge `verified`, lui, reste le geste
+de l'équipe sur la fiche entière : les deux coexistent.
+
+### 11 bis.6 Ce qui prévient de quoi
+
+Aucune notification n'annonce aujourd'hui l'arbitrage d'une pièce : **relisez
+le dossier** à l'ouverture de l'écran « Pièces ». L'équipe arbitre dans la
+console ; un refus porte toujours son motif.
+
 ## 12. ⚠️ CE QUE CETTE SURFACE NE SERT PAS — et pourquoi
 
 **N'en dessinez pas les écrans.** Certaines lignes sont des décisions,
@@ -2090,7 +2203,7 @@ côté application.
 | **La gestion locative au-delà du bail** — encaissement en ligne, quittances, révision et avenants, signature électronique | 🆕 le **bail** et son **échéancier** sont servis (section 9 quater, v4.133.0) ; le reste viendra. Aucun argent ne passe par Dira : un loyer est **marqué** payé par l'annonceur |
 | **La capture 3D, les mesures LiDAR, le contour de terrain au GPS** | l'**application de capture**, à venir. C'est elle qui écrira `has_3d` et les surfaces `measured_*` / `gps_polygon` ; cette application ne les saisit pas (6.4) |
 | **La vidéo de visite** — filmée, envoyée, montrée | pas servie. Le mode de créneau `video` n'est qu'une étiquette : aucun lien, aucune salle (9.1) |
-| **L'envoi et la vérification des titres de propriété** | le champ `documents` existe, aucune porte d'envoi ni aucune vérification (6.8) |
+| **La relance des pièces manquantes** | ⚠️ **délibérément absente** : les pièces sont des **badges**, pas une obligation (11 bis). Aucun rappel automatique ne réclame un titre foncier à un particulier qui n'en a pas |
 | **Supprimer un bien, une annonce ou une fiche** | un bien s'**archive** (6.12), une annonce se **clôt** (8.6) ; une fiche ne se supprime pas |
 | **Désarchiver un bien, rouvrir une annonce close** | un bien archivé reste archivé ; une annonce close se repropose en annonce **neuve** |
 | **Changer le genre d'une annonce, la forme d'une fiche** | une offre neuve sur le même bien ; la forme d'une fiche est définitive |
@@ -2241,10 +2354,30 @@ côté application.
 | `visit_not_started` | 409 | La présence se constate une fois la visite commencée |
 | `visit_slot_started` 🆕 | 409 | Ce créneau a commencé : il ne se retire plus — constatez la présence des visiteurs |
 | `account_unknown` | 401 | Cette session ne désigne aucun compte : reconnectez-vous |
+| **Pièces** 🆕 | | |
+| `publisher_documents_reserved` | 403 | Seuls le responsable de la fiche ou un manager peuvent voir et déposer ses pièces. |
+| `document_not_expected` | 422 | Cette pièce n'est pas demandée pour cette fiche (le registre du commerce et le mandat sont ceux d'une agence). |
+| `unknown_document_kind` | 422 | Cette pièce n'est pas demandée aux annonceurs. |
+| `document_needs_vehicle` | 422 | Cette pièce est celle d'un bien : dites lequel (property_id). |
+| `document_refuses_vehicle` | 422 | Cette pièce est celle de la fiche, pas d'un bien : retirez le bien. |
+| `vehicle_not_found` | 404 | Ce bien n'existe pas, ou n'est pas le vôtre. |
+| `document_file_type` | 422 | Une pièce s'envoie en JPEG, PNG ou PDF. |
+| `document_file_too_large` | 413 | Une pièce pèse au plus 10 Mo. |
+| `document_expiry_unreadable` | 422 | La date d'expiration s'écrit AAAA-MM-JJ. |
 
 ---
 
 ## 15. Journal
+
+### 4.134.0 — 11 novembre 2026
+
+🟢 **LES PIÈCES ET LEURS BADGES** (§11 bis, §0.2, §6.8, §12, §14) : identité et
+selfie pour tous, registre du commerce pour une agence, titre de chaque bien,
+mandat d'un bien d'agence — envoyés en `multipart` au compartiment privé,
+regardés par l'équipe, et posant des **badges** (`identity`, `business`,
+`title`, `mandate`) que le chercheur voit. **Rien n'est bloqué** sur une pièce.
+Un `agent` ne voit pas les pièces de l'agence (`403
+publisher_documents_reserved`).
 
 ### 4.128.0 — 10 novembre 2026
 
