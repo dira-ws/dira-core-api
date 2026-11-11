@@ -1,6 +1,6 @@
 # IMMOBILIER — ANNONCEUR (agence ou particulier) — contrat d'API
 
-> **Version 4.134.0** · 11 novembre 2026
+> **Version 4.135.0** · 11 novembre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Immobilier : `https://api-staging.dira.llc/api/v1/immo`
 
 ---
@@ -1218,8 +1218,9 @@ pas** : le serveur les pose (`422 validation_failed`, `unknown_field`, sinon).
   notifications de visite.
 - **Absents quand vides** : `pitch`, `available_from`, `published_at`,
   `closed_at`, `closed_reason`, `review_note`. **Toujours servis** : `sponsored`
-  (une annonce payée doit pouvoir se marquer partout ; aujourd'hui toujours
-  `false`), `charges`, `deposit_months`. `negotiable` vaut `null` quand rien
+  (une annonce payée doit pouvoir se marquer partout — 🆕 mise en avant, 11.4),
+  `charges`, `deposit_months`. 🆕 `boost` : la dernière mise en avant, absente
+  si l'annonce n'en a jamais eu. `negotiable` vaut `null` quand rien
   n'a été dit.
 
 | Refus | Code |
@@ -2056,7 +2057,7 @@ Lisible par tout compte connecté — ce que la console a réglé pour le pays :
   "free_listings":        10,   // gratuites PAR MOIS — particulier
   "free_listings_agency": 10,   // 🆕 gratuites PAR MOIS — agence
   "listing_tokens":       1,    // prix d'une annonce au-delà, en jetons
-  "boost_tokens":         1000, // mise en avant — pas encore servie (section 12)
+  "boost_tokens":         1000, // 🆕 prix d'une mise en avant (section 11.4)
   "boost_days":           7,
   "twin_tokens":          2000, // 3D — pas encore servie
   "updated_at":           "2026-11-11T09:00:00Z"
@@ -2069,8 +2070,52 @@ Lisible par tout compte connecté — ce que la console a réglé pour le pays :
   départ. Le serveur relit toutes les trente secondes.
 - ⚠️ **`updated_at` PEUT VALOIR `0001-01-01T00:00:00Z`** quand aucun réglage
   n'a jamais été écrit. Ne l'affichez pas.
-- ⚠️ La mise en avant et la 3D restent **annoncées, pas servies** : ne
-  dessinez aucun bouton d'achat pour elles.
+- ⚠️ La **3D** reste **annoncée, pas servie** : ne dessinez aucun bouton
+  d'achat pour elle. 🆕 (v4.135.0) La **mise en avant** est servie : 11.4.
+
+### 11.4 🆕 Mettre une annonce en avant — `POST /immo/publishers/me/listings/{id}/boost` (v4.135.0)
+
+Sans corps. Paie `boost_tokens` jetons du **portefeuille de la fiche** (11.1)
+et met l'annonce en avant pendant `boost_days` jours.
+
+```json
+→ 201 {
+  "listing_id": "6af3…",
+  "boost_id":   "6af4…",
+  "sponsored":  true,
+  "until":      "2026-11-18T14:05:00Z",
+  "tokens":     1000,
+  "days":       7
+}
+```
+
+- ⚠️⚠️ **ELLE NE PASSE JAMAIS DEVANT LA PERTINENCE.** Dans la recherche, la
+  mise en avant est le **dernier** départage : après la correspondance au
+  texte et la complétude. Elle fait gagner les égalités, rien de plus. Dites-le
+  à l'annonceur avant qu'il paie — « vos annonces passent devant à qualité
+  égale », pas « en tête des résultats ».
+- ⚠️ **Toujours marquée.** Une annonce à `sponsored: true` est affichée
+  « Annonce sponsorisée » partout chez le chercheur.
+- ⚠️ **Au plus une annonce en ligne sur cinq** du pays est mise en avant en
+  même temps (une au moins, sur un petit marché) : au-delà, `409
+  boost_slots_full` (`meta.sponsored`, `meta.allowed`). Réessayer plus tard.
+- **Seulement une annonce en ligne** (`409 listing_not_published`), **de la
+  fiche** (`404 listing_not_found` sinon), et **par le porteur ou un
+  `manager`** (`403 listing_boost_reserved`) — mettre en avant dépense le solde
+  de l'agence, comme recharger.
+- **Prolonger** : appeler à nouveau pendant une mise en avant en cours ajoute
+  `boost_days` jours **à sa fin** (`until` repart de là, pas d'aujourd'hui), et
+  ne prend pas de place supplémentaire. Chaque appel est un débit.
+- **Pas assez de jetons** : `402 boost_insufficient_tokens` (`meta.needed`,
+  `meta.balance`) — rien n'est débité ; proposez la recharge (11.1).
+- ⚠️ **`503 boost_unavailable` : RÉESSAYEZ, vous ne paierez pas deux fois.** Le
+  débit a peut-être eu lieu : la mise en avant reste réservée un quart d'heure,
+  et un nouvel appel reprend **le même** débit au lieu d'en faire un second. Ne
+  dites pas « échec du paiement ».
+- L'annonce porte ensuite `sponsored: true` et `boost` (`id`, `tokens`, `days`,
+  `at`, `until`) dans `GET /immo/publishers/me/listings/{id}`. À la fin,
+  `sponsored` repasse à `false` (dans le quart d'heure qui suit `until`) ;
+  `boost` reste, comme trace de la dernière.
 
 ---
 
@@ -2198,7 +2243,6 @@ côté application.
 | **Choisir le pays d'un bien ou d'une fiche** | ⚠️ **délibérément absent** : le pays est celui du compte (1 bis) |
 | **Poser le badge `verified`** (fiche ou bien) | il dit qu'un humain de Dira a regardé l'identité, le mandat, le titre ; une case à cocher en ferait une affirmation de plus |
 | **Se publier soi-même** | la relecture est faite par l'équipe (0.3) |
-| **La mise en avant payée** (`sponsored`, `boost_*`) | pas servie : `sponsored` est toujours `false`, aucune route ne l'achète |
 | **Les séjours courte durée — réservation et paiement** | 🆕 (v4.131.0) **`stay` est ouvert** : une annonce à la nuit se crée, se publie, se cherche, se visite et se discute comme les autres. Ce qui n'existe **pas encore** : le calendrier des nuits, la réservation et le paiement. Proposez `stay` en le disant : « le voyageur vous contacte ; la réservation en ligne arrive ». |
 | **La gestion locative au-delà du bail** — encaissement en ligne, quittances, révision et avenants, signature électronique | 🆕 le **bail** et son **échéancier** sont servis (section 9 quater, v4.133.0) ; le reste viendra. Aucun argent ne passe par Dira : un loyer est **marqué** payé par l'annonceur |
 | **La capture 3D, les mesures LiDAR, le contour de terrain au GPS** | l'**application de capture**, à venir. C'est elle qui écrira `has_3d` et les surfaces `measured_*` / `gps_polygon` ; cette application ne les saisit pas (6.4) |
@@ -2354,6 +2398,12 @@ côté application.
 | `visit_not_started` | 409 | La présence se constate une fois la visite commencée |
 | `visit_slot_started` 🆕 | 409 | Ce créneau a commencé : il ne se retire plus — constatez la présence des visiteurs |
 | `account_unknown` | 401 | Cette session ne désigne aucun compte : reconnectez-vous |
+| **Mise en avant** 🆕 | | |
+| `listing_boost_reserved` | 403 | Seuls le responsable de l'agence ou un manager peuvent payer une mise en avant. |
+| `listing_not_published` | 409 | Seule une annonce en ligne peut être mise en avant. |
+| `boost_slots_full` | 409 | Une annonce en ligne sur cinq au plus peut être mise en avant en même temps dans ce pays : toutes les places sont prises. Réessayez quand une mise en avant se termine. |
+| `boost_insufficient_tokens` | 402 | Le portefeuille de l'agence ne peut pas payer cette mise en avant. Rechargez-le, puis recommencez. |
+| `boost_unavailable` | 503 | La mise en avant est momentanément indisponible. Réessayez dans un instant : vous ne paierez pas deux fois. |
 | **Pièces** 🆕 | | |
 | `publisher_documents_reserved` | 403 | Seuls le responsable de la fiche ou un manager peuvent voir et déposer ses pièces. |
 | `document_not_expected` | 422 | Cette pièce n'est pas demandée pour cette fiche (le registre du commerce et le mandat sont ceux d'une agence). |
@@ -2368,6 +2418,15 @@ côté application.
 ---
 
 ## 15. Journal
+
+### 4.135.0 — 11 novembre 2026
+
+🟢 **LA MISE EN AVANT PAYÉE** (§11.3, §11.4, §8.5, §12, §14) :
+`POST /immo/publishers/me/listings/{id}/boost` — `boost_tokens` jetons du
+portefeuille de la fiche pour `boost_days` jours ; dernier départage du
+classement (jamais devant la pertinence), toujours marquée, une annonce en
+ligne sur cinq au plus ; prolongation depuis la fin de la précédente ; une
+reprise après `503` ne paie pas deux fois.
 
 ### 4.134.0 — 11 novembre 2026
 
