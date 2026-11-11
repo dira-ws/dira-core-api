@@ -103,6 +103,15 @@ var global = map[string]string{
 	// contrat est ensuite vérifié comme étant le SIEN, ce qui est la garantie
 	// qui compte : connaître le code sans en être le porteur ne donne rien.
 	"equipment.ContractByCode": "le code scanné désigne le contrat ; le porteur, lui, est vérifié",
+	// ⚠️ LES DONNÉES PROPRES D'UNE PERSONNE, PAR SON COMPTE (#65). Depuis que
+	// le gardien ne prend plus une clé de COMPTE pour une borne, ces lectures
+	// s'écrivent ici : elles suivent la personne, pas le pays de la requête.
+	// Un agent togolais qui travaille à Dakar garde ses contrats, ses
+	// paiements et ses alertes.
+	"equipment.ContractsOfUser":    "les contrats d'UN agent, par son compte : ils le suivent d'un pays à l'autre",
+	"payment.FindByIdempotencyKey": "le paiement que CE compte vient de lancer, retrouvé par sa clé — borné au compte, pas au pays",
+	"sos.countToday":               "les détections du jour d'UNE personne : la cadence vaut où qu'elle soit",
+	"sos.OpenOf":                   "l'alerte vivante d'UNE personne : la borner au pays raterait celle d'un chauffeur en déplacement",
 }
 
 // Toute lecture d'une collection bornée par pays porte son pays, ou un

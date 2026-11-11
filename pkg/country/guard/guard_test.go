@@ -24,8 +24,8 @@ func TestItSeesTheUnboundedReadsAndOnlyThose(t *testing.T) {
 	for _, f := range found {
 		names = append(names, f.Func)
 	}
-	assert.Equal(t, []string{"ByDay", "All", "Page"}, names,
-		"bornées : par le pays, par un identifiant, par une fonction voisine, ou par l'appelant")
+	assert.Equal(t, []string{"ByDay", "All", "Page", "OfUser"}, names,
+		"bornées : par le pays, par un identifiant d'OBJET, par une fonction voisine, ou par l'appelant — pas par un compte (#65)")
 	assert.Equal(t, "shop", found[0].Package)
 	assert.Equal(t, "orders", found[0].Collection)
 	assert.Contains(t, found[0].String(), "sans pays")
@@ -44,9 +44,10 @@ func TestOnlyTheDeclaredCollectionsAreWatched(t *testing.T) {
 // de requête, donc pas de pays.
 func TestADeclaredGlobalReadIsAccepted(t *testing.T) {
 	found, err := Scan("testdata", opts(map[string]string{
-		"shop.ByDay": "exemple",
-		"shop.All":   "exemple",
-		"shop.Page":  "exemple",
+		"shop.ByDay":  "exemple",
+		"shop.All":    "exemple",
+		"shop.Page":   "exemple",
+		"shop.OfUser": "exemple",
 	}))
 	require.NoError(t, err)
 	assert.Empty(t, found)

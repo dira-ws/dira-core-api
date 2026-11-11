@@ -13,8 +13,10 @@
 //	une lecture d'une collection bornée par pays est bornée par le PAYS,
 //	ou par un IDENTIFIANT — sinon elle est signalée.
 //
-// Une lecture par identifiant (`_id`, `order_id`, `driver_id`…) désigne un
-// objet précis : elle est déjà bornée, puisque l'objet porte son pays. Une
+// Une lecture par identifiant d'OBJET (`_id`, `order_id`, `store_id`…) désigne
+// un objet précis : elle est déjà bornée, puisque l'objet porte son pays.
+// ⚠️ PAS UNE CLÉ DE COMPTE (`user_id`, `driver_id`… — `AccountKeys`) : un
+// compte traverse les pays (#65). Une
 // lecture sans l'un ni l'autre balaye la collection entière, et c'est
 // toujours une fuite ou un balayage de fond. Les balayages de fond
 // s'inscrivent dans `Options.Global`, avec leur raison : ils sont rares, et
@@ -449,7 +451,28 @@ func isIDName(lit *ast.BasicLit) bool {
 		return false
 	}
 	v := strings.Trim(lit.Value, `"`)
+	if AccountKeys[v] {
+		return false
+	}
 	return v == "_id" || strings.HasSuffix(v, "_id") || strings.HasSuffix(v, "_ids")
+}
+
+// AccountKeys : les clés qui désignent un COMPTE, pas un objet — elles ne
+// bornent pas une lecture.
+//
+// ⚠️⚠️ UN COMPTE TRAVERSE LES PAYS (#65). `{"order_id": x}` désigne une
+// commande, d'un pays ; `{"user_id": x}` désigne une PERSONNE, et ses documents
+// de tous les pays : le voyageur de Lomé qui commande une course à Libreville
+// garde le même compte. La règle « une clé en `_id` est une borne » laissait
+// passer ces lectures — le mutant « favoris sans pays » de l'immobilier avait
+// survécu à son test de frontière.
+//
+// La liste est celle des clés de compte de la plateforme ; une clé nouvelle
+// s'ajoute ICI, avec la même raison.
+var AccountKeys = map[string]bool{
+	"user_id": true, "user_ids": true, "account_id": true, "account_ids": true,
+	"client_id": true, "driver_id": true, "rider_id": true, "courier_id": true,
+	"seeker_id": true, "tenant_id": true,
 }
 
 func isRangeOp(n ast.Node) bool {
