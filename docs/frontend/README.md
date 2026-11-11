@@ -1,6 +1,6 @@
 # Specs frontend — par rôle
 
-> **Version 4.133.0** · 11 novembre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics` + `dira-immo-api`
+> **Version 4.134.0** · 11 novembre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics` + `dira-immo-api`
 
 **Cinq** documents, un par application. Chacun est **autonome** : tout ce qu'un frontend doit savoir pour son rôle, sans avoir à ouvrir les vingt specs de modules.
 
@@ -395,6 +395,20 @@ Chaque document porte la même version en en-tête, et son propre journal des ch
 - [ ] ⚠️ **`TRACKING_JWT_SECRET` renseigné dans chaque environnement déployé.** Vide, l'authentification du service de suivi est **désactivée** : n'importe qui connaissant un `delivery_id` suit la course. Le secret doit valoir **exactement** le `JWT_SECRET` de `dira-food-api`.
 
 ## Journal
+
+### 4.134.0 — 11 novembre 2026
+
+🟢 **L'IMMOBILIER — les pièces et leurs badges** (`IMMO-PUBLISHER.md` §11 bis,
+`IMMO-SEEKER.md` §0, §4) : décision du 11 novembre — identité et selfie pour
+tous, registre du commerce pour une agence, le **titre de chaque bien** (il
+appartient au bien), le **mandat** d'un bien d'agence. Envoyés en `multipart`
+au compartiment **privé** (`POST /immo/publishers/me/documents`), regardés par
+l'équipe, ils posent des **badges** (`identity`, `business`, `title`,
+`mandate`) servis sur l'annonce publique. **Aucune pièce ne bloque une
+publication.**
+
+🔧 **La file des pièces de l'exploitation se lit dans le pays de la requête**
+(livraison et courses) : rien ne change pour les applications.
 
 ### 4.133.0 — 11 novembre 2026
 
