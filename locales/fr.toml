@@ -885,3 +885,10 @@ other = "Le maximum de recharge est sous le minimum : aucun montant ne pourrait 
 
 [errors.topup_preset_out_of_bounds]
 other = "Un montant proposé sort des bornes : le bouton serait refusé"
+
+# L'approvisionnement d'un portefeuille d'entreprise, sur pièce (colis).
+[errors.wallet_not_business]
+other = "Seul le portefeuille d'une entreprise s'approvisionne sur pièce"
+
+[errors.provision_already_recorded]
+other = "Cette pièce a déjà approvisionné ce portefeuille — vérifiez la référence avant de la saisir à nouveau"

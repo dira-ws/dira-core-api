@@ -235,3 +235,30 @@ func TestNoStorageErrorCarriesTheAddress(t *testing.T) {
 	require.Error(t, err)
 	assert.NotContains(t, err.Error(), "ailleurs.example")
 }
+
+// ⚠️⚠️ LA PHOTO D'UNE REMISE DE COLIS EST PRIVÉE, ET GARDÉE.
+//
+// Elle montre une porte, un visage, l'intérieur d'un colis — la maison de
+// quelqu'un qui n'a pas de compte chez nous : le seau la refuse en lecture
+// publique, comme une pièce d'identité. Et elle ne s'efface pas d'elle-même au
+// bout de la rétention d'un vocal : c'est ce qu'on regarde pour trancher une
+// réclamation, et la verticale qui la garde décide quand la retirer.
+func TestAProofIsPrivateAndKept(t *testing.T) {
+	assert.True(t, Private(KindProof), "la photo d'une remise serait servie à qui connaît l'adresse")
+	assert.Contains(t, bucketPolicy("dira"), "arn:aws:s3:::dira/proof/*", "la politique du seau ne la refuse pas")
+
+	assert.False(t, expiringKinds[KindProof], "la photo d'une remise s'effacerait au bout de la rétention d'un vocal")
+	for _, r := range expiryRules(90).Rules {
+		assert.NotEqual(t, KindProof+"/", r.RuleFilter.Prefix, "une règle d'expiration vise les preuves de colis")
+	}
+
+	// Une photo, et rien d'autre : un téléphone de livreur photographie.
+	for _, mime := range []string{"image/jpeg", "image/png", "image/webp"} {
+		_, ok := Accepts(KindProof, mime)
+		assert.True(t, ok, "%s refusé", mime)
+	}
+	for _, mime := range []string{"application/pdf", "image/svg+xml", "video/mp4", "audio/mpeg"} {
+		_, ok := Accepts(KindProof, mime)
+		assert.False(t, ok, "%s accepté", mime)
+	}
+}

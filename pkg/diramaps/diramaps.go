@@ -87,19 +87,28 @@ func (c *Client) routeURL() string {
 	return base + "/api/calc/route"
 }
 
-// Route est ce que le réseau routier dit d'une tournée : sa durée, et son
-// TRACÉ.
+// Route est ce que le réseau routier dit d'une tournée : sa durée, sa
+// DISTANCE par la route, et son TRACÉ.
 //
 // ⚠️⚠️ LE TRACÉ NE TARIFIE RIEN, ET C'EST UNE DÉCISION ÉCRITE AILLEURS AUSSI.
-// La distance qui fixe le prix d'une course reste calculée localement, à vol
-// d'oiseau entre les arrêts : la faire dépendre d'un service externe ferait
-// varier le prix d'une commande selon la disponibilité d'un tiers. Ce tracé
-// sert à DESSINER, et seulement à dessiner.
+// La distance qui fixe le prix d'une course de REPAS reste calculée
+// localement, à vol d'oiseau entre les arrêts : la faire dépendre d'un service
+// externe ferait varier le prix d'une commande selon la disponibilité d'un
+// tiers. Ce tracé sert à DESSINER, et seulement à dessiner.
 //
 // Il est donc AU MIEUX, comme la durée : un SIG muet rend une tournée sans
 // tracé, jamais une erreur qui empêcherait de créer la course.
 type Route struct {
 	DurationS int
+	// DistanceM : la distance PAR LA ROUTE, en mètres, telle que le SIG la
+	// rend (`routes[].distance_m`), arrondie au mètre.
+	//
+	// ⚠️ ZÉRO N'EST PAS UNE DISTANCE : c'est un SIG muet, une réponse sans le
+	// champ (les réponses consolidées n'en portent pas toujours), ou un nom de
+	// champ qui a changé. Qui tarifie au kilomètre par la route (le colis) doit
+	// le lire comme « pas de distance » (`HasDistance`) et refuser de vendre —
+	// jamais retomber sur la ligne droite, ni facturer zéro kilomètre.
+	DistanceM int
 	// Geometry : les points du tracé, `[lng, lat]`, dans l'ordre de GeoJSON et
 	// de toute cette plateforme. Vide si le moteur ne l'a pas rendue — on ne
 	// l'invente pas, et surtout on ne retombe pas sur la ligne droite : une
@@ -107,6 +116,14 @@ type Route struct {
 	// qu'on corrige (voir core#230).
 	Geometry [][2]float64
 }
+
+// HasDistance dit si le SIG a rendu une distance par la route.
+//
+// ⚠️ UNE DISTANCE NULLE OU NÉGATIVE N'EN EST PAS UNE : un trajet de zéro mètre
+// ne coûterait que la prise en charge, et c'est exactement ce que produirait
+// un champ manquant — une erreur qui facture moins, donc que personne ne
+// signale.
+func (r Route) HasDistance() bool { return r.DistanceM > 0 }
 
 // Polyline encode le tracé pour le fil, ou rend "" s'il n'y en a pas.
 func (r Route) Polyline() string {
@@ -214,6 +231,11 @@ func (c *Client) RouteAs(ctx context.Context, city string, points [][2]float64, 
 	var out struct {
 		Routes []struct {
 			DurationS float64 `json:"duration_s"`
+			// DistanceM : la distance par la route. ⚠️ ELLE ÉTAIT RENDUE ET
+			// JETÉE : seul le pont des courses la décodait. C'est la troisième
+			// fois que le SIG rend plus que ce qu'on lit (la géométrie, puis
+			// `maneuver.location` de la navigation).
+			DistanceM float64 `json:"distance_m"`
 			// Geometry : un LineString GeoJSON (`overview=full` côté SIG).
 			//
 			// ⚠️ LE TYPE EST VÉRIFIÉ, PAS SUPPOSÉ. Le SIG rend aussi des
@@ -236,6 +258,11 @@ func (c *Client) RouteAs(ctx context.Context, city string, points [][2]float64, 
 	// préférence, et c'est celle-là que la carte du livreur affichera.
 	first := out.Routes[0]
 	r := Route{DurationS: int(first.DurationS + 0.5)}
+	// Arrondie au mètre, comme la durée à la seconde. ⚠️ Une valeur nulle ou
+	// négative reste à zéro : « pas de distance », jamais une distance.
+	if first.DistanceM > 0 {
+		r.DistanceM = int(first.DistanceM + 0.5)
+	}
 	if first.Geometry.Type == "LineString" && len(first.Geometry.Coordinates) >= 2 {
 		r.Geometry = first.Geometry.Coordinates
 	}

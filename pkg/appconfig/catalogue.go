@@ -81,6 +81,7 @@ var Features = []Feature{
 	{FeatureAssistantSupport, "Joindre l'équipe depuis l'assistant", "Le geste « écrire à l'équipe » disparaît : à couper là où personne ne lit la file du support.", OwnerAnalytics},
 	{FeatureVoiceMessages, "Messages vocaux", "Le bouton micro disparaît : le client écrit.", OwnerAnalytics},
 	{FeatureWallet, "Portefeuille", "Le solde et la recharge disparaissent ; restent les espèces et le mobile money.", OwnerCore},
+	{FeatureParcel, "Colis", "L'envoi de colis disparaît de cette application, même dans un pays où il est ouvert.", OwnerFood},
 }
 
 // Les clés du catalogue.
@@ -106,6 +107,12 @@ const (
 	FeatureAssistantSupport = "assistant_support_request"
 	FeatureVoiceMessages    = "voice_messages"
 	FeatureWallet           = "wallet"
+	// ⚠️⚠️ CELUI-LÀ S'ALLUME PAR LA PRÉSENCE DU PAYS DANS `Registry.Parcel`, et
+	// il VERROUILLE — voir `parcel.go`. La règle de catalogue ne fait que le
+	// RETIRER ensuite d'une édition. Ne JAMAIS le juger par `Allows`,
+	// `Require` ou `middleware.RequireFeature` : ils disent « disponible » par
+	// défaut. Le colis se juge par `ParcelOpen`, fermé par défaut.
+	FeatureParcel = "parcel"
 )
 
 // Known dit si cette clé nomme une fonction du catalogue.

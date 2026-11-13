@@ -266,17 +266,19 @@ func TestResolveServesEveryKeyIncludingTheOnesLeftOn(t *testing.T) {
 }
 
 // Un registre nil se résout quand même — toutes fonctions ouvertes, SAUF le
-// direct.
+// direct et le colis.
 //
-// ⚠️⚠️ L'EXCEPTION EST NOMMÉE ICI, ET ELLE DOIT L'ÊTRE. Cette épreuve a refusé
-// l'assistant en direct au moment où je l'ai ajouté au catalogue, et elle avait
-// raison de le faire : le défaut de ce paquet est « disponible partout », et
-// l'enfreindre sans le dire aurait laissé croire que les autres fonctions
-// peuvent s'allumer aussi. Le direct est facturé à la seconde et ses langues
-// restent à mesurer : il s'allume par la présence d'un bloc `live`, pays par
-// pays (voir `live.go`). Toute AUTRE fonction qui ferait échouer cette épreuve
-// est un défaut, pas une exception de plus.
-func TestResolveOnANilRegistryOpensEverythingButTheLiveAssistant(t *testing.T) {
+// ⚠️⚠️ LES EXCEPTIONS SONT NOMMÉES ICI, ET ELLES DOIVENT L'ÊTRE. Cette épreuve a
+// refusé l'assistant en direct au moment où je l'ai ajouté au catalogue, et
+// elle avait raison de le faire : le défaut de ce paquet est « disponible
+// partout », et l'enfreindre sans le dire aurait laissé croire que les autres
+// fonctions peuvent s'allumer aussi. Le direct est facturé à la seconde et ses
+// langues restent à mesurer : il s'allume par la présence d'un bloc `live`,
+// pays par pays (voir `live.go`). Le colis est la SECONDE, nommée de même : il
+// ne s'ouvre que là où un barème et des livreurs l'attendent, et c'est un
+// VERROU que toutes ses routes lisent (voir `parcel.go`). Toute AUTRE fonction
+// qui ferait échouer cette épreuve est un défaut, pas une exception de plus.
+func TestResolveOnANilRegistryOpensEverythingButTheLiveAssistantAndParcel(t *testing.T) {
 	var r *Registry
 	got := r.Resolve("td", "LITE")
 	assert.Equal(t, "lite", got.Edition)
@@ -285,6 +287,10 @@ func TestResolveOnANilRegistryOpensEverythingButTheLiveAssistant(t *testing.T) {
 	for key, on := range got.Features {
 		if key == FeatureAssistantLive {
 			assert.False(t, on, "le direct s'allume, il ne se coupe pas : sans bloc `live`, il est éteint")
+			continue
+		}
+		if key == FeatureParcel {
+			assert.False(t, on, "le colis s'allume pays par pays : sans liste, il est fermé partout")
 			continue
 		}
 		assert.True(t, on, "%s", key)

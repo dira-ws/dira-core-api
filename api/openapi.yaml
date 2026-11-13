@@ -1420,7 +1420,7 @@ paths:
       tags: [wallet]
       summary: Les portefeuilles du pays courant — quatre soldes et le titulaire
       parameters:
-        - {name: type, in: query, schema: {type: string, enum: [client, driver, merchant]}}
+        - {name: type, in: query, schema: {type: string, enum: [client, driver, merchant, business]}}
         - {name: owner_id, in: query, schema: {type: string}}
         - {name: cursor, in: query, schema: {type: string}}
         - {name: limit, in: query, schema: {type: integer, maximum: 100}}
@@ -1438,7 +1438,7 @@ paths:
         débite).
       parameters:
         - {name: wallet_id, in: query, schema: {type: string}}
-        - {name: owner_type, in: query, schema: {type: string, enum: [client, driver, merchant]}}
+        - {name: owner_type, in: query, schema: {type: string, enum: [client, driver, merchant, business]}}
         - {name: unit, in: query, schema: {type: string, enum: [token, xof]}}
         - {name: reason, in: query, schema: {type: string}}
         - {name: ref_kind, in: query, schema: {type: string}}
@@ -1446,6 +1446,39 @@ paths:
         - {name: limit, in: query, schema: {type: integer, maximum: 100}}
       responses:
         "200": {description: Ledger rows}
+  /admin/wallets/{ownerID}/provision:
+    post:
+      tags: [wallet]
+      summary: Approvisionner le portefeuille d'une entreprise, sur pièce
+      description: >-
+        L'argent qu'une entreprise cliente du colis a versé (virement,
+        versement mobile, espèces au bureau), posé sur son portefeuille
+        `business` — le seul type que cette route accepte (`422
+        wallet_not_business`, le type refusé dans `reason`). Le montant, le
+        moyen, la référence de la pièce et le motif sont exigés ; le reçu se
+        joint quand il existe (`POST /uploads?kind=receipt`). La même
+        référence ne provisionne pas deux fois le même portefeuille (`409
+        provision_already_recorded`). L'écriture va de la trésorerie du moyen
+        aux avances des entreprises (`business_provision`), et une dette de
+        l'entreprise se rembourse d'office sur ce qui arrive. Journal d'audit.
+      parameters: [{name: ownerID, in: path, required: true, schema: {type: string}}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [amount, means, reference, justification]
+              properties:
+                amount: {type: integer, minimum: 1, description: "dans la plus petite unité de la monnaie du pays du portefeuille"}
+                means: {type: string, enum: [bank, mobile_money, cash]}
+                reference: {type: string, minLength: 3, maxLength: 80}
+                justification: {type: string, minLength: 3, maxLength: 500}
+                receipt_url: {type: string, maxLength: 2048}
+      responses:
+        "200": {description: Wallet — `balance_xof` et `debt_xof` à jour}
+        "409": {description: provision_already_recorded}
+        "422": {description: "validation_failed (le champ manquant dans `fields`) ou wallet_not_business"}
   /admin/wallets/{ownerID}/settle-debt:
     post:
       tags: [wallet]

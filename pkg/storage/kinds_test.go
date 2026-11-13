@@ -74,6 +74,10 @@ var natures = map[string]nature{
 	"feed":  video,
 	"sound": audio, "voice": audio, "speech": audio,
 	"receipt": proof, "document": proof,
+	// ⚠️ LA PHOTO D'UNE REMISE DE COLIS EST UNE PHOTO — privée et gardée, mais
+	// une photo : ni PDF, ni SVG. Sa nature dit ce qu'elle PREND ; ce qu'elle
+	// a de PRIVÉ se dit ailleurs (`privateKinds`).
+	"proof": photo,
 }
 
 func TestEveryKindHasADeclaredNature(t *testing.T) {

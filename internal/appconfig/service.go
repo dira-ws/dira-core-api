@@ -165,6 +165,14 @@ func (s *Service) Save(ctx context.Context, reg appconfig.Registry, actor string
 		return err
 	}
 	clean.Live = live
+	// LES PAYS OÙ LE COLIS EST OUVERT. ⚠️ UN PAYS NOMMÉ ICI OUVRE LA VENTE
+	// D'ENVOIS : un code qui n'en est pas un se refuse, et le refus le nomme.
+	parcel, bad := appconfig.CleanCountries(reg.Parcel)
+	if bad != "" {
+		return apperr.Validation("a country is two letters: " + bad).
+			WithMeta(map[string]any{"fields": []string{"parcel"}, "reason": bad})
+	}
+	clean.Parcel = parcel
 	if err := s.repo.Save(ctx, clean, actor); err != nil {
 		return err
 	}

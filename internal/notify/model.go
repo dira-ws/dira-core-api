@@ -423,6 +423,49 @@ const (
 	// période suffisent à reconnaître de quoi on parle ; le motif d'une retenue
 	// sur un écran verrouillé se lit par-dessus l'épaule.
 	KeyPayrollPaid = "payroll_paid"
+
+	// LE COLIS (`dira-food-api/internal/parcel`) — l'expéditeur, le livreur,
+	// l'équipe.
+	//
+	// ⚠️⚠️ L'EXPÉDITEUR, JAMAIS LE DESTINATAIRE. Le destinataire n'a pas de
+	// compte : ces messages vont à la personne qui a envoyé le colis. Et
+	// AUCUNE VARIABLE NE PORTE LE DESTINATAIRE — ni son nom, ni son numéro, ni
+	// son adresse : un écran verrouillé se lit par-dessus l'épaule, et ce sont
+	// les coordonnées de quelqu'un qui ne nous les a pas confiées. La référence
+	// de l'envoi (`shipment_ref`) suffit à reconnaître de quel colis on parle.
+	//
+	// ⚠️ ET LA VERTICALE MET `shipment_id` DANS LES DONNÉES : c'est ce qui fait
+	// que les messages d'un même envoi se REMPLACENT sur l'écran verrouillé
+	// (`collapseOf`), au lieu de s'empiler.
+	KeyParcelConfirmed     = "parcel_confirmed"
+	KeyParcelAccepted      = "parcel_accepted"
+	KeyParcelPickedUp      = "parcel_picked_up"
+	KeyParcelCourierNearby = "parcel_courier_nearby"
+	KeyParcelDelivered     = "parcel_delivered"
+	// KeyParcelFailedAttempt : la remise a échoué, et l'EXPÉDITEUR doit
+	// décider — une nouvelle tentative ou le retour. Le délai de la décision
+	// est dans la phrase : passé ce délai, le colis revient.
+	KeyParcelFailedAttempt = "parcel_failed_attempt"
+	KeyParcelReturning     = "parcel_returning"
+	KeyParcelReturned      = "parcel_returned"
+	// KeyParcelCancelled : l'envoi est annulé, et la phrase dit CE QUI EST
+	// RENDU. Un envoi annulé après l'acceptation ne rend pas tout : sans le
+	// montant, l'expéditeur croirait à une erreur en lisant son solde.
+	KeyParcelCancelled = "parcel_cancelled"
+	// KeyParcelPaymentKept : un paiement mobile est arrivé APRÈS l'annulation
+	// de son envoi. L'argent est sur le solde de l'expéditeur — rien n'est
+	// perdu, et sans ce message il croirait avoir payé un colis qui ne part
+	// pas.
+	KeyParcelPaymentKept = "parcel_payment_kept"
+	// KeyParcelReturnAssigned va au LIVREUR : le colis qu'il n'a pas pu
+	// remettre repart avec lui vers l'expéditeur.
+	KeyParcelReturnAssigned = "parcel_return_assigned"
+	// LES ALERTES DE L'ÉQUIPE DU COLIS (`staff_parcel_*`), poussées aux membres
+	// dont le périmètre couvre `parcel`. `staff_parcel_code_locked` : un code
+	// de remise s'est verrouillé ; `staff_parcel_incident` : un envoi demande
+	// qu'un humain tranche.
+	KeyStaffParcelCodeLocked = "staff_parcel_code_locked"
+	KeyStaffParcelIncident   = "staff_parcel_incident"
 )
 
 // defaults sont les gabarits COMPILÉS, servis tant que la base n'en porte pas.
@@ -1200,6 +1243,125 @@ var defaults = map[string]Template{
 			LocaleEN: {Title: "Pay sent", Body: "Your pay for [period] has been sent: [amount]."},
 		},
 	},
+
+	// --- LE COLIS : à l'EXPÉDITEUR, au livreur, à l'équipe ---
+	KeyParcelConfirmed: {
+		Key:         KeyParcelConfirmed,
+		Description: "COLIS — l'envoi est payé : on cherche un livreur. Message à l'EXPÉDITEUR, qui partage le lien de suivi et le code avec le destinataire.",
+		Enabled:     true,
+		Locales: map[string]Text{
+			LocaleFR: {Title: "Envoi confirmé", Body: "Votre envoi [shipment_ref] est confirmé. Nous cherchons un livreur — pensez à partager le lien de suivi et le code avec le destinataire."},
+			LocaleEN: {Title: "Shipment confirmed", Body: "Your shipment [shipment_ref] is confirmed. We are finding a courier — remember to share the tracking link and the code with the recipient."},
+		},
+	},
+	KeyParcelAccepted: {
+		Key:         KeyParcelAccepted,
+		Description: "COLIS — un livreur a accepté l'envoi et part le chercher. Message à l'EXPÉDITEUR.",
+		Enabled:     true,
+		Locales: map[string]Text{
+			LocaleFR: {Title: "Un livreur arrive", Body: "[courier] vient chercher votre colis [shipment_ref] en [vehicle]."},
+			LocaleEN: {Title: "A courier is on the way", Body: "[courier] is coming to collect your parcel [shipment_ref] on a [vehicle]."},
+		},
+	},
+	KeyParcelPickedUp: {
+		Key:         KeyParcelPickedUp,
+		Description: "COLIS — le livreur a retiré le colis (photo prise) et part vers le destinataire. Message à l'EXPÉDITEUR.",
+		Enabled:     true,
+		Locales: map[string]Text{
+			LocaleFR: {Title: "Colis retiré", Body: "Votre colis [shipment_ref] a été retiré. Il est en route vers le destinataire."},
+			LocaleEN: {Title: "Parcel collected", Body: "Your parcel [shipment_ref] has been collected. It is on its way to the recipient."},
+		},
+	},
+	KeyParcelCourierNearby: {
+		Key:         KeyParcelCourierNearby,
+		Description: "COLIS — le livreur approche du destinataire. Message à l'EXPÉDITEUR, pour qu'il prévienne le destinataire. Une seule fois par envoi.",
+		Enabled:     true,
+		Locales: map[string]Text{
+			LocaleFR: {Title: "Bientôt remis", Body: "Le livreur est à environ [minutes] min du destinataire de votre colis [shipment_ref]."},
+			LocaleEN: {Title: "Almost there", Body: "The courier is about [minutes] min from the recipient of your parcel [shipment_ref]."},
+		},
+	},
+	KeyParcelDelivered: {
+		Key:         KeyParcelDelivered,
+		Description: "COLIS — le colis a été remis (code et photo). Message à l'EXPÉDITEUR.",
+		Enabled:     true,
+		Locales: map[string]Text{
+			LocaleFR: {Title: "Colis remis", Body: "Votre colis [shipment_ref] a été remis au destinataire."},
+			LocaleEN: {Title: "Parcel delivered", Body: "Your parcel [shipment_ref] has been handed to the recipient."},
+		},
+	},
+	KeyParcelFailedAttempt: {
+		Key:         KeyParcelFailedAttempt,
+		Description: "COLIS — la remise a échoué. Message à l'EXPÉDITEUR, qui décide : nouvelle tentative ou retour. Sans décision dans le délai, le colis revient.",
+		Enabled:     true,
+		Locales: map[string]Text{
+			LocaleFR: {Title: "Remise impossible", Body: "Le colis [shipment_ref] n'a pas pu être remis : [reason]. Choisissez une nouvelle tentative ou le retour dans les [minutes] min — sans réponse, il vous revient."},
+			LocaleEN: {Title: "Delivery failed", Body: "Parcel [shipment_ref] could not be handed over: [reason]. Choose another attempt or a return within [minutes] min — without an answer, it comes back to you."},
+		},
+	},
+	KeyParcelReturning: {
+		Key:         KeyParcelReturning,
+		Description: "COLIS — le colis repart vers l'expéditeur. Message à l'EXPÉDITEUR.",
+		Enabled:     true,
+		Locales: map[string]Text{
+			LocaleFR: {Title: "Votre colis revient", Body: "Le colis [shipment_ref] revient vers vous. Préparez votre code de retour pour le récupérer."},
+			LocaleEN: {Title: "Your parcel is coming back", Body: "Parcel [shipment_ref] is coming back to you. Have your return code ready to collect it."},
+		},
+	},
+	KeyParcelReturned: {
+		Key:         KeyParcelReturned,
+		Description: "COLIS — le colis a été rendu à l'expéditeur. Message à l'EXPÉDITEUR.",
+		Enabled:     true,
+		Locales: map[string]Text{
+			LocaleFR: {Title: "Colis rendu", Body: "Le colis [shipment_ref] vous a été rendu."},
+			LocaleEN: {Title: "Parcel returned", Body: "Parcel [shipment_ref] has been returned to you."},
+		},
+	},
+	KeyParcelCancelled: {
+		Key:         KeyParcelCancelled,
+		Description: "COLIS — l'envoi est annulé. Message à l'EXPÉDITEUR, avec CE QUI LUI EST RENDU (un envoi annulé après l'acceptation ne rend pas tout).",
+		Enabled:     true,
+		Locales: map[string]Text{
+			LocaleFR: {Title: "Envoi annulé", Body: "Votre envoi [shipment_ref] est annulé. Rendu sur votre solde : [amount]."},
+			LocaleEN: {Title: "Shipment cancelled", Body: "Your shipment [shipment_ref] is cancelled. Returned to your balance: [amount]."},
+		},
+	},
+	KeyParcelPaymentKept: {
+		Key:         KeyParcelPaymentKept,
+		Description: "COLIS — un paiement mobile est arrivé après l'annulation de son envoi : l'argent est sur le solde de l'EXPÉDITEUR.",
+		Enabled:     true,
+		Locales: map[string]Text{
+			LocaleFR: {Title: "Paiement conservé", Body: "Votre paiement de [amount] est arrivé après l'annulation de l'envoi [shipment_ref]. Il est sur votre solde Dira."},
+			LocaleEN: {Title: "Payment kept", Body: "Your payment of [amount] arrived after shipment [shipment_ref] was cancelled. It is in your Dira balance."},
+		},
+	},
+	KeyParcelReturnAssigned: {
+		Key:         KeyParcelReturnAssigned,
+		Description: "COLIS — le colis non remis repart avec le LIVREUR vers l'expéditeur. Message au LIVREUR.",
+		Enabled:     true,
+		Locales: map[string]Text{
+			LocaleFR: {Title: "Retour du colis", Body: "Rapportez le colis [shipment_ref] à l'expéditeur. Le retour vous est payé."},
+			LocaleEN: {Title: "Parcel return", Body: "Bring parcel [shipment_ref] back to the sender. The return is paid to you."},
+		},
+	},
+	KeyStaffParcelCodeLocked: {
+		Key:         KeyStaffParcelCodeLocked,
+		Description: "STAFF — un code de remise de colis s'est verrouillé après trop d'essais faux.",
+		Enabled:     true,
+		Locales: map[string]Text{
+			LocaleFR: {Title: "Code de colis verrouillé — [ref]", Body: "Le code de remise de l'envoi [ref] s'est verrouillé (livreur : [who])."},
+			LocaleEN: {Title: "Parcel code locked — [ref]", Body: "The handover code of shipment [ref] is locked (courier: [who])."},
+		},
+	},
+	KeyStaffParcelIncident: {
+		Key:         KeyStaffParcelIncident,
+		Description: "STAFF — un envoi de colis demande qu'un humain tranche (paiement trop court, retour sans expéditeur, signalement du destinataire…).",
+		Enabled:     true,
+		Locales: map[string]Text{
+			LocaleFR: {Title: "Colis à traiter — [ref]", Body: "[kind] : [detail]"},
+			LocaleEN: {Title: "Parcel to handle — [ref]", Body: "[kind]: [detail]"},
+		},
+	},
 }
 
 // provided déclare, par clé, les variables que la PLATEFORME sait remplir.
@@ -1334,6 +1496,26 @@ var provided = map[string][]string{
 	KeySupportReply: {"country"},
 	// La période et le NET versé — rien du détail : voir `KeyPayrollPaid`.
 	KeyPayrollPaid: {"period", "amount"},
+	// LE COLIS : la référence de l'envoi, et ce que chaque moment ajoute.
+	// ⚠️ RIEN DU DESTINATAIRE — ni nom, ni numéro, ni adresse (voir les clés).
+	// `courier` et `vehicle` : le livreur qui vient chez l'EXPÉDITEUR, qu'il
+	// va recevoir ; `amount` : un montant déjà mis en forme, avec sa monnaie.
+	KeyParcelConfirmed:      {"shipment_ref"},
+	KeyParcelAccepted:       {"shipment_ref", "courier", "vehicle"},
+	KeyParcelPickedUp:       {"shipment_ref", "courier"},
+	KeyParcelCourierNearby:  {"shipment_ref", "minutes"},
+	KeyParcelDelivered:      {"shipment_ref"},
+	KeyParcelFailedAttempt:  {"shipment_ref", "reason", "minutes"},
+	KeyParcelReturning:      {"shipment_ref"},
+	KeyParcelReturned:       {"shipment_ref"},
+	KeyParcelCancelled:      {"shipment_ref", "amount", "reason"},
+	KeyParcelPaymentKept:    {"shipment_ref", "amount"},
+	KeyParcelReturnAssigned: {"shipment_ref"},
+	// ⚠️ `who` est le LIVREUR qui essayait le code : c'est lui que l'équipe
+	// appelle. `kind` et `detail` d'un incident sont des phrases déjà écrites
+	// par la verticale.
+	KeyStaffParcelCodeLocked: {"ref", "who"},
+	KeyStaffParcelIncident:   {"kind", "ref", "detail"},
 }
 
 // Provided rend les variables que la plateforme remplit pour une clé.

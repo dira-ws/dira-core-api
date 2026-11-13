@@ -1,0 +1,970 @@
+[
+  {
+    "name": "repas",
+    "entries": [
+      {
+        "id": "000000000000000000000000",
+        "country": "TG",
+        "at": "2026-11-13T09:30:00Z",
+        "service": "core",
+        "reason": "wallet_topup",
+        "transaction_id": "cccccccccccccccccccc0001",
+        "wallet_id": "aaaaaaaaaaaaaaaaaaaa0001",
+        "owner_id": "bbbbbbbbbbbbbbbbbbbb0001",
+        "unit": "xof",
+        "amount": 5000,
+        "description": "wallet_topup · client",
+        "lines": [
+          {
+            "account": "mobile_money",
+            "debit": 5000
+          },
+          {
+            "account": "client_wallets",
+            "credit": 5000
+          }
+        ]
+      },
+      {
+        "id": "000000000000000000000000",
+        "country": "TG",
+        "at": "2026-11-13T09:30:00Z",
+        "service": "core",
+        "reason": "payment",
+        "ref_kind": "order",
+        "ref_id": "0123456789abcdef01234567",
+        "transaction_id": "cccccccccccccccccccc0002",
+        "wallet_id": "aaaaaaaaaaaaaaaaaaaa0001",
+        "owner_id": "bbbbbbbbbbbbbbbbbbbb0001",
+        "unit": "xof",
+        "amount": 300,
+        "description": "payment · client · order #34567",
+        "lines": [
+          {
+            "account": "promo_credits",
+            "debit": 300
+          },
+          {
+            "account": "order_clearing",
+            "credit": 300
+          }
+        ]
+      },
+      {
+        "id": "000000000000000000000000",
+        "country": "TG",
+        "at": "2026-11-13T09:30:00Z",
+        "service": "core",
+        "reason": "payment",
+        "ref_kind": "order",
+        "ref_id": "0123456789abcdef01234567",
+        "transaction_id": "cccccccccccccccccccc0003",
+        "wallet_id": "aaaaaaaaaaaaaaaaaaaa0001",
+        "owner_id": "bbbbbbbbbbbbbbbbbbbb0001",
+        "unit": "xof",
+        "amount": 2700,
+        "description": "payment · client · order #34567",
+        "lines": [
+          {
+            "account": "client_wallets",
+            "debit": 2700
+          },
+          {
+            "account": "order_clearing",
+            "credit": 2700
+          }
+        ]
+      },
+      {
+        "id": "000000000000000000000000",
+        "country": "TG",
+        "at": "2026-11-13T09:30:00Z",
+        "service": "core",
+        "reason": "order_accept",
+        "ref_kind": "order",
+        "ref_id": "0123456789abcdef01234567",
+        "transaction_id": "cccccccccccccccccccc0004",
+        "wallet_id": "aaaaaaaaaaaaaaaaaaaa0002",
+        "owner_id": "bbbbbbbbbbbbbbbbbbbb0002",
+        "unit": "token",
+        "amount": 200,
+        "tokens": 2,
+        "description": "order_accept · agent · order #34567",
+        "lines": [
+          {
+            "account": "agent_tokens",
+            "debit": 200
+          },
+          {
+            "account": "revenue_tokens",
+            "credit": 200
+          }
+        ]
+      },
+      {
+        "id": "000000000000000000000000",
+        "country": "TG",
+        "at": "2026-11-13T09:30:00Z",
+        "service": "core",
+        "reason": "order_accept_refund",
+        "transaction_id": "cccccccccccccccccccc0005",
+        "wallet_id": "aaaaaaaaaaaaaaaaaaaa0002",
+        "owner_id": "bbbbbbbbbbbbbbbbbbbb0002",
+        "unit": "token",
+        "amount": 200,
+        "tokens": 2,
+        "description": "order_accept_refund · agent",
+        "lines": [
+          {
+            "account": "revenue_tokens",
+            "debit": 200
+          },
+          {
+            "account": "agent_tokens",
+            "credit": 200
+          }
+        ]
+      },
+      {
+        "id": "000000000000000000000000",
+        "country": "TG",
+        "at": "2026-11-13T09:30:00Z",
+        "service": "core",
+        "reason": "order_payout",
+        "ref_kind": "order",
+        "ref_id": "0123456789abcdef01234567",
+        "transaction_id": "cccccccccccccccccccc0006",
+        "wallet_id": "aaaaaaaaaaaaaaaaaaaa0003",
+        "owner_id": "bbbbbbbbbbbbbbbbbbbb0003",
+        "unit": "xof",
+        "amount": 2500,
+        "description": "order_payout · marchand · order #34567",
+        "lines": [
+          {
+            "account": "order_clearing",
+            "debit": 2500
+          },
+          {
+            "account": "merchant_payables",
+            "credit": 2500
+          }
+        ]
+      },
+      {
+        "id": "000000000000000000000000",
+        "country": "TG",
+        "at": "2026-11-13T09:30:00Z",
+        "service": "core",
+        "reason": "delivery_fee",
+        "ref_kind": "order",
+        "ref_id": "0123456789abcdef01234567",
+        "transaction_id": "cccccccccccccccccccc0007",
+        "wallet_id": "aaaaaaaaaaaaaaaaaaaa0002",
+        "owner_id": "bbbbbbbbbbbbbbbbbbbb0002",
+        "unit": "xof",
+        "amount": 1000,
+        "description": "delivery_fee · agent · order #34567",
+        "lines": [
+          {
+            "account": "order_clearing",
+            "debit": 1000
+          },
+          {
+            "account": "agent_payables",
+            "credit": 1000
+          }
+        ]
+      },
+      {
+        "id": "000000000000000000000000",
+        "country": "TG",
+        "at": "2026-11-13T09:30:00Z",
+        "service": "core",
+        "reason": "commission",
+        "ref_kind": "order",
+        "ref_id": "0123456789abcdef01234567",
+        "transaction_id": "cccccccccccccccccccc0008",
+        "wallet_id": "aaaaaaaaaaaaaaaaaaaa0002",
+        "owner_id": "bbbbbbbbbbbbbbbbbbbb0002",
+        "unit": "xof",
+        "amount": 150,
+        "description": "commission · agent · order #34567",
+        "lines": [
+          {
+            "account": "agent_payables",
+            "debit": 150
+          },
+          {
+            "account": "revenue_commission",
+            "credit": 150
+          }
+        ]
+      },
+      {
+        "id": "000000000000000000000000",
+        "country": "TG",
+        "at": "2026-11-13T09:30:00Z",
+        "service": "core",
+        "reason": "debt_repaid",
+        "ref_kind": "order",
+        "ref_id": "0123456789abcdef01234567",
+        "transaction_id": "cccccccccccccccccccc0009",
+        "wallet_id": "aaaaaaaaaaaaaaaaaaaa0002",
+        "owner_id": "bbbbbbbbbbbbbbbbbbbb0002",
+        "unit": "xof",
+        "amount": 100,
+        "description": "debt_repaid · agent · order #34567",
+        "lines": [
+          {
+            "account": "agent_payables",
+            "debit": 100
+          },
+          {
+            "account": "agent_receivable",
+            "credit": 100
+          }
+        ]
+      },
+      {
+        "id": "000000000000000000000000",
+        "country": "TG",
+        "at": "2026-11-13T09:30:00Z",
+        "service": "core",
+        "reason": "commission",
+        "ref_kind": "order",
+        "ref_id": "0123456789abcdef01234567",
+        "transaction_id": "cccccccccccccccccccc0010",
+        "wallet_id": "aaaaaaaaaaaaaaaaaaaa0002",
+        "owner_id": "bbbbbbbbbbbbbbbbbbbb0002",
+        "unit": "xof",
+        "amount": 50,
+        "description": "commission · agent · order #34567",
+        "lines": [
+          {
+            "account": "agent_payables",
+            "debit": 50
+          },
+          {
+            "account": "revenue_commission",
+            "credit": 50
+          }
+        ]
+      },
+      {
+        "id": "000000000000000000000000",
+        "country": "TG",
+        "at": "2026-11-13T09:30:00Z",
+        "service": "core",
+        "reason": "commission_due",
+        "ref_kind": "order",
+        "ref_id": "0123456789abcdef01234567",
+        "transaction_id": "cccccccccccccccccccc0011",
+        "wallet_id": "aaaaaaaaaaaaaaaaaaaa0002",
+        "owner_id": "bbbbbbbbbbbbbbbbbbbb0002",
+        "unit": "xof",
+        "amount": 100,
+        "description": "commission_due · agent · order #34567",
+        "lines": [
+          {
+            "account": "agent_receivable",
+            "debit": 100
+          },
+          {
+            "account": "revenue_commission",
+            "credit": 100
+          }
+        ]
+      },
+      {
+        "id": "000000000000000000000000",
+        "country": "TG",
+        "at": "2026-11-13T09:30:00Z",
+        "service": "core",
+        "reason": "refund",
+        "ref_kind": "order",
+        "ref_id": "0123456789abcdef01234567",
+        "transaction_id": "cccccccccccccccccccc0012",
+        "wallet_id": "aaaaaaaaaaaaaaaaaaaa0001",
+        "owner_id": "bbbbbbbbbbbbbbbbbbbb0001",
+        "unit": "xof",
+        "amount": 3000,
+        "description": "refund · client · order #34567",
+        "lines": [
+          {
+            "account": "order_clearing",
+            "debit": 3000
+          },
+          {
+            "account": "client_wallets",
+            "credit": 3000
+          }
+        ]
+      },
+      {
+        "id": "000000000000000000000000",
+        "country": "TG",
+        "at": "2026-11-13T09:30:00Z",
+        "service": "core",
+        "reason": "payment",
+        "ref_kind": "order",
+        "ref_id": "0123456789abcdef01234567",
+        "transaction_id": "cccccccccccccccccccc0013",
+        "wallet_id": "aaaaaaaaaaaaaaaaaaaa0001",
+        "owner_id": "bbbbbbbbbbbbbbbbbbbb0001",
+        "unit": "xof",
+        "amount": 500,
+        "description": "payment · client · order #34567",
+        "lines": [
+          {
+            "account": "client_wallets",
+            "debit": 500
+          },
+          {
+            "account": "order_clearing",
+            "credit": 500
+          }
+        ]
+      },
+      {
+        "id": "000000000000000000000000",
+        "country": "TG",
+        "at": "2026-11-13T09:30:00Z",
+        "service": "core",
+        "reason": "payment_due",
+        "ref_kind": "order",
+        "ref_id": "0123456789abcdef01234567",
+        "transaction_id": "cccccccccccccccccccc0014",
+        "wallet_id": "aaaaaaaaaaaaaaaaaaaa0001",
+        "owner_id": "bbbbbbbbbbbbbbbbbbbb0001",
+        "unit": "xof",
+        "amount": 1500,
+        "description": "payment_due · client · order #34567",
+        "lines": [
+          {
+            "account": "agent_receivable",
+            "debit": 1500
+          },
+          {
+            "account": "order_clearing",
+            "credit": 1500
+          }
+        ]
+      },
+      {
+        "id": "000000000000000000000000",
+        "country": "TG",
+        "at": "2026-11-13T09:30:00Z",
+        "service": "core",
+        "reason": "debt_repaid",
+        "transaction_id": "cccccccccccccccccccc0015",
+        "wallet_id": "aaaaaaaaaaaaaaaaaaaa0001",
+        "owner_id": "bbbbbbbbbbbbbbbbbbbb0001",
+        "unit": "xof",
+        "amount": 1500,
+        "description": "debt_repaid · client",
+        "lines": [
+          {
+            "account": "client_wallets",
+            "debit": 1500
+          },
+          {
+            "account": "agent_receivable",
+            "credit": 1500
+          }
+        ]
+      },
+      {
+        "id": "000000000000000000000000",
+        "country": "TG",
+        "at": "2026-11-13T09:30:00Z",
+        "service": "core",
+        "reason": "promo_credit",
+        "transaction_id": "cccccccccccccccccccc0016",
+        "wallet_id": "aaaaaaaaaaaaaaaaaaaa0001",
+        "owner_id": "bbbbbbbbbbbbbbbbbbbb0001",
+        "unit": "xof",
+        "amount": 1000,
+        "description": "promo_credit · client",
+        "lines": [
+          {
+            "account": "expense_promo",
+            "debit": 1000
+          },
+          {
+            "account": "promo_credits",
+            "credit": 1000
+          }
+        ]
+      },
+      {
+        "id": "000000000000000000000000",
+        "country": "TG",
+        "at": "2026-11-13T09:30:00Z",
+        "service": "core",
+        "reason": "operator_credit",
+        "transaction_id": "cccccccccccccccccccc0017",
+        "wallet_id": "aaaaaaaaaaaaaaaaaaaa0002",
+        "owner_id": "bbbbbbbbbbbbbbbbbbbb0002",
+        "unit": "token",
+        "amount": 500,
+        "tokens": 5,
+        "description": "operator_credit · agent",
+        "lines": [
+          {
+            "account": "expense_operator_credits",
+            "debit": 500
+          },
+          {
+            "account": "agent_tokens",
+            "credit": 500
+          }
+        ]
+      },
+      {
+        "id": "000000000000000000000000",
+        "country": "TG",
+        "at": "2026-11-13T09:30:00Z",
+        "service": "core",
+        "reason": "topup",
+        "transaction_id": "cccccccccccccccccccc0018",
+        "wallet_id": "aaaaaaaaaaaaaaaaaaaa0002",
+        "owner_id": "bbbbbbbbbbbbbbbbbbbb0002",
+        "unit": "token",
+        "amount": 1000,
+        "tokens": 10,
+        "description": "topup · agent",
+        "lines": [
+          {
+            "account": "mobile_money",
+            "debit": 1000
+          },
+          {
+            "account": "agent_tokens",
+            "credit": 1000
+          }
+        ]
+      },
+      {
+        "id": "000000000000000000000000",
+        "country": "TG",
+        "at": "2026-11-13T09:30:00Z",
+        "service": "core",
+        "reason": "equipment",
+        "ref_kind": "equipment",
+        "ref_id": "3333333333333333333333cc",
+        "transaction_id": "cccccccccccccccccccc0019",
+        "wallet_id": "aaaaaaaaaaaaaaaaaaaa0002",
+        "owner_id": "bbbbbbbbbbbbbbbbbbbb0002",
+        "unit": "xof",
+        "amount": 300,
+        "description": "equipment · agent · equipment #333CC",
+        "lines": [
+          {
+            "account": "agent_payables",
+            "debit": 300
+          },
+          {
+            "account": "revenue_equipment",
+            "credit": 300
+          }
+        ]
+      },
+      {
+        "id": "000000000000000000000000",
+        "country": "TG",
+        "at": "2026-11-13T09:30:00Z",
+        "service": "core",
+        "reason": "equipment",
+        "ref_kind": "equipment",
+        "ref_id": "3333333333333333333333cc",
+        "transaction_id": "cccccccccccccccccccc0020",
+        "wallet_id": "aaaaaaaaaaaaaaaaaaaa0002",
+        "owner_id": "bbbbbbbbbbbbbbbbbbbb0002",
+        "unit": "xof",
+        "amount": 5000,
+        "description": "equipment · agent · equipment #333CC",
+        "lines": [
+          {
+            "account": "revenue_equipment",
+            "debit": 5000
+          },
+          {
+            "account": "agent_payables",
+            "credit": 5000
+          }
+        ]
+      },
+      {
+        "id": "000000000000000000000000",
+        "country": "TG",
+        "at": "2026-11-13T09:30:00Z",
+        "service": "core",
+        "reason": "debt_repaid",
+        "transaction_id": "cccccccccccccccccccc0021",
+        "wallet_id": "aaaaaaaaaaaaaaaaaaaa0002",
+        "owner_id": "bbbbbbbbbbbbbbbbbbbb0002",
+        "unit": "xof",
+        "amount": 200,
+        "description": "debt_repaid · agent",
+        "lines": [
+          {
+            "account": "mobile_money",
+            "debit": 200
+          },
+          {
+            "account": "agent_receivable",
+            "credit": 200
+          }
+        ]
+      },
+      {
+        "id": "000000000000000000000000",
+        "country": "TG",
+        "at": "2026-11-13T09:30:00Z",
+        "service": "core",
+        "reason": "mystery",
+        "transaction_id": "cccccccccccccccccccc0022",
+        "wallet_id": "aaaaaaaaaaaaaaaaaaaa0001",
+        "owner_id": "bbbbbbbbbbbbbbbbbbbb0001",
+        "unit": "xof",
+        "amount": 42,
+        "description": "mystery · client",
+        "lines": [
+          {
+            "account": "client_wallets",
+            "debit": 42
+          },
+          {
+            "account": "suspense",
+            "credit": 42
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "course",
+    "entries": [
+      {
+        "id": "000000000000000000000000",
+        "country": "TG",
+        "at": "2026-11-13T09:30:00Z",
+        "service": "core",
+        "reason": "payment",
+        "ref_kind": "ride",
+        "ref_id": "76543210fedcba9876543210",
+        "transaction_id": "cccccccccccccccccccc0023",
+        "wallet_id": "aaaaaaaaaaaaaaaaaaaa0001",
+        "owner_id": "bbbbbbbbbbbbbbbbbbbb0001",
+        "unit": "xof",
+        "amount": 800,
+        "description": "payment · client · ride #43210",
+        "lines": [
+          {
+            "account": "promo_credits",
+            "debit": 800
+          },
+          {
+            "account": "ride_clearing",
+            "credit": 800
+          }
+        ]
+      },
+      {
+        "id": "000000000000000000000000",
+        "country": "TG",
+        "at": "2026-11-13T09:30:00Z",
+        "service": "core",
+        "reason": "payment",
+        "ref_kind": "ride",
+        "ref_id": "76543210fedcba9876543210",
+        "transaction_id": "cccccccccccccccccccc0024",
+        "wallet_id": "aaaaaaaaaaaaaaaaaaaa0001",
+        "owner_id": "bbbbbbbbbbbbbbbbbbbb0001",
+        "unit": "xof",
+        "amount": 1200,
+        "description": "payment · client · ride #43210",
+        "lines": [
+          {
+            "account": "client_wallets",
+            "debit": 1200
+          },
+          {
+            "account": "ride_clearing",
+            "credit": 1200
+          }
+        ]
+      },
+      {
+        "id": "000000000000000000000000",
+        "country": "TG",
+        "at": "2026-11-13T09:30:00Z",
+        "service": "core",
+        "reason": "payment",
+        "ref_kind": "ride_adjustment",
+        "ref_id": "2222222222222222222222bb",
+        "transaction_id": "cccccccccccccccccccc0025",
+        "wallet_id": "aaaaaaaaaaaaaaaaaaaa0001",
+        "owner_id": "bbbbbbbbbbbbbbbbbbbb0001",
+        "unit": "xof",
+        "amount": 400,
+        "description": "payment · client · ride_adjustment #222BB",
+        "lines": [
+          {
+            "account": "client_wallets",
+            "debit": 400
+          },
+          {
+            "account": "ride_clearing",
+            "credit": 400
+          }
+        ]
+      },
+      {
+        "id": "000000000000000000000000",
+        "country": "TG",
+        "at": "2026-11-13T09:30:00Z",
+        "service": "core",
+        "reason": "refund",
+        "ref_kind": "ride_adjustment",
+        "ref_id": "2222222222222222222222bb",
+        "transaction_id": "cccccccccccccccccccc0026",
+        "wallet_id": "aaaaaaaaaaaaaaaaaaaa0001",
+        "owner_id": "bbbbbbbbbbbbbbbbbbbb0001",
+        "unit": "xof",
+        "amount": 400,
+        "description": "refund · client · ride_adjustment #222BB",
+        "lines": [
+          {
+            "account": "ride_clearing",
+            "debit": 400
+          },
+          {
+            "account": "client_wallets",
+            "credit": 400
+          }
+        ]
+      },
+      {
+        "id": "000000000000000000000000",
+        "country": "TG",
+        "at": "2026-11-13T09:30:00Z",
+        "service": "core",
+        "reason": "tip",
+        "ref_kind": "tip",
+        "ref_id": "1111111111111111111111aa",
+        "transaction_id": "cccccccccccccccccccc0027",
+        "wallet_id": "aaaaaaaaaaaaaaaaaaaa0001",
+        "owner_id": "bbbbbbbbbbbbbbbbbbbb0001",
+        "unit": "xof",
+        "amount": 500,
+        "description": "tip · client · tip #111AA",
+        "lines": [
+          {
+            "account": "client_wallets",
+            "debit": 500
+          },
+          {
+            "account": "agent_payables",
+            "credit": 500
+          }
+        ]
+      },
+      {
+        "id": "000000000000000000000000",
+        "country": "TG",
+        "at": "2026-11-13T09:30:00Z",
+        "service": "core",
+        "reason": "refund",
+        "ref_kind": "ride",
+        "ref_id": "76543210fedcba9876543210",
+        "transaction_id": "cccccccccccccccccccc0028",
+        "wallet_id": "aaaaaaaaaaaaaaaaaaaa0001",
+        "owner_id": "bbbbbbbbbbbbbbbbbbbb0001",
+        "unit": "xof",
+        "amount": 2000,
+        "description": "refund · client · ride #43210",
+        "lines": [
+          {
+            "account": "ride_clearing",
+            "debit": 2000
+          },
+          {
+            "account": "client_wallets",
+            "credit": 2000
+          }
+        ]
+      },
+      {
+        "id": "000000000000000000000000",
+        "country": "TG",
+        "at": "2026-11-13T09:30:00Z",
+        "service": "core",
+        "reason": "payment_due",
+        "ref_kind": "ride",
+        "ref_id": "76543210fedcba9876543210",
+        "transaction_id": "cccccccccccccccccccc0029",
+        "wallet_id": "aaaaaaaaaaaaaaaaaaaa0001",
+        "owner_id": "bbbbbbbbbbbbbbbbbbbb0001",
+        "unit": "xof",
+        "amount": 2000,
+        "description": "payment_due · client · ride #43210",
+        "lines": [
+          {
+            "account": "agent_receivable",
+            "debit": 2000
+          },
+          {
+            "account": "ride_clearing",
+            "credit": 2000
+          }
+        ]
+      },
+      {
+        "id": "000000000000000000000000",
+        "country": "TG",
+        "at": "2026-11-13T09:30:00Z",
+        "service": "core",
+        "reason": "ride_accept",
+        "ref_kind": "ride",
+        "ref_id": "76543210fedcba9876543210",
+        "transaction_id": "cccccccccccccccccccc0030",
+        "wallet_id": "aaaaaaaaaaaaaaaaaaaa0004",
+        "owner_id": "bbbbbbbbbbbbbbbbbbbb0004",
+        "unit": "token",
+        "amount": 300,
+        "tokens": 3,
+        "description": "ride_accept · agent · ride #43210",
+        "lines": [
+          {
+            "account": "agent_tokens",
+            "debit": 300
+          },
+          {
+            "account": "revenue_tokens",
+            "credit": 300
+          }
+        ]
+      },
+      {
+        "id": "000000000000000000000000",
+        "country": "TG",
+        "at": "2026-11-13T09:30:00Z",
+        "service": "core",
+        "reason": "ride_accept_refund",
+        "transaction_id": "cccccccccccccccccccc0031",
+        "wallet_id": "aaaaaaaaaaaaaaaaaaaa0004",
+        "owner_id": "bbbbbbbbbbbbbbbbbbbb0004",
+        "unit": "token",
+        "amount": 300,
+        "tokens": 3,
+        "description": "ride_accept_refund · agent",
+        "lines": [
+          {
+            "account": "revenue_tokens",
+            "debit": 300
+          },
+          {
+            "account": "agent_tokens",
+            "credit": 300
+          }
+        ]
+      },
+      {
+        "id": "000000000000000000000000",
+        "country": "TG",
+        "at": "2026-11-13T09:30:00Z",
+        "service": "vtc",
+        "reason": "ride_earning",
+        "ref_kind": "ride",
+        "ref_id": "76543210fedcba9876543210",
+        "owner_id": "bbbbbbbbbbbbbbbbbbbb0004",
+        "unit": "xof",
+        "amount": 1600,
+        "description": "part du chauffeur sur course payée en ligne",
+        "lines": [
+          {
+            "account": "ride_clearing",
+            "debit": 1600
+          },
+          {
+            "account": "agent_payables",
+            "credit": 1600
+          }
+        ]
+      },
+      {
+        "id": "000000000000000000000000",
+        "country": "TG",
+        "at": "2026-11-13T09:30:00Z",
+        "service": "vtc",
+        "reason": "ride_commission",
+        "ref_kind": "ride",
+        "ref_id": "76543210fedcba9876543210",
+        "owner_id": "bbbbbbbbbbbbbbbbbbbb0004",
+        "unit": "xof",
+        "amount": 400,
+        "description": "commission sur course payée en ligne",
+        "lines": [
+          {
+            "account": "ride_clearing",
+            "debit": 400
+          },
+          {
+            "account": "revenue_commission",
+            "credit": 400
+          }
+        ]
+      },
+      {
+        "id": "000000000000000000000000",
+        "country": "TG",
+        "at": "2026-11-13T09:30:00Z",
+        "service": "vtc",
+        "reason": "ride_commission_cash",
+        "ref_kind": "ride",
+        "ref_id": "76543210fedcba9876543210",
+        "owner_id": "bbbbbbbbbbbbbbbbbbbb0004",
+        "unit": "xof",
+        "amount": 400,
+        "description": "commission due sur course en espèces",
+        "lines": [
+          {
+            "account": "agent_receivable",
+            "debit": 400
+          },
+          {
+            "account": "revenue_commission",
+            "credit": 400
+          }
+        ]
+      },
+      {
+        "id": "000000000000000000000000",
+        "country": "TG",
+        "at": "2026-11-13T09:30:00Z",
+        "service": "vtc",
+        "reason": "ledger_payout",
+        "owner_id": "bbbbbbbbbbbbbbbbbbbb0004",
+        "unit": "xof",
+        "amount": 5000,
+        "description": "retrait",
+        "lines": [
+          {
+            "account": "agent_payables",
+            "debit": 5000
+          },
+          {
+            "account": "mobile_money",
+            "credit": 5000
+          }
+        ]
+      },
+      {
+        "id": "000000000000000000000000",
+        "country": "TG",
+        "at": "2026-11-13T09:30:00Z",
+        "service": "vtc",
+        "reason": "ledger_settlement",
+        "owner_id": "bbbbbbbbbbbbbbbbbbbb0004",
+        "unit": "xof",
+        "amount": 700,
+        "description": "dette réglée",
+        "lines": [
+          {
+            "account": "mobile_money",
+            "debit": 700
+          },
+          {
+            "account": "agent_receivable",
+            "credit": 700
+          }
+        ]
+      },
+      {
+        "id": "000000000000000000000000",
+        "country": "TG",
+        "at": "2026-11-13T09:30:00Z",
+        "service": "vtc",
+        "reason": "ledger_adjustment",
+        "owner_id": "bbbbbbbbbbbbbbbbbbbb0004",
+        "unit": "xof",
+        "amount": 250,
+        "description": "geste",
+        "lines": [
+          {
+            "account": "expense_operator_credits",
+            "debit": 250
+          },
+          {
+            "account": "agent_payables",
+            "credit": 250
+          }
+        ]
+      },
+      {
+        "id": "000000000000000000000000",
+        "country": "TG",
+        "at": "2026-11-13T09:30:00Z",
+        "service": "vtc",
+        "reason": "ledger_adjustment",
+        "owner_id": "bbbbbbbbbbbbbbbbbbbb0004",
+        "unit": "xof",
+        "amount": 250,
+        "description": "abandon",
+        "lines": [
+          {
+            "account": "agent_payables",
+            "debit": 250
+          },
+          {
+            "account": "expense_writeoff",
+            "credit": 250
+          }
+        ]
+      },
+      {
+        "id": "000000000000000000000000",
+        "country": "TG",
+        "at": "2026-11-13T09:30:00Z",
+        "service": "vtc",
+        "reason": "ledger_equipment",
+        "owner_id": "bbbbbbbbbbbbbbbbbbbb0004",
+        "unit": "xof",
+        "amount": 300,
+        "description": "matériel",
+        "lines": [
+          {
+            "account": "agent_payables",
+            "debit": 300
+          },
+          {
+            "account": "revenue_equipment",
+            "credit": 300
+          }
+        ]
+      },
+      {
+        "id": "000000000000000000000000",
+        "country": "TG",
+        "at": "2026-11-13T09:30:00Z",
+        "service": "vtc",
+        "reason": "ledger_commission",
+        "owner_id": "bbbbbbbbbbbbbbbbbbbb0004",
+        "unit": "xof",
+        "amount": 120,
+        "description": "commission",
+        "lines": [
+          {
+            "account": "agent_receivable",
+            "debit": 120
+          },
+          {
+            "account": "revenue_commission",
+            "credit": 120
+          }
+        ]
+      }
+    ]
+  }
+]

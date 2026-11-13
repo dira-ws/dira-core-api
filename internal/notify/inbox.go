@@ -72,7 +72,9 @@ func categoryOf(key string) string {
 		// les alertes de sécurité n'en est plus un. Et contrairement au SOS, le
 		// chauffeur concerné n'a RIEN demandé — personne d'autre que
 		// l'exploitation ne sait que ça vient d'arriver.
-		KeyStaffSpeeding:
+		KeyStaffSpeeding,
+		// L'équipe du colis : un code verrouillé, un envoi à trancher.
+		KeyStaffParcelCodeLocked, KeyStaffParcelIncident:
 		return CategoryStaff
 	case KeyEquipmentProposed, KeyEquipmentHandedOver, KeyEquipmentDue, KeyEquipmentCharged,
 		KeyEquipmentOverdue, KeyEquipmentBlocked, KeyEquipmentReturned:
@@ -114,6 +116,12 @@ func categoryOf(key string) string {
 		// le marchand, et lui donner une catégorie à part lui offrirait un
 		// interrupteur pour couper son gagne-pain.
 		return CategoryOrderUpdates
+	case KeyParcelPaymentKept:
+		// ⚠️ RANGÉE DANS `support`, DONC NON COUPABLE. De l'argent payé qui
+		// n'a rien acheté : c'est « ce qu'on a payé », comme le matériel, et
+		// quelqu'un qui aurait coupé les mises à jour ne doit pas croire son
+		// argent perdu.
+		return CategorySupport
 	default:
 		return CategoryOrderUpdates
 	}

@@ -141,6 +141,23 @@ type OperatorPromoRequest struct {
 	Justification string `json:"justification" validate:"required,min=3,max=500"`
 }
 
+// ProvisionInput : l'approvisionnement d'un portefeuille d'ENTREPRISE, sur
+// pièce — `POST /admin/wallets/{ownerID}/provision`.
+//
+// ⚠️ QUATRE CHAMPS EXIGÉS, ET C'EST LA RÈGLE QUI REND CE GESTE DÉFENDABLE. Il
+// pose de l'argent réel sur un solde sans qu'un prestataire de paiement l'ait
+// confirmé : seule la pièce le justifie. `amount` est un ENTIER dans la plus
+// petite unité de la monnaie du pays du portefeuille. `receipt_url` est
+// l'adresse du reçu téléversé (`POST /uploads?kind=receipt`), facultative : un
+// versement au bureau n'a pas toujours de papier.
+type ProvisionInput struct {
+	Amount        int    `json:"amount" validate:"required,gt=0"`
+	Means         string `json:"means" validate:"required,oneof=bank mobile_money cash"`
+	Reference     string `json:"reference" validate:"required,min=3,max=80"`
+	Justification string `json:"justification" validate:"required,min=3,max=500"`
+	ReceiptURL    string `json:"receipt_url" validate:"omitempty,url,max=2048"`
+}
+
 // BuyOptionRequest purchases a store option paid in tokens.
 type BuyOptionRequest struct {
 	Option string `json:"option" validate:"required"`

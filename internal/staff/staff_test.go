@@ -101,16 +101,32 @@ func TestARetiredScopeIsDroppedNotRefused(t *testing.T) {
 // S'ACCORDE PAS : ni dans la réponse de la console — qui la renverrait —, ni
 // dans le jeton.
 func TestARetiredScopeIsNeitherShownNorGranted(t *testing.T) {
-	legacy := &Member{Status: StatusActive, Scopes: []string{auth.ScopeCore, auth.ScopeFood, auth.ScopeVTC, "immo"}}
+	served := []string{auth.ScopeCore, auth.ScopeFood, auth.ScopeVTC, auth.ScopeParcel}
+	legacy := &Member{Status: StatusActive, Scopes: append(append([]string{}, served...), "immo")}
 	resp := toResponse(legacy)
-	assert.Equal(t, []string{auth.ScopeCore, auth.ScopeFood, auth.ScopeVTC}, resp.Scopes)
+	assert.Equal(t, served, resp.Scopes)
 	assert.True(t, resp.CoversEverything, "elle couvre toujours tout ce que le socle sert")
-	assert.Equal(t, []string{auth.ScopeCore, auth.ScopeFood, auth.ScopeVTC}, scopesFor(legacy))
+	assert.Equal(t, served, scopesFor(legacy))
 
 	only := &Member{Status: StatusActive, Scopes: []string{"immo"}}
 	assert.Equal(t, []string{}, toResponse(only).Scopes, "un tableau vide, pas un champ absent")
 	assert.False(t, toResponse(only).CoversEverything)
 	assert.Empty(t, scopesFor(only), "n'administre plus rien")
+}
+
+// ⚠️⚠️ UNE PORTÉE NOUVELLE NE S'ACCORDE À PERSONNE D'OFFICE. Une fiche qui
+// couvrait les trois verticales d'hier ne couvre pas le colis : `parcel` ne
+// part pas dans son jeton, et « toute la plateforme » cesse de s'afficher pour
+// elle. C'est le drapeau calculé qui fait son travail — stocké, il serait resté
+// vrai pour des gens qui ne couvrent pas le colis.
+func TestAMemberOfYesterdayDoesNotCoverTheParcel(t *testing.T) {
+	hier := &Member{Status: StatusActive, Scopes: []string{auth.ScopeCore, auth.ScopeFood, auth.ScopeVTC}}
+	assert.False(t, hier.CoversEverything(), "le colis est arrivé après elle")
+	assert.NotContains(t, scopesFor(hier), auth.ScopeParcel, "personne ne reçoit la portée du colis sans qu'on la lui donne")
+
+	out, err := normaliseScopes([]string{auth.ScopeParcel})
+	require.NoError(t, err, "la portée du colis s'accorde, elle n'est pas une faute de frappe")
+	assert.Equal(t, []string{auth.ScopeParcel}, out)
 }
 
 // ⚠️ Les TROIS cas de `scopesFor` rendent une liste vide, qui n'accorde rien.

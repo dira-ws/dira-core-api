@@ -39,7 +39,30 @@ const (
 	// crédit n'a lieu qu'à la CONFIRMATION du prestataire : créditer sur la
 	// réponse d'une initiation reviendrait à offrir l'argent.
 	PurposeWalletTopup = "wallet_topup"
+	// PurposeShipment paie un ENVOI de colis (`dira-food-api/internal/parcel`).
+	//
+	// ⚠️⚠️ IL PASSE PAR LE PORTEFEUILLE DU PAYEUR. À la confirmation, le socle
+	// crédite ce portefeuille du montant CONFIRMÉ — une recharge, écrite au
+	// journal comme toutes les recharges — PUIS annonce le paiement à la
+	// livraison, qui débite l'envoi de ce portefeuille. Un paiement plus court
+	// que l'envoi laisse donc l'argent au portefeuille et l'envoi en attente ;
+	// un paiement arrivé après l'annulation de l'envoi y reste aussi.
+	//
+	// ⚠️ ET IL NE SE LANCE QUE PAR LA ROUTE DE SERVICE, avec sa clé
+	// (`/internal/payments/initiate`) : le montant est celui que la verticale
+	// a figé. Il n'est PAS dans le `oneof` de `POST /payments/initiate`.
+	PurposeShipment = "shipment"
 )
+
+// VerticalPurposes : les objets payés qui vivent dans une VERTICALE — celle
+// qu'il faut prévenir à la confirmation, et de nouveau à chaque rejeu.
+//
+// ⚠️⚠️ UNE SEULE LISTE, LUE PAR LA CONFIRMATION, PAR LE REJEU D'UN DOUBLON ET
+// PAR LE CÂBLAGE DES RAPPELS (`cmd/api`). Séparées, elles ont divergé : un
+// `purpose` ajouté d'un côté seulement confirmait le premier webhook et
+// laissait tomber les reprises — l'échec le plus difficile à voir, puisqu'il
+// ne se produit que quand le prestataire réessaie.
+var VerticalPurposes = []string{PurposeOrder, PurposeRide, PurposeRideSubscription, PurposeShipment}
 
 // Payment statuses.
 const (

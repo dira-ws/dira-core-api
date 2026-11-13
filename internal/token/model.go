@@ -25,7 +25,19 @@ const (
 	// aucun usage. `Balance` y reste donc à zéro, et c'est `BalanceXOF` qui
 	// vit.
 	WalletTypeClient = "client"
-	// ⚠️ UN QUATRIÈME TYPE, `publisher`, existe encore EN BASE : les
+	// WalletTypeBusiness est le portefeuille PRÉPAYÉ d'une entreprise cliente
+	// du colis : elle y paie ses envois. `owner_id` est l'identifiant de sa
+	// fiche dans la verticale — le socle ne connaît pas l'entreprise, il tient
+	// son argent.
+	//
+	// ⚠️ UN TYPE À LUI, ET NON `client`. Une entreprise n'est pas une personne :
+	// son argent vient d'un approvisionnement par l'équipe, sur pièce
+	// (`ProvisionBusiness`), jamais d'un paiement mobile à son nom, et le
+	// journal le range sur son propre compte (« avances des entreprises »).
+	// Sous `client`, un paiement d'entreprise aurait débité au journal le compte
+	// des soldes clients, que personne n'avait crédité.
+	WalletTypeBusiness = "business"
+	// ⚠️ UN AUTRE TYPE, `publisher`, existe encore EN BASE : les
 	// portefeuilles d'une verticale qui ne fait plus partie de Dira. Ils se
 	// LISENT comme les autres (le type n'est qu'une étiquette à la lecture) ;
 	// `CreateWallet` n'en ouvre plus.
@@ -123,6 +135,23 @@ const (
 	// ReasonDebtRepaid : la dette remboursée, prise sur un crédit qui arrive
 	// (gain, recharge) ou réglée à l'agence.
 	ReasonDebtRepaid = "debt_repaid"
+	// ReasonBusinessProvision : l'argent qu'une entreprise a VERSÉ à la
+	// plateforme (virement, versement mobile, espèces au bureau), posé par
+	// l'équipe sur son portefeuille `business`, pièce à l'appui.
+	//
+	// ⚠️ UN MOTIF À PART DE `wallet_topup`. Une recharge vient d'un paiement que
+	// le prestataire a confirmé ; un approvisionnement vient d'une pièce que
+	// quelqu'un a vérifiée. Le journal ne les range pas sur le même compte de
+	// trésorerie, et un rapprochement bancaire doit pouvoir isoler les seconds.
+	ReasonBusinessProvision = "business_provision"
+	// ReasonParcelCancelCompensation : ce qu'un livreur reçoit quand l'envoi
+	// qu'il portait est annulé sous lui — le trajet qu'il a fait, pris sur ce
+	// que l'expéditeur n'a pas récupéré.
+	ReasonParcelCancelCompensation = "parcel_cancel_compensation"
+	// ReasonParcelReturnFee : le frais du retour d'un colis non remis, payé
+	// par l'expéditeur — pris sur son solde, porté à sa dette sinon (`Owe`,
+	// avec `payment_due`).
+	ReasonParcelReturnFee = "parcel_return_fee"
 )
 
 // Ce à quoi un mouvement se rattache.
@@ -158,6 +187,26 @@ const (
 	// versement idempotent — un bonus payé deux fois est de l'argent perdu que
 	// personne ne réclame.
 	RefChallenge = "challenge"
+	// LE COLIS (`dira-food-api/internal/parcel`) : TROIS GENRES, parce qu'un
+	// envoi bouge de l'argent sous trois identités qui ne se remplacent pas.
+	//
+	//   - RefShipment : l'ENVOI — son prix, payé une fois (`payment:shipment:<envoi>`),
+	//     et son remboursement s'il est annulé ;
+	//   - RefShipmentCharge : un FRAIS décidé après coup (le retour d'un colis
+	//     non remis), sous l'identifiant du frais ;
+	//   - RefShipmentLeg : une ÉTAPE (l'aller, le retour) et ce qui la touche —
+	//     les jetons de l'acceptation, le gain du livreur, la compensation d'une
+	//     annulation.
+	//
+	// ⚠️ L'ÉTAPE ET NON L'ENVOI POUR CE QUI PAIE UN LIVREUR. L'aller et le retour
+	// ont le même livreur et le même envoi : sous l'identifiant de l'envoi, le
+	// gain du retour aurait la clé de celui de l'aller, et ne serait jamais versé.
+	//
+	// ⚠️ ET AUCUN DE CES GENRES N'EST `order`. Rangé sous `order`, l'argent d'un
+	// colis passerait au journal par le compte des commandes de repas.
+	RefShipment       = "shipment"
+	RefShipmentCharge = "shipment_charge"
+	RefShipmentLeg    = "shipment_leg"
 )
 
 // Unités du grand livre.

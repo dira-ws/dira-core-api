@@ -313,14 +313,7 @@ func run(logger *slog.Logger) error {
 	// ⚠️ Le jeton de RAPPEL, pas celui de service. Le socle PRÉSENTE celui-ci
 	// et EXIGE l'autre : réutiliser le même ferait qu'un secret volé chez la
 	// livraison ouvrirait tous les portefeuilles du socle.
-	verticals := callback.NewRegistry(map[string]*callback.Client{
-		payment.PurposeOrder: callback.New("food", cfg.FoodBaseURL, cfg.FoodCallbackToken),
-		payment.PurposeRide:  callback.New("vtc", cfg.VTCBaseURL, cfg.VTCCallbackToken),
-		// L'abonnement de courses va chez les COURSES, comme une course —
-		// mais sous son propre nom, parce que son `ref_id` n'est pas une
-		// course.
-		payment.PurposeRideSubscription: callback.New("vtc", cfg.VTCBaseURL, cfg.VTCCallbackToken),
-	}).
+	verticals := callback.NewRegistry(paymentCallbacks(cfg)).
 		// ⚠️⚠️ L'ANALYTIQUE EST PRÉVENUE DES FAITS QUI CONCERNENT UNE PERSONNE,
 		// pas des paiements — voir `AlsoTell`. Elle détient le FIL DE
 		// CONVERSATION de chaque client et ses MESSAGES VOCAUX : du texte

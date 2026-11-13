@@ -131,3 +131,36 @@ func TestTheSIGIsCalledOnTheRightPathWhateverTheBase(t *testing.T) {
 			"base %q : le chemin doublé (`/api/api/…`) est le défaut qu'on corrige", srv.URL+suffixe)
 	}
 }
+
+// ⚠️⚠️ LA DISTANCE PAR LA ROUTE EST LUE — ET ZÉRO N'EST PAS UNE DISTANCE.
+//
+// Le SIG rend `routes[].distance_m`, et ce client la jetait : seul le pont des
+// courses la décodait. Le colis tarife au kilomètre par la route, et une
+// distance absente, nulle ou négative est un SIG muet ou un champ renommé —
+// jamais un trajet de zéro mètre, qui ne coûterait que la prise en charge.
+func TestARouteCarriesItsDistance(t *testing.T) {
+	r, err := sig(t, `{"routes":[{"duration_s":612.4,"distance_m":4210.6,
+	  "geometry":{"type":"LineString","coordinates":[[1.22,6.13],[1.25,6.16]]}}]}`).RouteAs(context.Background(), "lome", tournée, ModeMotorcycle)
+	require.NoError(t, err)
+	assert.Equal(t, 4211, r.DistanceM, "arrondie au mètre")
+	assert.True(t, r.HasDistance())
+	assert.Equal(t, 612, r.DurationS, "la durée arrive avec")
+
+	for _, corps := range []string{
+		`{"routes":[{"duration_s":600}]}`,
+		`{"routes":[{"duration_s":600,"distance_m":0}]}`,
+		`{"routes":[{"duration_s":600,"distance_m":-12}]}`,
+		`{"routes":[{"duration_s":600,"distance_m":null}]}`,
+		`{"routes":[]}`,
+	} {
+		r, err := sig(t, corps).Route(context.Background(), "lome", tournée)
+		require.NoError(t, err, corps)
+		assert.Zero(t, r.DistanceM, "aucune distance ne sort de : %s", corps)
+		assert.False(t, r.HasDistance(), "zéro n'est pas une distance : %s", corps)
+	}
+
+	// Un SIG absent : pas de distance, pas d'erreur — le colis refuse de vendre.
+	r, err = New("", "").Route(context.Background(), "lome", tournée)
+	require.NoError(t, err)
+	assert.False(t, r.HasDistance())
+}
