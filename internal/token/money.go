@@ -13,6 +13,7 @@ import (
 	"go.mongodb.org/mongo-driver/bson/primitive"
 
 	"github.com/kgtech-org/dira-core-api/pkg/apperr"
+	"github.com/kgtech-org/dira-core-api/pkg/refkind"
 	"github.com/kgtech-org/dira-core-api/pkg/storage"
 )
 
@@ -292,14 +293,12 @@ func parseRef(refKind, refID string) (*primitive.ObjectID, error) {
 	// ⚠️ `RefListing` et `RefListingBoost` n'y sont plus : lisibles, refusés à
 	// l'écriture (voir `model.go`).
 	//
-	// ⚠️ CETTE LISTE A UNE JUMELLE, le `oneof` de `serviceapi.walletRequest` :
-	// un genre ajouté ici et oublié là-bas est refusé en `422` par la route que
-	// les verticales appellent (`refkinds_test.go`).
-	switch refKind {
-	case RefOrder, RefRide, RefTip, RefRideAdjustment, RefEquipment,
-		RefShipment, RefShipmentCharge, RefShipmentLeg:
-	default:
-		return nil, apperr.Validation("reference kind must be order, ride, tip, ride_adjustment, equipment, shipment, shipment_charge or shipment_leg")
+	// ⚠️ LA LISTE EST CELLE DE `pkg/refkind`, que les verticales lisent aussi.
+	// Elle a une jumelle, le `oneof` de `serviceapi.walletRequest` : un genre
+	// accepté ici et oublié là-bas est refusé en `422` par la route que les
+	// verticales appellent (`refkinds_test.go` tient les deux égales).
+	if !refkind.Writable(refKind) {
+		return nil, apperr.Validation("unknown reference kind: " + refKind)
 	}
 	oid, err := primitive.ObjectIDFromHex(refID)
 	if err != nil {
