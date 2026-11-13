@@ -1,6 +1,6 @@
 # Specs frontend — par rôle
 
-> **Version 4.137.0** · 13 novembre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics`
+> **Version 4.138.0** · 13 novembre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics`
 
 **Cinq** documents, un par application. Chacun est **autonome** : tout ce qu'un frontend doit savoir pour son rôle, sans avoir à ouvrir les vingt specs de modules.
 
@@ -355,6 +355,18 @@ Chaque document porte la même version en en-tête, et son propre journal des ch
 - [ ] ⚠️ **`TRACKING_JWT_SECRET` renseigné dans chaque environnement déployé.** Vide, l'authentification du service de suivi est **désactivée** : n'importe qui connaissant un `delivery_id` suit la course. Le secret doit valoir **exactement** le `JWT_SECRET` de `dira-food-api`.
 
 ## Journal
+
+### 4.138.0 — 13 novembre 2026
+
+🆕 **`features.parcel` dans `GET /app/config`** — la livraison de colis, qui
+s'ouvre pays par pays. Elle n'est ouverte **nulle part** : la clé vaut `false`
+dans tous les pays et les deux éditions, et une clé absente vaut `false` elle
+aussi (comme `assistant_live`). Elle est décrite dans `DIRA-CLIENT.md` §4 ter.
+
+🔧 **Ce qui ne change pas** : la livraison de repas, les courses, l'assistant, et
+toutes les autres routes. Une application n'a rien à faire, sinon ne pas
+afficher d'entrée « Colis » tant que la clé vaut `false`. Le contrat du colis
+viendra avec ses routes.
 
 ### 4.137.0 — 13 novembre 2026
 

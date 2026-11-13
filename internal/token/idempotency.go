@@ -3,6 +3,7 @@ package token
 import (
 	"context"
 	"errors"
+	"strings"
 	"time"
 
 	"go.mongodb.org/mongo-driver/bson"
@@ -53,6 +54,27 @@ func earningsKey(ownerID, refKind, refID, reason string) string {
 // livreur qui accepte, un marchand qui propulse.
 func consumeKey(ownerID, refKind, refID, reason string) string {
 	return "consume:" + reason + ":" + ownerID + ":" + refKind + ":" + refID
+}
+
+// creditKey identifie un crédit de JETONS rattaché à un objet — les jetons
+// d'une acceptation rendus au livreur d'une étape annulée sous lui.
+//
+// ⚠️ LE MIROIR DE `consumeKey`, et il le faut : ce qui rend les jetons est
+// rejoué par une boîte d'envoi tant que le socle n'a pas répondu, et un crédit
+// sans clé rejoué trois fois en rend trois.
+func creditKey(ownerID, refKind, refID, reason string) string {
+	return "credit:" + reason + ":" + ownerID + ":" + refKind + ":" + refID
+}
+
+// provisionKey identifie l'approvisionnement d'un portefeuille d'entreprise
+// par sa PIÈCE : la référence du virement ou du versement.
+//
+// ⚠️ LA PIÈCE EST LA CLÉ NATURELLE. Un même virement saisi deux fois — un
+// double clic, une réponse perdue puis une nouvelle saisie — créditerait deux
+// fois de l'argent reçu une fois. La casse et les espaces ne distinguent pas
+// deux pièces.
+func provisionKey(ownerID, reference string) string {
+	return "provision:" + ownerID + ":" + strings.ToLower(strings.Join(strings.Fields(reference), " "))
 }
 
 // ClaimOperation réserve une opération, ou dit qu'elle a déjà eu lieu.

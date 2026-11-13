@@ -116,7 +116,10 @@ type Accounts interface {
 type Wallets interface {
 	CreateWallet(ctx context.Context, ownerID, walletType string) error
 	Consume(ctx context.Context, ownerID string, amount int, reason, refKind, refID string, ref map[string]any) error
-	Credit(ctx context.Context, ownerID string, amount int, reason string) error
+	// CreditRef pose des JETONS. La référence est FACULTATIVE : vide, le
+	// crédit n'est rattaché à rien (le comportement de toujours) ; donnée, il
+	// est rattaché à l'objet et idempotent.
+	CreditRef(ctx context.Context, ownerID string, amount int, reason, refKind, refID string) error
 	// TopUp recharge un portefeuille en ARGENT, comme le ferait un paiement
 	// abouti. ⚠️ À ne pas confondre avec `Credit`, qui pose des JETONS :
 	// deux unités, deux économies — le VTC vit de la commission, la
@@ -144,9 +147,13 @@ type Wallets interface {
 //
 // ⚠️ Sert au canal WhatsApp : une commande passée hors de l'application n'a
 // pas de session, et personne pour appuyer sur « payer ». C'est la verticale
-// qui déclenche, au nom du client.
+// qui déclenche, au nom du client. Et au colis : le paiement mobile d'un envoi
+// part du serveur, au montant figé.
+//
+// La clé d'idempotence est FACULTATIVE (exigée pour un envoi) : même clé, même
+// paiement, et l'opérateur n'est pas sollicité deux fois.
 type Payments interface {
-	InitiateFor(ctx context.Context, clientID, purpose, refID string, amountXOF int) (paymentURL string, err error)
+	InitiateFor(ctx context.Context, clientID, purpose, refID string, amount int, idempotencyKey string) (*payment.InitiatePaymentResponse, error)
 }
 
 // BackOffice is what a vertical's ADMINISTRATION reads about money.
@@ -539,9 +546,14 @@ type walletRequest struct {
 	// RefKind : ce que ce mouvement paie. ⚠️ `listing` et `listing_boost`, que
 	// le grand livre porte encore, ne s'acceptent plus : ils venaient d'une
 	// verticale qui ne fait plus partie de Dira (voir `token.RefListing`).
-	RefKind string         `json:"ref_kind" validate:"omitempty,oneof=order ride tip ride_adjustment"`
+	//
+	// ⚠️ LA JUMELLE DE `token.parseRef` : les trois genres du colis
+	// (`shipment`, `shipment_charge`, `shipment_leg`) y sont aussi. Un genre
+	// que le grand livre accepte et que cette liste oublie est refusé en `422`
+	// avant d'atteindre le grand livre (`refkinds_test.go`).
+	RefKind string         `json:"ref_kind" validate:"omitempty,oneof=order ride tip ride_adjustment shipment shipment_charge shipment_leg"`
 	Ref     map[string]any `json:"ref"`
-	Type    string         `json:"type" validate:"omitempty,oneof=driver merchant client"`
+	Type    string         `json:"type" validate:"omitempty,oneof=driver merchant client business"`
 }
 
 func (h *Handler) createWallet(w http.ResponseWriter, r *http.Request) {
@@ -551,9 +563,12 @@ func (h *Handler) createWallet(w http.ResponseWriter, r *http.Request) {
 	// de contournement. Une verticale qui ne l'envoyait pas voyait chaque
 	// lecture de portefeuille échouer en préprod (11 nov. 2026).
 	// `amount` reste ACCEPTÉ (et ignoré) : ceux qui l'envoient ne cassent pas.
+	//
+	// `business` : le portefeuille prépayé d'une entreprise cliente du colis,
+	// ouvert à la création de sa fiche — `owner_id` est cette fiche.
 	var req struct {
 		OwnerID string `json:"owner_id" validate:"required,len=24,hexadecimal"`
-		Type    string `json:"type" validate:"required,oneof=driver merchant client"`
+		Type    string `json:"type" validate:"required,oneof=driver merchant client business"`
 		Amount  int    `json:"amount"`
 	}
 	if err := httpx.DecodeService(r, &req); err != nil {
@@ -573,9 +588,15 @@ func (h *Handler) consume(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// POST /internal/wallets/credit — des JETONS, avec une référence FACULTATIVE.
+//
+// ⚠️ SANS `ref_kind`/`ref_id`, RIEN NE CHANGE : un crédit sans objet, comme
+// toujours. AVEC, il est rattaché à l'objet et IDEMPOTENT — rendre les jetons
+// de l'acceptation d'une étape annulée sous son livreur se rejoue sans en
+// rendre deux fois.
 func (h *Handler) credit(w http.ResponseWriter, r *http.Request) {
 	h.move(w, r, func(ctx context.Context, req walletRequest) error {
-		return h.wallets.Credit(ctx, req.OwnerID, req.Amount, req.Reason)
+		return h.wallets.CreditRef(ctx, req.OwnerID, req.Amount, req.Reason, req.RefKind, req.RefID)
 	})
 }
 
@@ -962,23 +983,53 @@ func (h *Handler) notifyStaff(w http.ResponseWriter, r *http.Request) {
 
 // --- paiements ---
 
+// POST /internal/payments/initiate {client_id, purpose, ref_id, amount,
+// idempotency_key?} — un paiement mobile lancé AU NOM d'un client.
+//
+// ⚠️ LA LIGNE EST RÉSERVÉE AVANT QUE L'OPÉRATEUR NE SOIT SOLLICITÉ, et la clé
+// la retrouve : un rappel qui réessaie après une réponse perdue retombe sur le
+// même paiement au lieu d'en demander un second. La réponse dit donc ce qu'il
+// faut pour le reprendre — `payment_id`, `status`, `expires_at`,
+// `operator_reached` — en plus de `payment_url`, que les appelants d'avant
+// lisent seul (des champs ajoutés, rien de retiré).
 func (h *Handler) initiatePayment(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		ClientID string `json:"client_id" validate:"required,len=24,hexadecimal"`
 		Purpose  string `json:"purpose" validate:"required,max=30"`
 		RefID    string `json:"ref_id" validate:"required,len=24,hexadecimal"`
 		Amount   int    `json:"amount" validate:"required,gt=0"`
+		// IdempotencyKey : la clé de la VERTICALE pour cette tentative, dérivée
+		// de son opération. Exigée pour un envoi.
+		IdempotencyKey string `json:"idempotency_key" validate:"omitempty,max=128"`
 	}
 	if err := httpx.DecodeService(r, &req); err != nil {
 		httpx.Error(w, r, err)
 		return
 	}
-	url, err := h.payments.InitiateFor(r.Context(), req.ClientID, req.Purpose, req.RefID, req.Amount)
+	resp, err := h.payments.InitiateFor(r.Context(), req.ClientID, req.Purpose, req.RefID, req.Amount, req.IdempotencyKey)
 	if err != nil {
 		httpx.Error(w, r, err)
 		return
 	}
-	httpx.JSON(w, http.StatusCreated, map[string]string{"payment_url": url})
+	httpx.JSON(w, http.StatusCreated, initiatedPayment{
+		PaymentURL:      resp.PaymentURL,
+		PaymentID:       resp.Payment.ID,
+		Status:          resp.Payment.Status,
+		ExpiresAt:       resp.Payment.ExpiresAt,
+		OperatorReached: resp.Payment.OperatorReached,
+	})
+}
+
+// initiatedPayment : ce que la route de service rend d'un paiement lancé.
+//
+// ⚠️ ÉTROITE, et nommée champ par champ plutôt que la réponse entière du
+// paiement : une verticale n'a pas à recevoir ce qu'elle n'a pas à garder.
+type initiatedPayment struct {
+	PaymentURL      string     `json:"payment_url"`
+	PaymentID       string     `json:"payment_id"`
+	Status          string     `json:"status"`
+	ExpiresAt       *time.Time `json:"expires_at,omitempty"`
+	OperatorReached bool       `json:"operator_reached"`
 }
 
 // --- back-office ---

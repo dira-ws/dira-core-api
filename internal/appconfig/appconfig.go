@@ -102,7 +102,11 @@ func (r *Repository) Save(ctx context.Context, reg appconfig.Registry, actor str
 			// l'écran de la console affiche le réglage qu'il vient d'envoyer,
 			// jusqu'au prochain rechargement. Une épreuve de parité tient
 			// cette liste à jour.
-			"live":       reg.Live,
+			"live": reg.Live,
+			// ⚠️ LES PAYS DU COLIS : ce `$set` REMPLACE, comme le reste. Une
+			// console qui renverrait le registre sans eux FERMERAIT le colis
+			// partout — elle doit étaler ce qu'elle a lu, pas le recopier.
+			"parcel":     reg.Parcel,
 			"updated_at": time.Now().UTC(),
 			"updated_by": actor,
 		},

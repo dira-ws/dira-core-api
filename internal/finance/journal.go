@@ -107,13 +107,25 @@ func EntryFor(tx *token.Transaction, w *token.Wallet, tokenPriceXOF int) *Entry 
 	e.Amount = amount
 	clearing := clearingOf(tx.RefKind)
 	walletAcc := walletAccount(w)
+	// payer : le compte d'où part un paiement, et où revient son
+	// remboursement. Les soldes clients, comme toujours — sauf pour le
+	// portefeuille d'une entreprise, dont l'argent est une avance qu'elle a
+	// versée (`AccBusinessAdvances`).
+	//
+	// ⚠️ POUR CE TYPE SEULEMENT. Un client, un livreur ou un marchand qui paie
+	// garde la ligne d'aujourd'hui : c'est ce qui fait que le journal d'un repas
+	// et d'une course ne change pas d'un octet.
+	payer := AccClientWallets
+	if w != nil && w.Type == token.WalletTypeBusiness {
+		payer = walletAcc
+	}
 	switch tx.Reason {
 	case token.ReasonWalletTopup:
 		e.Lines = lines(AccMobileMoney, AccClientWallets, amount)
 	case token.ReasonPromoCredit:
 		e.Lines = lines(AccExpensePromo, AccPromoCredits, amount)
 	case token.ReasonPayment:
-		from := AccClientWallets
+		from := payer
 		if source == "promo" {
 			from = AccPromoCredits
 		}
@@ -125,11 +137,34 @@ func EntryFor(tx *token.Transaction, w *token.Wallet, tokenPriceXOF int) *Entry 
 		}
 		e.Lines = lines(from, AccAgentPayables, amount)
 	case token.ReasonRefund:
-		e.Lines = lines(clearing, AccClientWallets, amount)
+		e.Lines = lines(clearing, payer, amount)
 	case token.ReasonOrderPayout:
 		e.Lines = lines(AccOrderClearing, AccMerchantPayables, amount)
 	case token.ReasonDeliveryFee:
-		e.Lines = lines(AccOrderClearing, AccAgentPayables, amount)
+		// Le gain d'une course débite le passage de ce qu'elle a servi : celui
+		// des colis pour une étape d'envoi, celui des commandes pour tout le
+		// reste — la ligne de toujours.
+		e.Lines = lines(deliveryClearingOf(tx.RefKind), AccAgentPayables, amount)
+	case token.ReasonParcelCancelCompensation:
+		// Le trajet d'un livreur annulé sous lui : pris sur ce que
+		// l'expéditeur n'a pas récupéré, resté au passage des colis.
+		e.Lines = lines(clearing, AccAgentPayables, amount)
+	case token.ReasonParcelReturnFee:
+		// Le frais d'un retour, pris sur le solde de l'expéditeur. Ce que le
+		// solde n'a pas couvert devient une créance (`payment_due`, plus bas).
+		if credit {
+			e.Lines = lines(clearing, payer, amount)
+		} else {
+			e.Lines = lines(payer, clearing, amount)
+		}
+	case token.ReasonBusinessProvision:
+		// L'argent qu'une entreprise a versé : la trésorerie par où il est
+		// arrivé (le moyen de la pièce), vers ses avances.
+		if treasury := TreasuryAccount(refString(tx.Ref, "means")); treasury != "" && credit {
+			e.Lines = lines(treasury, walletAcc, amount)
+		} else {
+			e.Lines = lines(AccSuspense, walletAcc, amount)
+		}
 	case token.ReasonEquipment:
 		if credit {
 			// La caution rendue.
@@ -169,17 +204,41 @@ func lines(debit, credit string, amount int) []Line {
 	return []Line{{Account: debit, Debit: amount}, {Account: credit, Credit: amount}}
 }
 
+// clearingOf : le compte de passage de ce qu'un mouvement paie.
+//
+// ⚠️ LES TROIS GENRES DU COLIS ONT LE LEUR. Sans eux, ils tomberaient ici
+// « à classer » — et le prix d'un envoi, son remboursement, le frais de son
+// retour finiraient dans le compte d'attente que le balayage signale.
 func clearingOf(refKind string) string {
 	switch refKind {
 	case token.RefRide, token.RefRideAdjustment, token.RefTip:
 		return AccRideClearing
 	case token.RefOrder:
 		return AccOrderClearing
+	case token.RefShipment, token.RefShipmentCharge, token.RefShipmentLeg:
+		return AccParcelClearing
 	}
 	return AccSuspense
 }
 
+// deliveryClearingOf : le passage que débite le GAIN d'un livreur.
+//
+// ⚠️⚠️ LE COMPTE DES COMMANDES ÉTAIT ÉCRIT EN DUR, et il le reste pour tout ce
+// qui n'est pas un colis : la ligne d'un repas ne bouge pas d'un octet. Mais le
+// gain d'une étape d'envoi débité du passage des commandes aurait vidé un
+// compte que le colis n'a jamais rempli, et laissé plein celui qu'il a rempli.
+func deliveryClearingOf(refKind string) string {
+	if c := clearingOf(refKind); c == AccParcelClearing {
+		return c
+	}
+	return AccOrderClearing
+}
+
 // walletAccount : le passif que porte un portefeuille selon son propriétaire.
+//
+// ⚠️ `business` A LE SIEN : sans ce cas, le portefeuille d'une entreprise
+// tombait dans le défaut — le compte des agents — et son approvisionnement se
+// serait lu comme une dette envers les livreurs.
 func walletAccount(w *token.Wallet) string {
 	if w == nil {
 		return AccSuspense
@@ -189,9 +248,29 @@ func walletAccount(w *token.Wallet) string {
 		return AccClientWallets
 	case token.WalletTypeMerchant:
 		return AccMerchantPayables
+	case token.WalletTypeBusiness:
+		return AccBusinessAdvances
 	default:
 		return AccAgentPayables
 	}
+}
+
+// refString lit une chaîne de la référence d'un mouvement, vide sinon.
+func refString(ref map[string]any, key string) string {
+	s, _ := ref[key].(string)
+	return s
+}
+
+// parcelWords : ce que l'exploitation LIT d'un mouvement du colis, au lieu du
+// genre technique.
+//
+// ⚠️ « COLIS », JAMAIS « COMMANDE ». C'est le mot qui permet à qui relit le
+// journal de reconnaître un envoi ; les autres genres gardent le libellé
+// d'aujourd'hui.
+var parcelWords = map[string]string{
+	token.RefShipment:       "colis",
+	token.RefShipmentCharge: "frais de colis",
+	token.RefShipmentLeg:    "étape de colis",
 }
 
 func describe(tx *token.Transaction, w *token.Wallet) string {
@@ -202,13 +281,19 @@ func describe(tx *token.Transaction, w *token.Wallet) string {
 			who = "client"
 		case token.WalletTypeMerchant:
 			who = "marchand"
+		case token.WalletTypeBusiness:
+			who = "entreprise"
 		default:
 			who = "agent"
 		}
 	}
 	ref := ""
 	if tx.RefKind != "" && tx.RefID != nil {
-		ref = " · " + tx.RefKind + " #" + strings.ToUpper(tx.RefID.Hex()[len(tx.RefID.Hex())-5:])
+		kind := tx.RefKind
+		if word, ok := parcelWords[kind]; ok {
+			kind = word
+		}
+		ref = " · " + kind + " #" + strings.ToUpper(tx.RefID.Hex()[len(tx.RefID.Hex())-5:])
 	}
 	return fmt.Sprintf("%s · %s%s", tx.Reason, who, ref)
 }

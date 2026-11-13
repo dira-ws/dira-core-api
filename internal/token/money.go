@@ -5,11 +5,15 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/http"
+	"slices"
+	"strings"
 	"time"
 
 	"go.mongodb.org/mongo-driver/bson/primitive"
 
 	"github.com/kgtech-org/dira-core-api/pkg/apperr"
+	"github.com/kgtech-org/dira-core-api/pkg/storage"
 )
 
 // Le grand livre porte deux unités. Les mouvements d'ARGENT passent tous par
@@ -287,10 +291,15 @@ func parseRef(refKind, refID string) (*primitive.ObjectID, error) {
 	}
 	// ⚠️ `RefListing` et `RefListingBoost` n'y sont plus : lisibles, refusés à
 	// l'écriture (voir `model.go`).
+	//
+	// ⚠️ CETTE LISTE A UNE JUMELLE, le `oneof` de `serviceapi.walletRequest` :
+	// un genre ajouté ici et oublié là-bas est refusé en `422` par la route que
+	// les verticales appellent (`refkinds_test.go`).
 	switch refKind {
-	case RefOrder, RefRide, RefTip, RefRideAdjustment, RefEquipment:
+	case RefOrder, RefRide, RefTip, RefRideAdjustment, RefEquipment,
+		RefShipment, RefShipmentCharge, RefShipmentLeg:
 	default:
-		return nil, apperr.Validation("reference kind must be order, ride, tip, ride_adjustment or equipment")
+		return nil, apperr.Validation("reference kind must be order, ride, tip, ride_adjustment, equipment, shipment, shipment_charge or shipment_leg")
 	}
 	oid, err := primitive.ObjectIDFromHex(refID)
 	if err != nil {
@@ -562,6 +571,119 @@ func (s *Service) Owe(ctx context.Context, ownerID string, amountXOF int, reason
 		"amount_xof": amountXOF, "paid_xof": paid, "owed_xof": owed, "reason": reason, "owner_id": ownerID,
 	})
 	return paid, owed, nil
+}
+
+// --- L'APPROVISIONNEMENT D'UN PORTEFEUILLE D'ENTREPRISE ---------------------
+
+// ProvisionMeans : par où l'argent d'une entreprise est arrivé. Ce sont les
+// moyens de la trésorerie (`finance.TreasuryAccount`) : le journal en tire le
+// compte qu'il débite.
+//
+// ⚠️ LA MÊME LISTE QUE LA TRÉSORERIE, ÉPROUVÉE DES DEUX CÔTÉS : un moyen
+// accepté ici et inconnu du journal tomberait « à classer ».
+var ProvisionMeans = []string{"bank", "mobile_money", "cash"}
+
+// errNotABusinessWallet : seul le portefeuille d'une entreprise se provisionne
+// sur pièce.
+//
+// ⚠️ LA RÈGLE DU SOLDE EN ARGENT TIENT : celui d'une personne se recharge par un
+// paiement que le prestataire confirme, celui d'une entreprise par une pièce
+// que l'équipe vérifie — chacun par sa porte. Le type refusé part dans
+// `reason`.
+var errNotABusinessWallet = apperr.New("wallet_not_business",
+	"only a business wallet is provisioned from a proof of payment", http.StatusUnprocessableEntity)
+
+// errProvisionRecorded : cette pièce a déjà approvisionné ce portefeuille.
+//
+// ⚠️ UN REFUS, ET NON UN SUCCÈS SILENCIEUX comme le rejeu d'un débit. Ici, une
+// personne saisit : la même référence deux fois est un double clic ou une
+// erreur de saisie, et elle doit le LIRE — un « OK » muet laisserait croire
+// qu'un second virement a été crédité.
+var errProvisionRecorded = apperr.Conflict("provision_already_recorded",
+	"this reference has already provisioned this wallet")
+
+// ProvisionBusiness pose sur le portefeuille d'une entreprise l'argent qu'elle
+// a versé, PIÈCE À L'APPUI : le montant, le moyen, la référence de la pièce et
+// le motif sont exigés ; la pièce elle-même (le reçu) se joint quand elle
+// existe.
+//
+// L'écriture va de la trésorerie (le moyen) aux avances des entreprises, et la
+// dette de l'entreprise — un retour qu'elle n'avait pas pu payer — se
+// rembourse d'office sur ce qui arrive, dans la même transaction.
+func (s *Service) ProvisionBusiness(ctx context.Context, actorID, ownerID string, in ProvisionInput) (*WalletResponse, error) {
+	in.Means = strings.TrimSpace(in.Means)
+	in.Reference = strings.TrimSpace(in.Reference)
+	in.Justification = strings.TrimSpace(in.Justification)
+	in.ReceiptURL = storage.Bare(strings.TrimSpace(in.ReceiptURL))
+	// ⚠️ LA PIÈCE EST VÉRIFIÉE ICI AUSSI, et pas seulement au décodage de la
+	// route : c'est le service qui porte la règle, quelle que soit la porte
+	// par laquelle on l'appelle.
+	missing := func(field string) error {
+		return apperr.Validation("a provision needs its " + field).
+			WithMeta(map[string]any{"fields": []string{field}})
+	}
+	switch {
+	case in.Amount <= 0:
+		return nil, missing("amount")
+	case !slices.Contains(ProvisionMeans, in.Means):
+		return nil, missing("means")
+	case len([]rune(in.Reference)) < 3:
+		return nil, missing("reference")
+	case len([]rune(in.Justification)) < 3 || len([]rune(in.Justification)) > maxJustificationLen:
+		return nil, missing("justification")
+	}
+	wallet, err := s.findWallet(ctx, ownerID)
+	if err != nil {
+		return nil, err
+	}
+	if wallet.Type != WalletTypeBusiness {
+		return nil, errNotABusinessWallet.WithMeta(map[string]any{"reason": wallet.Type})
+	}
+
+	ref := map[string]any{"means": in.Means, "reference": in.Reference}
+	if in.ReceiptURL != "" {
+		ref["receipt_url"] = in.ReceiptURL
+	}
+	now := time.Now().UTC()
+	repaid := 0
+	err = s.repo.WithTransaction(ctx, func(txCtx context.Context) error {
+		if err := s.repo.ClaimOperation(txCtx, provisionKey(ownerID, in.Reference)); err != nil {
+			return err
+		}
+		if err := s.repo.CreditField(txCtx, wallet.ID, "balance_xof", in.Amount); err != nil {
+			return apperr.Internal(err)
+		}
+		if err := s.repo.InsertTransaction(txCtx, &Transaction{
+			WalletID: wallet.ID, Kind: KindPurchase, Reason: ReasonBusinessProvision,
+			Amount: in.Amount, Unit: UnitXOF, Ref: ref, CreatedAt: now,
+		}); err != nil {
+			return apperr.Internal(err)
+		}
+		repaid, err = s.repayDebt(txCtx, wallet, nil, "", now)
+		return err
+	})
+	if errors.Is(err, errOperationApplied) {
+		return nil, errProvisionRecorded.WithMeta(map[string]any{"reason": in.Reference})
+	}
+	if err != nil {
+		return nil, err
+	}
+	// ⚠️ LE JOURNAL D'AUDIT PORTE TOUTE LA PIÈCE ET QUI L'A POSÉE : le grand
+	// livre dit combien et par où, l'audit dit qui et sur quelle justification.
+	audited := map[string]any{
+		"owner_id": ownerID, "amount": in.Amount, "means": in.Means, "reference": in.Reference,
+		"justification": in.Justification, "actor_id": actorID, "debt_repaid": repaid,
+	}
+	if in.ReceiptURL != "" {
+		audited["receipt_url"] = in.ReceiptURL
+	}
+	s.record(ctx, "token.business_provision", wallet.ID.Hex(), audited)
+
+	resp, err := s.WalletOf(ctx, ownerID)
+	if err != nil {
+		return nil, err
+	}
+	return &resp, nil
 }
 
 // SettleDebt enregistre un remboursement de dette réglé HORS solde — à

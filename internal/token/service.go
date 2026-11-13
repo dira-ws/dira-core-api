@@ -156,11 +156,15 @@ func NewService(repo Repo, auditRec *audit.Recorder, payments PurchaseInitiator,
 // la confirmation d'une recharge — paiement déjà marqué `succeeded` —
 // échouait en 500 sans rien créditer. Une garde qui contredit ses appelants
 // ne protège rien : elle perd de l'argent en silence.
+//
+// ⚠️ `business` S'OUVRE POUR UNE FICHE QUE LE SOCLE NE CONNAÎT PAS : celle
+// d'une entreprise cliente du colis, tenue par la verticale. Son propriétaire
+// est cette fiche, et c'est voulu — le socle tient l'argent, pas l'entreprise.
 func (s *Service) CreateWallet(ctx context.Context, ownerID, walletType string) error {
 	switch walletType {
-	case WalletTypeDriver, WalletTypeMerchant, WalletTypeClient:
+	case WalletTypeDriver, WalletTypeMerchant, WalletTypeClient, WalletTypeBusiness:
 	default:
-		return apperr.Validation("wallet type must be driver, merchant or client")
+		return apperr.Validation("wallet type must be driver, merchant, client or business")
 	}
 	oid, err := primitive.ObjectIDFromHex(ownerID)
 	if err != nil {
@@ -246,6 +250,22 @@ func (s *Service) Consume(ctx context.Context, ownerID string, amount int, reaso
 // Credit adds amount tokens to the owner's wallet (called after a confirmed
 // payment) and records the matching transaction atomically.
 func (s *Service) Credit(ctx context.Context, ownerID string, amount int, reason string) error {
+	return s.CreditRef(ctx, ownerID, amount, reason, "", "")
+}
+
+// CreditRef : le même crédit de jetons, RATTACHÉ à un objet quand une
+// référence est donnée — et alors rejouable sans risque.
+//
+// ⚠️ SANS RÉFÉRENCE, RIEN NE CHANGE : aucune clé, aucun rattachement, la même
+// ligne au grand livre que `Credit` a toujours écrite. Un crédit sans objet
+// n'a pas de clé naturelle — deux crédits identiques peuvent être deux gestes
+// voulus.
+//
+// ⚠️ AVEC UNE RÉFÉRENCE, IL EST IDEMPOTENT (`credit:<motif>:<propriétaire>:
+// <genre>:<id>`). C'est ce qui permet de rendre les jetons d'une acceptation
+// depuis une boîte d'envoi qui rejoue tant que le socle n'a pas répondu : la
+// seconde fois est un succès, sans second crédit.
+func (s *Service) CreditRef(ctx context.Context, ownerID string, amount int, reason, refKind, refID string) error {
 	if amount <= 0 {
 		return apperr.Validation("amount must be positive")
 	}
@@ -253,8 +273,17 @@ func (s *Service) Credit(ctx context.Context, ownerID string, amount int, reason
 	if err != nil {
 		return err
 	}
+	refOID, err := parseRef(refKind, refID)
+	if err != nil {
+		return err
+	}
 
 	err = s.repo.WithTransaction(ctx, func(txCtx context.Context) error {
+		if refOID != nil {
+			if err := s.repo.ClaimOperation(txCtx, creditKey(ownerID, refKind, refID, reason)); err != nil {
+				return err
+			}
+		}
 		if err := s.repo.Credit(txCtx, wallet.ID, amount); err != nil {
 			return apperr.Internal(err)
 		}
@@ -263,6 +292,8 @@ func (s *Service) Credit(ctx context.Context, ownerID string, amount int, reason
 			Kind:      KindPurchase,
 			Reason:    reason,
 			Amount:    amount,
+			RefID:     refOID,
+			RefKind:   refKind,
 			CreatedAt: time.Now().UTC(),
 		}
 		if err := s.repo.InsertTransaction(txCtx, tx); err != nil {
@@ -270,13 +301,22 @@ func (s *Service) Credit(ctx context.Context, ownerID string, amount int, reason
 		}
 		return nil
 	})
+	if errors.Is(err, errOperationApplied) {
+		// DÉJÀ RENDUS : un succès. L'appelant voulait que les jetons reviennent ;
+		// ils sont revenus.
+		slog.InfoContext(ctx, "token: credit replayed, not applied twice",
+			"owner_id", ownerID, "ref_kind", refKind, "ref_id", refID, "reason", reason)
+		return nil
+	}
 	if err != nil {
 		return err
 	}
 
-	s.record(ctx, "token.credit", wallet.ID.Hex(), map[string]any{
-		"amount": amount, "reason": reason, "owner_id": ownerID,
-	})
+	after := map[string]any{"amount": amount, "reason": reason, "owner_id": ownerID}
+	if refOID != nil {
+		after["ref_kind"], after["ref_id"] = refKind, refID
+	}
+	s.record(ctx, "token.credit", wallet.ID.Hex(), after)
 	return nil
 }
 

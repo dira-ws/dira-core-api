@@ -89,6 +89,11 @@ type Registry struct {
 	// en majuscules). Pays absent = le direct est éteint là-bas — voir
 	// `live.go`.
 	Live map[string]LiveRule `bson:"live,omitempty" json:"live,omitempty"`
+	// Parcel : les pays où le COLIS est ouvert (`parcel.go`).
+	//
+	// ⚠️ UNE LISTE QUI OUVRE, à l'inverse des règles qui retirent : absente, le
+	// colis n'est ouvert NULLE PART.
+	Parcel []string `bson:"parcel,omitempty" json:"parcel,omitempty"`
 	// ListRules : clé de liste → sa règle (c'est `Allow` qui y compte).
 	ListRules map[string]Rule `bson:"lists,omitempty" json:"lists,omitempty"`
 	// Languages : le catalogue des langues, dans l'ordre de la console. Vide =
@@ -252,6 +257,10 @@ func (r *Registry) Resolve(countryCode, ed string) Resolved {
 	// et l'application aurait ouvert un micro vers un relais qui refuse.
 	block, live := r.LiveFor(countryCode, ed)
 	out.Features[FeatureAssistantLive] = live
+	// ⚠️⚠️ LE COLIS AUSSI S'ÉCRIT APRÈS LA BOUCLE, pour la même raison : la
+	// boucle l'aurait annoncé « disponible » dans tous les pays, et c'est
+	// `ParcelOpen`, fermé par défaut, qui décide.
+	out.Features[FeatureParcel] = r.ParcelOpen(countryCode, ed)
 	if live {
 		out.Live = &block
 	}

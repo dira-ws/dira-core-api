@@ -129,6 +129,10 @@ const (
 	ScopeCore = "core"
 	ScopeFood = "food"
 	ScopeVTC  = "vtc"
+	// ScopeParcel : l'équipe du COLIS. Ses routes d'administration vivent dans
+	// la livraison, mais derrière leur propre vérificateur : la portée `food`
+	// n'ouvre pas le colis, et la portée `parcel` n'ouvre pas les repas.
+	ScopeParcel = "parcel"
 )
 
 // AllScopes est l'ensemble des verticales de la plateforme.
@@ -141,7 +145,7 @@ const (
 // (`Verify` ne trie pas les portées) : aucune route ne la demande plus, elle
 // n'ouvre donc rien. C'est `internal/staff` qui cesse de la rendre et de
 // l'accorder.
-var AllScopes = []string{ScopeCore, ScopeFood, ScopeVTC}
+var AllScopes = []string{ScopeCore, ScopeFood, ScopeVTC, ScopeParcel}
 
 // Allows dit si ces claims couvrent la verticale demandée.
 //

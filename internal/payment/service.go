@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"slices"
 	"strings"
 	"time"
 
@@ -494,17 +495,13 @@ func (s *Service) replayRefPaid(ctx context.Context, p *Payment) {
 // VERTICALE — par opposition au portefeuille et aux jetons, que le socle
 // crédite lui-même.
 //
-// ⚠️ Une seule liste, lue par la confirmation ET par le rejeu d'un doublon.
-// Séparées, elles ont divergé : un `purpose` ajouté d'un côté seulement
-// confirmait le premier webhook et laissait tomber les reprises — l'échec le
-// plus difficile à voir, puisqu'il ne se produit que quand le prestataire
-// réessaie.
+// ⚠️ Une seule liste (`VerticalPurposes`), lue par la confirmation ET par le
+// rejeu d'un doublon. Séparées, elles ont divergé : un `purpose` ajouté d'un
+// côté seulement confirmait le premier webhook et laissait tomber les reprises
+// — l'échec le plus difficile à voir, puisqu'il ne se produit que quand le
+// prestataire réessaie.
 func notifiesVertical(purpose string) bool {
-	switch purpose {
-	case PurposeOrder, PurposeRide, PurposeRideSubscription:
-		return true
-	}
-	return false
+	return slices.Contains(VerticalPurposes, purpose)
 }
 
 func (s *Service) confirmSucceeded(ctx context.Context, p *Payment) error {
@@ -521,8 +518,25 @@ func (s *Service) confirmSucceeded(ctx context.Context, p *Payment) error {
 
 	s.record(ctx, "payment.succeeded", p, StatusSucceeded)
 
-	switch p.Purpose {
-	case PurposeOrder, PurposeRide, PurposeRideSubscription:
+	// ⚠️⚠️ LE PAIEMENT D'UN ENVOI CRÉDITE D'ABORD LE PORTEFEUILLE DU PAYEUR, ET
+	// SEULEMENT ICI. La recharge se fait UNE fois, au passage `pending` →
+	// `succeeded` que la ligne vient de gagner ; le rejeu d'un doublon
+	// (`replayRefPaid`) ré-annonce, il ne recharge pas — recharger au rejeu
+	// créditerait deux fois un paiement reçu une fois. Et elle précède
+	// l'annonce : la livraison, prévenue, débite l'envoi de ce portefeuille,
+	// qui doit déjà porter l'argent.
+	if p.Purpose == PurposeShipment {
+		if s.OnWalletToppedUp == nil {
+			slog.ErrorContext(ctx, "payment: OnWalletToppedUp hook not configured, the shipment payment is NOT credited",
+				"payment_id", p.ID.Hex(), "ref_id", p.RefID.Hex())
+		} else if err := s.OnWalletToppedUp(ctx, p.UserID.Hex(), p.Amount, p.ID.Hex()); err != nil {
+			// Le montant CRÉDITÉ est celui du paiement confirmé, jamais celui
+			// d'une requête : c'est le prestataire qui fait foi.
+			return apperr.Internal(err)
+		}
+	}
+
+	if notifiesVertical(p.Purpose) {
 		if s.OnRefPaid == nil {
 			slog.WarnContext(ctx, "payment: OnRefPaid hook not configured, skipping",
 				"payment_id", p.ID.Hex(), "purpose", p.Purpose, "ref_id", p.RefID.Hex())
@@ -534,6 +548,10 @@ func (s *Service) confirmSucceeded(ctx context.Context, p *Payment) error {
 		if err := s.OnRefPaid(ctx, p.Purpose, p.RefID.Hex(), p.ID.Hex()); err != nil {
 			return apperr.Internal(err)
 		}
+		return nil
+	}
+
+	switch p.Purpose {
 	case PurposeWalletTopup:
 		if s.OnWalletToppedUp == nil {
 			slog.WarnContext(ctx, "payment: OnWalletToppedUp hook not configured, skipping", "payment_id", p.ID.Hex())
@@ -674,17 +692,24 @@ func (s *Service) SetPreferences(p PaymentPreferences) { s.preferences = p }
 //
 // ⚠️ Sert au canal WhatsApp : une commande passée hors de l'application n'a pas
 // de session, et personne pour appuyer sur « payer ». La verticale déclenche,
-// le client reçoit un lien.
+// le client reçoit un lien. Et au COLIS : le paiement mobile d'un envoi part du
+// serveur, au montant que la verticale a figé.
 //
-// Rend l'URL SEULE et non la réponse entière : l'appelant n'a besoin que de
-// cela, et lui rendre l'objet complet ferait traverser au réseau des champs
-// qu'aucune verticale n'a à connaître.
-func (s *Service) InitiateFor(ctx context.Context, clientID, purpose, refID string, amountXOF int) (string, error) {
-	resp, err := s.Initiate(ctx, clientID, InitiatePaymentRequest{
-		Purpose: purpose, RefID: refID, Amount: amountXOF,
-	})
-	if err != nil {
-		return "", err
+// ⚠️ LA CLÉ D'IDEMPOTENCE est celle de la verticale, bornée au compte du
+// payeur comme celle d'une application : même clé, même paiement, et rien de
+// redemandé à l'opérateur pour un paiement qui a déjà sa référence. Elle est
+// EXIGÉE pour un envoi (`errShipmentNeedsKey`) : une ligne qu'on ne pourrait pas
+// retrouver après une réponse perdue ferait demander un second paiement.
+func (s *Service) InitiateFor(ctx context.Context, clientID, purpose, refID string, amountXOF int, idempotencyKey string) (*InitiatePaymentResponse, error) {
+	idempotencyKey = strings.TrimSpace(idempotencyKey)
+	if purpose == PurposeShipment && idempotencyKey == "" {
+		return nil, errShipmentNeedsKey
 	}
-	return resp.PaymentURL, nil
+	return s.Initiate(ctx, clientID, InitiatePaymentRequest{
+		Purpose: purpose, RefID: refID, Amount: amountXOF, IdempotencyKey: idempotencyKey,
+	})
 }
+
+// errShipmentNeedsKey : le paiement d'un envoi se lance avec sa clé.
+var errShipmentNeedsKey = apperr.Validation("a shipment payment needs its idempotency key").
+	WithMeta(map[string]any{"fields": []string{"idempotency_key"}})

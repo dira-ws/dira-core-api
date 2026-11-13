@@ -26,6 +26,8 @@ func refBody(kind string) string {
 func TestEveryReferenceKindTheLedgerTakesPassesTheServiceRoute(t *testing.T) {
 	for _, kind := range []string{
 		token.RefOrder, token.RefRide, token.RefTip, token.RefRideAdjustment,
+		// Les trois genres du colis : l'envoi, un frais, une étape.
+		token.RefShipment, token.RefShipmentCharge, token.RefShipmentLeg,
 	} {
 		var req walletRequest
 		require.NoError(t, httpx.DecodeService(httptest.NewRequest("POST", "/", strings.NewReader(refBody(kind))), &req), kind)

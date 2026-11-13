@@ -98,7 +98,33 @@ func (h *Handler) Mount(r chi.Router, authMW func(http.Handler) http.Handler, ga
 		g.Get("/admin/wallets/{ownerID}/transactions", h.adminTransactions)
 		g.Post("/admin/wallets/{ownerID}/promo", h.adminPromo)
 		g.Post("/admin/wallets/{ownerID}/settle-debt", h.adminSettleDebt)
+		// L'APPROVISIONNEMENT d'un portefeuille d'ENTREPRISE, sur pièce : le
+		// seul geste de la console qui pose de l'argent réel sur un solde, et
+		// le seul type de portefeuille qu'il accepte.
+		g.Post("/admin/wallets/{ownerID}/provision", h.adminProvision)
 	})
+}
+
+// POST /admin/wallets/{ownerID}/provision — { amount, means, reference,
+// justification, receipt_url? } : l'argent qu'une entreprise a versé, posé sur
+// son portefeuille `business`.
+func (h *Handler) adminProvision(w http.ResponseWriter, r *http.Request) {
+	userID, _, err := caller(r)
+	if err != nil {
+		httpx.Error(w, r, err)
+		return
+	}
+	var req ProvisionInput
+	if err := httpx.Decode(r, &req); err != nil {
+		httpx.Error(w, r, err)
+		return
+	}
+	wallet, err := h.svc.ProvisionBusiness(r.Context(), userID, chi.URLParam(r, "ownerID"), req)
+	if err != nil {
+		httpx.Error(w, r, err)
+		return
+	}
+	httpx.JSON(w, http.StatusOK, wallet)
 }
 
 // GET /admin/wallets/{ownerID}/transactions?cursor=&limit=

@@ -1,6 +1,6 @@
 # App CLIENT UNIFIÉE — LIVRAISON **et** COURSES — contrat d'API
 
-> **Version 4.137.0** · 13 novembre 2026
+> **Version 4.138.0** · 13 novembre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Livraison : `…/api/v1/food` · Courses : `…/api/v1/vtc` · Combiné : `…/api/v1/analytics` · Suivi : `wss://tracking-staging.dira.llc`
 
 ---
@@ -232,7 +232,8 @@ GET /app/config          # SANS jeton — lu AVANT l'écran de connexion
     "promo_codes": false, "challenges": false, "raffle": false,
     "banners": false, "feed": true, "assistant": true,
     "assistant_auto_order": false, "voice_messages": true, "wallet": false,
-    "assistant_live": true, "assistant_support_request": true
+    "assistant_live": true, "assistant_support_request": true,
+    "parcel": false                                       // 🆕 v4.138.0
   },
   "lists": {
     "payment_methods": ["cash", "mobile_money"],
@@ -268,13 +269,20 @@ GET /app/config          # SANS jeton — lu AVANT l'écran de connexion
 > de la plateforme, pas un réglage de pays. Absent (serveur plus ancien) :
 > tenez-vous-en à 60 s et 2 Mio.
 
-> 🆕 ⚠️⚠️ **`assistant_live` est le SEUL drapeau de ce catalogue dont le défaut
-> est `false`** (v4.103.0). Tous les autres partent de « disponible partout » et
-> une règle les retire ; l'assistant **en direct**, lui, s'allume pays par pays
-> — il est facturé à la seconde dans les deux sens, et les langues qu'il parle
-> se mesurent avant de s'ouvrir. Il vaut `true` **exactement** quand le bloc
-> `live` est servi, et le serveur garantit que les deux ne se contredisent
-> jamais. Détail du mode : **§8 quater**.
+> 🆕 ⚠️⚠️ **`assistant_live` et `parcel` sont les DEUX drapeaux de ce catalogue
+> dont le défaut est `false`.** Tous les autres partent de « disponible
+> partout » et une règle les retire ; ces deux-là s'allument pays par pays.
+>
+> - **`assistant_live`** (v4.103.0) — l'assistant **en direct**, facturé à la
+>   seconde dans les deux sens, dans des langues qui se mesurent avant de
+>   s'ouvrir. Il vaut `true` **exactement** quand le bloc `live` est servi, et
+>   le serveur garantit que les deux ne se contredisent jamais. Détail du mode :
+>   **§8 quater**.
+> - 🆕 **`parcel`** (v4.138.0) — **la livraison de colis**. Elle s'ouvre pays par
+>   pays, et elle n'est **ouverte nulle part aujourd'hui** : `parcel` vaut
+>   `false` dans tous les pays et les deux éditions. **N'affichez aucune entrée
+>   « Colis »** tant qu'elle vaut `false`. Son contrat — les écrans, les routes,
+>   les refus — arrivera avec ses routes ; d'ici là, il n'y a rien à appeler.
 
 **Lisez-la une fois à l'ouverture**, gardez-la en mémoire, et **cachez vos
 entrées de menu** sur ce qu'elle dit. C'est ce qui évite de proposer un bouton
@@ -300,8 +308,9 @@ que votre application : traitez-la comme **disponible** (`true`), jamais comme
 coupée — sinon une fonction nouvelle disparaîtrait de vos écrans le jour où le
 serveur l'annonce.
 
-⚠️ **SAUF CELLE QUI S'ALLUME** : `assistant_live`. Absente, elle vaut
-**`false`** — le direct est facturé à la seconde.
+⚠️ **SAUF CELLES QUI S'ALLUMENT** : `assistant_live` et `parcel`. Absentes,
+elles valent **`false`** — le direct est facturé à la seconde, et un pays où le
+colis n'est pas ouvert ne vend rien.
 
 🔧 **`immo` N'EST PLUS SERVIE** (v4.137.0) : ce drapeau ne vous concernait pas,
 et il a disparu du catalogue. Retirez ce que votre code en lisait ; un serveur
@@ -338,6 +347,7 @@ il faut savoir laquelle est laquelle :
 | `subscriptions` | `POST /subscriptions` refuse |
 | `feed`, `banners` | 🚧 **pas encore appliqué côté serveur** — fiez-vous à `/app/config` |
 | `raffle`, `voice_messages`, `assistant*` | **écrans d'application** : aucune route à refuser, `/app/config` est la seule source |
+| 🆕 `parcel` | **un verrou** : le colis n'est ouvert nulle part, et aucune de ses routes n'est encore servie |
 
 ⚠️⚠️ **Pour les deux dernières lignes, `/app/config` n'est pas un confort,
 c'est la SEULE chose qui coupe la fonction.** Une application qui ne la lit pas
@@ -397,8 +407,9 @@ parlée** (celle qu'on parle à Dira). On peut lire en français et parler wolof
 
 ### ⚠️ Rien n'est coupé par défaut
 
-Un déploiement neuf sert `true` partout et aucune liste : la plateforme se
-comporte **exactement comme avant**. Les restrictions sont posées pays par pays
+Un déploiement neuf sert `true` partout — sauf `assistant_live` et `parcel`, qui
+s'allument pays par pays — et aucune liste : la plateforme se comporte
+**exactement comme avant**. Les restrictions sont posées pays par pays
 et édition par édition depuis la console.
 
 ---
@@ -1953,8 +1964,9 @@ GET /app/config          # SANS jeton, à l'ouverture
   } }
 ```
 
-**⚠️⚠️ Ce drapeau-là est le seul du catalogue dont le défaut est `false`.** Tous
-les autres partent de « disponible partout » et une règle les retire ; le direct
+**⚠️⚠️ Ce drapeau-là est l'un des deux du catalogue dont le défaut est `false`**
+(l'autre est `parcel`, le colis — §4 ter). Tous les autres partent de
+« disponible partout » et une règle les retire ; le direct
 est facturé **à la seconde dans les deux sens**, et la prise en charge vocale
 des langues qui en ont besoin se **mesure** avant de s'ouvrir. Il s'allume donc
 pays par pays, et `features.assistant_live` vaut `true` **exactement** quand le
@@ -3088,7 +3100,8 @@ du métier.
 - [ ] L'édition **republiée** par le serveur est lue au moins une fois : recevoir `full` en se croyant `lite` veut dire que l'en-tête n'arrive pas.
 - [ ] `POST /me/devices` porte `edition` : sans elle, une notification arrive **deux fois**, dont une dans l'application qui n'a rien commandé.
 - [ ] **`GET /app/config`** lu à l'ouverture (§4 ter), gardé en mémoire, et les menus cachés dessus.
-- [ ] Une clé **absente** de `features` est traitée comme **disponible**, jamais comme coupée — **sauf `assistant_live`**, qui s'allume : absente, elle vaut `false`.
+- [ ] Une clé **absente** de `features` est traitée comme **disponible**, jamais comme coupée — **sauf `assistant_live` et `parcel`**, qui s'allument : absentes, elles valent `false`.
+- [ ] 🆕 **Aucune entrée « Colis »** tant que `features.parcel` vaut `false` — c'est le cas partout aujourd'hui.
 - [ ] Les listes de `lists` sont **croisées** avec les listes réelles du métier, jamais affichées telles quelles.
 - [ ] `403 feature_unavailable_in_edition` ne propose **pas** de se reconnecter ; `error.feature` dit quoi cacher.
 - [ ] **Le vocal** (§8) : les **quatre** `state` traités — `understood`, `ordered`, `needs_support`, `failed` —, et jamais « c'est commandé » déduit de la présence d'un `plan`.
@@ -3126,6 +3139,14 @@ du métier.
 ---
 
 ## 15. Journal
+
+### 4.138.0 — 13 novembre 2026
+
+🆕 **`features.parcel`** dans `GET /app/config` (§4 ter) : la livraison de colis,
+qui s'ouvre pays par pays. Elle n'est ouverte **nulle part** : la clé vaut `false`
+dans tous les pays et les deux éditions, et une clé absente vaut `false` elle
+aussi. **Rien à faire** de plus que de ne pas afficher d'entrée « Colis » tant
+qu'elle vaut `false`. Rien d'autre ne change pour cette application.
 
 ### 4.137.0 — 13 novembre 2026
 

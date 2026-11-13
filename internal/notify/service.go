@@ -347,8 +347,11 @@ func applyRing(m *PushMessage, tmpl Template, locale, callID string, ttl time.Du
 // ⚠️ ET UN MESSAGE SANS OBJET NE SE REGROUPE PAS : rendre une chaîne vide est
 // une réponse — sans identifiant, deux messages n'ont aucune raison de se
 // remplacer, et les confondre en perdrait un.
+//
+// ⚠️ `shipment_id` : un ENVOI de colis passe par huit états, et c'est l'envoi
+// que l'expéditeur suit — pas la course qui le porte.
 func collapseOf(data map[string]string) string {
-	for _, k := range []string{"ride_id", "order_id", "delivery_id", "ticket_id"} {
+	for _, k := range []string{"ride_id", "order_id", "shipment_id", "delivery_id", "ticket_id"} {
 		if v := data[k]; v != "" {
 			// Le PRÉFIXE compte : une course et une commande peuvent porter le
 			// même identifiant hexadécimal, et se remplaceraient l'une

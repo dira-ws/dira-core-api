@@ -768,3 +768,10 @@ other = "The maximum top-up is below the minimum: no amount could ever pass"
 
 [errors.topup_preset_out_of_bounds]
 other = "A suggested amount falls outside the bounds: the button would be refused"
+
+# Provisioning a business wallet from a proof of payment (parcels).
+[errors.wallet_not_business]
+other = "Only a business wallet can be provisioned from a proof of payment"
+
+[errors.provision_already_recorded]
+other = "This reference has already provisioned this wallet — check it before entering it again"

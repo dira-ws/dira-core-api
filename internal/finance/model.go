@@ -135,9 +135,25 @@ const (
 	AccAgentPayables    = "agent_payables"     // ce que l'on doit aux livreurs et chauffeurs
 	AccAgentTokens      = "agent_tokens"       // jetons prépayés non consommés (produit constaté d'avance)
 	AccEquipmentDeposit = "equipment_deposits" // cautions à rendre
+	// AccBusinessAdvances : l'argent que les ENTREPRISES clientes du colis ont
+	// versé d'avance sur leur portefeuille, pas encore dépensé.
+	//
+	// ⚠️ UN PASSIF À LUI, et non les soldes clients : une entreprise n'est pas
+	// une personne, son argent arrive par un approvisionnement sur pièce et
+	// non par un paiement mobile. Sans ce compte, son paiement aurait débité
+	// les soldes clients, que personne n'avait crédités.
+	AccBusinessAdvances = "business_advances"
 	// Transit : une commande ou une course payée, pas encore répartie.
 	AccOrderClearing = "order_clearing"
 	AccRideClearing  = "ride_clearing"
+	// AccParcelClearing : un envoi de colis payé, pas encore réparti entre son
+	// livreur, la plateforme et ce qui est rendu à l'expéditeur.
+	//
+	// ⚠️ UN PASSAGE À LUI, et non celui des commandes : le colis ne passe jamais
+	// par la commande de repas. Mêlés, un remboursement d'envoi et le produit
+	// d'un restaurant s'annuleraient dans le même compte, et aucun des deux ne
+	// se rapprocherait plus.
+	AccParcelClearing = "parcel_clearing"
 	// Produits.
 	AccRevenueCommission = "revenue_commission"
 	AccRevenueTokens     = "revenue_tokens"
@@ -228,8 +244,10 @@ var Chart = []Account{
 	{AccAgentPayables, KindLiability, "Dû aux livreurs et chauffeurs"},
 	{AccAgentTokens, KindLiability, "Jetons prépayés"},
 	{AccEquipmentDeposit, KindLiability, "Cautions de matériel"},
+	{AccBusinessAdvances, KindLiability, "Avances des entreprises"},
 	{AccOrderClearing, KindClearing, "Commandes payées à répartir"},
 	{AccRideClearing, KindClearing, "Courses payées à répartir"},
+	{AccParcelClearing, KindClearing, "Colis payés à répartir"},
 	{AccRevenueCommission, KindRevenue, "Commissions"},
 	{AccRevenueTokens, KindRevenue, "Jetons consommés"},
 	{AccRevenueEquipment, KindRevenue, "Matériel vendu et loué"},

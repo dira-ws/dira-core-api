@@ -173,7 +173,7 @@ const (
 // seau et le cycle de vie des objets savent tous deux appliquer. Le dire
 // ailleurs — sur l'appelant, sur le module — aurait demandé que chacun y
 // pense.
-var privateKinds = map[string]bool{KindVoice: true, KindSpeech: true, KindDocument: true, KindReceipt: true}
+var privateKinds = map[string]bool{KindVoice: true, KindSpeech: true, KindDocument: true, KindReceipt: true, KindProof: true}
 
 // expiringKinds : les genres dont les OBJETS s'effacent d'eux-mêmes, au bout
 // de `Config.PrivateRetention`.
@@ -216,6 +216,19 @@ const (
 	// KindReceipt : la pièce d'une déclaration d'argent — facture, reçu,
 	// quittance. Privée et jamais éphémère, pour la même raison.
 	KindReceipt = "receipt"
+	// KindProof : la PHOTO D'UNE REMISE DE COLIS — au retrait, à la remise, à
+	// l'échec d'une remise, au passage de main entre deux livreurs.
+	//
+	// ⚠️⚠️ PRIVÉE : elle montre une porte, un visage, l'intérieur d'un colis —
+	// la maison de quelqu'un qui n'a pas de compte chez nous. Et JAMAIS
+	// ÉPHÉMÈRE dans le seau : c'est ce qu'on regarde pour trancher une
+	// réclamation, et sa durée de garde est celle que la verticale décide
+	// (elle la retire elle-même, par `/internal/files/forget`), pas celle d'un
+	// vocal.
+	//
+	// ⚠️ DES PHOTOS SEULEMENT, ni PDF ni SVG : un téléphone de livreur
+	// photographie, il ne scanne pas.
+	KindProof = "proof"
 )
 
 // Private dit si ce genre exige une URL signée.
@@ -286,6 +299,10 @@ var Kinds = map[string]Kind{
 	// Une attestation d'assurance est un PDF neuf fois sur dix.
 	KindReceipt:  {proofTypes, MaxProofBytes, "jpeg, png, webp, pdf"},
 	KindDocument: {proofTypes, MaxProofBytes, "jpeg, png, webp, pdf"},
+
+	// LA PHOTO D'UNE REMISE DE COLIS — privée et gardée (voir `KindProof`).
+	// Le format et le plafond d'une photographie.
+	KindProof: {photoTypes, MaxUploadBytes, "jpeg, png, webp"},
 }
 
 // merge réunit deux tables de formats. ⚠️ Une fonction plutôt qu'une table

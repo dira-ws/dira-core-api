@@ -186,3 +186,18 @@ func (c *Client) Require(ctx context.Context, feature string) error {
 func (c *Client) Live(ctx context.Context) (LiveBlock, bool) {
 	return c.Registry(ctx).LiveFor(country.FromContext(ctx), edition.FromContext(ctx))
 }
+
+// ParcelOpen dit si le COLIS est ouvert pour le pays et l'édition de CET appel.
+//
+// ⚠️⚠️ LE DÉFAUT EST NON, comme le direct. Registre nil, socle muet sans
+// registre déjà lu, pays absent : le colis est FERMÉ — un pays ne se met pas à
+// vendre parce qu'un appel HTTP a échoué. Le dernier registre lu, lui, passe
+// avant ce défaut (`Registry`) : une panne passagère ne rouvre pas, et ne ferme
+// pas, ce que l'exploitation a décidé.
+//
+// ⚠️ C'EST UN VERROU : la verticale le lit sur CHAQUE route du colis, et pas
+// seulement pour l'affichage. Ne jamais lui substituer `Allows` ou `Require`,
+// qui disent « disponible » par défaut.
+func (c *Client) ParcelOpen(ctx context.Context) bool {
+	return c.Registry(ctx).ParcelOpen(country.FromContext(ctx), edition.FromContext(ctx))
+}

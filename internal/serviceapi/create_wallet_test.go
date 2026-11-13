@@ -39,9 +39,12 @@ func TestOpeningAWalletNeedsNoAmount(t *testing.T) {
 	const owner = "6b0f3c1a9e2d4f5a6b7c8d90"
 	assert.Equal(t, http.StatusNoContent, call(`{"owner_id":"`+owner+`","type":"merchant"}`), "sans montant")
 	assert.Equal(t, http.StatusNoContent, call(`{"owner_id":"`+owner+`","type":"driver","amount":1}`), "le contournement de la livraison")
-	assert.Equal(t, []string{owner + ":merchant", owner + ":driver"}, o.opened)
+	// Le portefeuille prépayé d'une entreprise cliente du colis : sa fiche, que
+	// le socle ne connaît pas, en est le propriétaire.
+	assert.Equal(t, http.StatusNoContent, call(`{"owner_id":"`+owner+`","type":"business"}`), "une entreprise")
+	assert.Equal(t, []string{owner + ":merchant", owner + ":driver", owner + ":business"}, o.opened)
 	assert.Equal(t, http.StatusUnprocessableEntity, call(`{"owner_id":"`+owner+`"}`), "sans type")
 	assert.Equal(t, http.StatusUnprocessableEntity, call(`{"owner_id":"`+owner+`","type":"jardin"}`), "type inconnu")
 	assert.Equal(t, http.StatusUnprocessableEntity, call(`{"owner_id":"`+owner+`","type":"publisher"}`), "type retiré")
-	assert.Len(t, o.opened, 2, "rien d'ouvert sur un refus")
+	assert.Len(t, o.opened, 3, "rien d'ouvert sur un refus")
 }

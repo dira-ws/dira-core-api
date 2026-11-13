@@ -177,9 +177,14 @@ func parseQuery(r *http.Request) (PaymentQuery, error) {
 // ⚠️ UNE SEULE LISTE PAR NOTION, celle des constantes. Une liste de statuts
 // écrite une deuxième fois a déjà produit un refus FAUX ailleurs sur cette
 // plateforme : on ajoute un statut d'un côté, et l'autre côté le refuse.
+//
+// ⚠️ `shipment` Y EST, alors qu'il n'est pas dans le `oneof` de
+// `POST /payments/initiate` : une application ne LANCE pas le paiement d'un
+// envoi (le serveur le fait), mais elle doit pouvoir le RETROUVER quand la
+// réponse s'est perdue — `?purpose=shipment&ref_id=<envoi>`.
 func knownPurpose(p string) bool {
 	switch p {
-	case PurposeOrder, PurposeRide, PurposeRideSubscription, PurposeTokenPurchase, PurposeWalletTopup:
+	case PurposeOrder, PurposeRide, PurposeRideSubscription, PurposeTokenPurchase, PurposeWalletTopup, PurposeShipment:
 		return true
 	}
 	return false

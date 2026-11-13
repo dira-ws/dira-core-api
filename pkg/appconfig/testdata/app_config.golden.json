@@ -1,0 +1,662 @@
+[
+  {
+    "registry": "nil",
+    "country": "TG",
+    "edition": "full",
+    "features": {
+      "assistant": true,
+      "assistant_auto_order": true,
+      "assistant_live": false,
+      "assistant_support_request": true,
+      "banners": true,
+      "challenges": true,
+      "feed": true,
+      "multi_car": true,
+      "pool": true,
+      "promo_codes": true,
+      "raffle": true,
+      "rental": true,
+      "scheduled_rides": true,
+      "subscriptions": true,
+      "trip_share": true,
+      "voice_messages": true,
+      "wallet": true
+    }
+  },
+  {
+    "registry": "nil",
+    "country": "TG",
+    "edition": "lite",
+    "features": {
+      "assistant": true,
+      "assistant_auto_order": true,
+      "assistant_live": false,
+      "assistant_support_request": true,
+      "banners": true,
+      "challenges": true,
+      "feed": true,
+      "multi_car": true,
+      "pool": true,
+      "promo_codes": true,
+      "raffle": true,
+      "rental": true,
+      "scheduled_rides": true,
+      "subscriptions": true,
+      "trip_share": true,
+      "voice_messages": true,
+      "wallet": true
+    }
+  },
+  {
+    "registry": "nil",
+    "country": "GA",
+    "edition": "full",
+    "features": {
+      "assistant": true,
+      "assistant_auto_order": true,
+      "assistant_live": false,
+      "assistant_support_request": true,
+      "banners": true,
+      "challenges": true,
+      "feed": true,
+      "multi_car": true,
+      "pool": true,
+      "promo_codes": true,
+      "raffle": true,
+      "rental": true,
+      "scheduled_rides": true,
+      "subscriptions": true,
+      "trip_share": true,
+      "voice_messages": true,
+      "wallet": true
+    }
+  },
+  {
+    "registry": "nil",
+    "country": "GA",
+    "edition": "lite",
+    "features": {
+      "assistant": true,
+      "assistant_auto_order": true,
+      "assistant_live": false,
+      "assistant_support_request": true,
+      "banners": true,
+      "challenges": true,
+      "feed": true,
+      "multi_car": true,
+      "pool": true,
+      "promo_codes": true,
+      "raffle": true,
+      "rental": true,
+      "scheduled_rides": true,
+      "subscriptions": true,
+      "trip_share": true,
+      "voice_messages": true,
+      "wallet": true
+    }
+  },
+  {
+    "registry": "nil",
+    "country": "TD",
+    "edition": "full",
+    "features": {
+      "assistant": true,
+      "assistant_auto_order": true,
+      "assistant_live": false,
+      "assistant_support_request": true,
+      "banners": true,
+      "challenges": true,
+      "feed": true,
+      "multi_car": true,
+      "pool": true,
+      "promo_codes": true,
+      "raffle": true,
+      "rental": true,
+      "scheduled_rides": true,
+      "subscriptions": true,
+      "trip_share": true,
+      "voice_messages": true,
+      "wallet": true
+    }
+  },
+  {
+    "registry": "nil",
+    "country": "TD",
+    "edition": "lite",
+    "features": {
+      "assistant": true,
+      "assistant_auto_order": true,
+      "assistant_live": false,
+      "assistant_support_request": true,
+      "banners": true,
+      "challenges": true,
+      "feed": true,
+      "multi_car": true,
+      "pool": true,
+      "promo_codes": true,
+      "raffle": true,
+      "rental": true,
+      "scheduled_rides": true,
+      "subscriptions": true,
+      "trip_share": true,
+      "voice_messages": true,
+      "wallet": true
+    }
+  },
+  {
+    "registry": "nil",
+    "country": "",
+    "edition": "full",
+    "features": {
+      "assistant": true,
+      "assistant_auto_order": true,
+      "assistant_live": false,
+      "assistant_support_request": true,
+      "banners": true,
+      "challenges": true,
+      "feed": true,
+      "multi_car": true,
+      "pool": true,
+      "promo_codes": true,
+      "raffle": true,
+      "rental": true,
+      "scheduled_rides": true,
+      "subscriptions": true,
+      "trip_share": true,
+      "voice_messages": true,
+      "wallet": true
+    }
+  },
+  {
+    "registry": "nil",
+    "country": "",
+    "edition": "lite",
+    "features": {
+      "assistant": true,
+      "assistant_auto_order": true,
+      "assistant_live": false,
+      "assistant_support_request": true,
+      "banners": true,
+      "challenges": true,
+      "feed": true,
+      "multi_car": true,
+      "pool": true,
+      "promo_codes": true,
+      "raffle": true,
+      "rental": true,
+      "scheduled_rides": true,
+      "subscriptions": true,
+      "trip_share": true,
+      "voice_messages": true,
+      "wallet": true
+    }
+  },
+  {
+    "registry": "vide",
+    "country": "TG",
+    "edition": "full",
+    "features": {
+      "assistant": true,
+      "assistant_auto_order": true,
+      "assistant_live": false,
+      "assistant_support_request": true,
+      "banners": true,
+      "challenges": true,
+      "feed": true,
+      "multi_car": true,
+      "pool": true,
+      "promo_codes": true,
+      "raffle": true,
+      "rental": true,
+      "scheduled_rides": true,
+      "subscriptions": true,
+      "trip_share": true,
+      "voice_messages": true,
+      "wallet": true
+    }
+  },
+  {
+    "registry": "vide",
+    "country": "TG",
+    "edition": "lite",
+    "features": {
+      "assistant": true,
+      "assistant_auto_order": true,
+      "assistant_live": false,
+      "assistant_support_request": true,
+      "banners": true,
+      "challenges": true,
+      "feed": true,
+      "multi_car": true,
+      "pool": true,
+      "promo_codes": true,
+      "raffle": true,
+      "rental": true,
+      "scheduled_rides": true,
+      "subscriptions": true,
+      "trip_share": true,
+      "voice_messages": true,
+      "wallet": true
+    }
+  },
+  {
+    "registry": "vide",
+    "country": "GA",
+    "edition": "full",
+    "features": {
+      "assistant": true,
+      "assistant_auto_order": true,
+      "assistant_live": false,
+      "assistant_support_request": true,
+      "banners": true,
+      "challenges": true,
+      "feed": true,
+      "multi_car": true,
+      "pool": true,
+      "promo_codes": true,
+      "raffle": true,
+      "rental": true,
+      "scheduled_rides": true,
+      "subscriptions": true,
+      "trip_share": true,
+      "voice_messages": true,
+      "wallet": true
+    }
+  },
+  {
+    "registry": "vide",
+    "country": "GA",
+    "edition": "lite",
+    "features": {
+      "assistant": true,
+      "assistant_auto_order": true,
+      "assistant_live": false,
+      "assistant_support_request": true,
+      "banners": true,
+      "challenges": true,
+      "feed": true,
+      "multi_car": true,
+      "pool": true,
+      "promo_codes": true,
+      "raffle": true,
+      "rental": true,
+      "scheduled_rides": true,
+      "subscriptions": true,
+      "trip_share": true,
+      "voice_messages": true,
+      "wallet": true
+    }
+  },
+  {
+    "registry": "vide",
+    "country": "TD",
+    "edition": "full",
+    "features": {
+      "assistant": true,
+      "assistant_auto_order": true,
+      "assistant_live": false,
+      "assistant_support_request": true,
+      "banners": true,
+      "challenges": true,
+      "feed": true,
+      "multi_car": true,
+      "pool": true,
+      "promo_codes": true,
+      "raffle": true,
+      "rental": true,
+      "scheduled_rides": true,
+      "subscriptions": true,
+      "trip_share": true,
+      "voice_messages": true,
+      "wallet": true
+    }
+  },
+  {
+    "registry": "vide",
+    "country": "TD",
+    "edition": "lite",
+    "features": {
+      "assistant": true,
+      "assistant_auto_order": true,
+      "assistant_live": false,
+      "assistant_support_request": true,
+      "banners": true,
+      "challenges": true,
+      "feed": true,
+      "multi_car": true,
+      "pool": true,
+      "promo_codes": true,
+      "raffle": true,
+      "rental": true,
+      "scheduled_rides": true,
+      "subscriptions": true,
+      "trip_share": true,
+      "voice_messages": true,
+      "wallet": true
+    }
+  },
+  {
+    "registry": "vide",
+    "country": "",
+    "edition": "full",
+    "features": {
+      "assistant": true,
+      "assistant_auto_order": true,
+      "assistant_live": false,
+      "assistant_support_request": true,
+      "banners": true,
+      "challenges": true,
+      "feed": true,
+      "multi_car": true,
+      "pool": true,
+      "promo_codes": true,
+      "raffle": true,
+      "rental": true,
+      "scheduled_rides": true,
+      "subscriptions": true,
+      "trip_share": true,
+      "voice_messages": true,
+      "wallet": true
+    }
+  },
+  {
+    "registry": "vide",
+    "country": "",
+    "edition": "lite",
+    "features": {
+      "assistant": true,
+      "assistant_auto_order": true,
+      "assistant_live": false,
+      "assistant_support_request": true,
+      "banners": true,
+      "challenges": true,
+      "feed": true,
+      "multi_car": true,
+      "pool": true,
+      "promo_codes": true,
+      "raffle": true,
+      "rental": true,
+      "scheduled_rides": true,
+      "subscriptions": true,
+      "trip_share": true,
+      "voice_messages": true,
+      "wallet": true
+    }
+  },
+  {
+    "registry": "réglé",
+    "country": "TG",
+    "edition": "full",
+    "features": {
+      "assistant": true,
+      "assistant_auto_order": true,
+      "assistant_live": true,
+      "assistant_support_request": true,
+      "banners": true,
+      "challenges": true,
+      "feed": true,
+      "multi_car": true,
+      "pool": true,
+      "promo_codes": true,
+      "raffle": true,
+      "rental": true,
+      "scheduled_rides": true,
+      "subscriptions": true,
+      "trip_share": true,
+      "voice_messages": true,
+      "wallet": true
+    },
+    "live": {
+      "max_session_seconds": 600,
+      "idle_timeout_seconds": 30,
+      "languages": [
+        "fr",
+        "shu"
+      ],
+      "input": {
+        "encodings": [
+          "pcm16"
+        ],
+        "sample_rate": 16000
+      }
+    }
+  },
+  {
+    "registry": "réglé",
+    "country": "TG",
+    "edition": "lite",
+    "features": {
+      "assistant": true,
+      "assistant_auto_order": true,
+      "assistant_live": true,
+      "assistant_support_request": true,
+      "banners": true,
+      "challenges": true,
+      "feed": true,
+      "multi_car": true,
+      "pool": true,
+      "promo_codes": true,
+      "raffle": true,
+      "rental": false,
+      "scheduled_rides": true,
+      "subscriptions": true,
+      "trip_share": false,
+      "voice_messages": true,
+      "wallet": true
+    },
+    "lists": {
+      "payment_methods": [
+        "cash",
+        "mobile_money"
+      ]
+    },
+    "live": {
+      "max_session_seconds": 600,
+      "idle_timeout_seconds": 30,
+      "languages": [
+        "fr",
+        "shu"
+      ],
+      "input": {
+        "encodings": [
+          "pcm16"
+        ],
+        "sample_rate": 16000
+      }
+    }
+  },
+  {
+    "registry": "réglé",
+    "country": "GA",
+    "edition": "full",
+    "features": {
+      "assistant": true,
+      "assistant_auto_order": true,
+      "assistant_live": false,
+      "assistant_support_request": true,
+      "banners": true,
+      "challenges": true,
+      "feed": false,
+      "multi_car": true,
+      "pool": true,
+      "promo_codes": true,
+      "raffle": true,
+      "rental": true,
+      "scheduled_rides": true,
+      "subscriptions": true,
+      "trip_share": true,
+      "voice_messages": true,
+      "wallet": true
+    }
+  },
+  {
+    "registry": "réglé",
+    "country": "GA",
+    "edition": "lite",
+    "features": {
+      "assistant": true,
+      "assistant_auto_order": true,
+      "assistant_live": false,
+      "assistant_support_request": true,
+      "banners": true,
+      "challenges": true,
+      "feed": false,
+      "multi_car": true,
+      "pool": true,
+      "promo_codes": true,
+      "raffle": true,
+      "rental": false,
+      "scheduled_rides": true,
+      "subscriptions": true,
+      "trip_share": true,
+      "voice_messages": true,
+      "wallet": true
+    },
+    "lists": {
+      "payment_methods": [
+        "cash",
+        "mobile_money"
+      ]
+    }
+  },
+  {
+    "registry": "réglé",
+    "country": "TD",
+    "edition": "full",
+    "features": {
+      "assistant": true,
+      "assistant_auto_order": true,
+      "assistant_live": true,
+      "assistant_support_request": true,
+      "banners": true,
+      "challenges": true,
+      "feed": true,
+      "multi_car": true,
+      "pool": true,
+      "promo_codes": true,
+      "raffle": true,
+      "rental": true,
+      "scheduled_rides": true,
+      "subscriptions": true,
+      "trip_share": true,
+      "voice_messages": true,
+      "wallet": true
+    },
+    "live": {
+      "max_session_seconds": 300,
+      "idle_timeout_seconds": 30,
+      "languages": [
+        "fr",
+        "shu"
+      ],
+      "input": {
+        "encodings": [
+          "pcm16"
+        ],
+        "sample_rate": 16000
+      }
+    }
+  },
+  {
+    "registry": "réglé",
+    "country": "TD",
+    "edition": "lite",
+    "features": {
+      "assistant": true,
+      "assistant_auto_order": true,
+      "assistant_live": true,
+      "assistant_support_request": true,
+      "banners": true,
+      "challenges": true,
+      "feed": true,
+      "multi_car": true,
+      "pool": true,
+      "promo_codes": true,
+      "raffle": true,
+      "rental": false,
+      "scheduled_rides": true,
+      "subscriptions": true,
+      "trip_share": true,
+      "voice_messages": true,
+      "wallet": false
+    },
+    "lists": {
+      "payment_methods": [
+        "cash",
+        "mobile_money"
+      ],
+      "vehicle_modes": [
+        "eco",
+        "moto"
+      ]
+    },
+    "live": {
+      "max_session_seconds": 300,
+      "idle_timeout_seconds": 30,
+      "languages": [
+        "fr",
+        "shu"
+      ],
+      "input": {
+        "encodings": [
+          "pcm16"
+        ],
+        "sample_rate": 16000
+      }
+    }
+  },
+  {
+    "registry": "réglé",
+    "country": "",
+    "edition": "full",
+    "features": {
+      "assistant": true,
+      "assistant_auto_order": true,
+      "assistant_live": false,
+      "assistant_support_request": true,
+      "banners": true,
+      "challenges": true,
+      "feed": true,
+      "multi_car": true,
+      "pool": true,
+      "promo_codes": true,
+      "raffle": true,
+      "rental": true,
+      "scheduled_rides": true,
+      "subscriptions": true,
+      "trip_share": true,
+      "voice_messages": true,
+      "wallet": true
+    }
+  },
+  {
+    "registry": "réglé",
+    "country": "",
+    "edition": "lite",
+    "features": {
+      "assistant": true,
+      "assistant_auto_order": true,
+      "assistant_live": false,
+      "assistant_support_request": true,
+      "banners": true,
+      "challenges": true,
+      "feed": true,
+      "multi_car": true,
+      "pool": true,
+      "promo_codes": true,
+      "raffle": true,
+      "rental": false,
+      "scheduled_rides": true,
+      "subscriptions": true,
+      "trip_share": true,
+      "voice_messages": true,
+      "wallet": true
+    },
+    "lists": {
+      "payment_methods": [
+        "cash",
+        "mobile_money"
+      ]
+    }
+  }
+]
