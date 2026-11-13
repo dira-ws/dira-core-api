@@ -1,6 +1,6 @@
 # Specs frontend — par rôle
 
-> **Version 4.136.0** · 11 novembre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics` + `dira-immo-api`
+> **Version 4.137.0** · 13 novembre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics`
 
 **Cinq** documents, un par application. Chacun est **autonome** : tout ce qu'un frontend doit savoir pour son rôle, sans avoir à ouvrir les vingt specs de modules.
 
@@ -11,8 +11,6 @@
 | [`FOOD-DELIVERY.md`](FOOD-DELIVERY.md) | livraison | **livreur** — véhicules, appel de course, collectes, portefeuille, matériel |
 | [`VTC-CLIENT.md`](VTC-CLIENT.md) | courses | client — devis, course, suivi, conversation |
 | [`VTC-DRIVER.md`](VTC-DRIVER.md) | courses | **chauffeur** — véhicules, appel de 30 s, course, **dette**, matériel |
-| [`IMMO-SEEKER.md`](IMMO-SEEKER.md) | immobilier | **chercheur** — recherche, annonce, photos, favoris, alertes, visites ; 🆕 sur téléphone, l'application **Dira Immo** |
-| [`IMMO-PUBLISHER.md`](IMMO-PUBLISHER.md) | immobilier | **annonceur** — fiche, biens, photos, annonces, créneaux et visites ; 🆕 sur téléphone, l'application **Dira Immo Pro** (`immo_pro`) |
 
 > ⚠️ **Le nom du fichier dit la VERTICALE.** « Livreur » et « chauffeur » se
 > traduisent tous les deux par *driver* : un document nommé `DRIVER.md` à côté
@@ -90,44 +88,6 @@ quelqu'un), lire le grand livre d'un chauffeur, lire ses tickets de support.
 
 **Ce ne sont pas des manques à combler.** Si l'un de ces champs apparaît un jour
 dans une réponse, ne l'affichez pas — signalez-le.
-
-### 🆕 L'IMMOBILIER — [`IMMO-SEEKER.md`](IMMO-SEEKER.md) et [`IMMO-PUBLISHER.md`](IMMO-PUBLISHER.md) (v4.121.0)
-
-**La quatrième verticale a ses deux contrats** : le **chercheur** (qui loue ou
-achète) et l'**annonceur** (agence ou particulier qui publie). Une base d'URL de
-plus, servie par `dira-immo-api` : `…/api/v1/immo/…` — le jeton, l'identité et
-la boîte de notifications restent ceux du socle.
-
-⚠️ **TROIS RÈGLES DE CONFIANCE TIENNENT LES DEUX DOCUMENTS**, et leur §0 les
-pose avant toute route : le **téléphone** d'un annonceur (et celui du
-chercheur) n'apparaît qu'une fois une **visite confirmée** ; l'adresse d'un
-**particulier** est un **cercle de 300 m** jusque-là ; une annonce **non
-vérifiée le dit**. Ce ne sont pas des manques à combler.
-
-⚠️ **Toutes les routes de l'immobilier y sont écrites AVEC leur préfixe**
-(`GET /immo/listings`) : c'est ce qui permet à `dira-immo-api` de vérifier,
-depuis chez lui, que chaque route citée est servie avec le bon verbe.
-
-### 🆕 📱 L'IMMOBILIER SUR TÉLÉPHONE — deux applications natives (v4.123.0)
-
-| Qui | Quelle application | Compte | Où c'est écrit |
-|---|---|---|---|
-| le **chercheur** | **Dira Immo** — iOS et Android | le `client` **existant** (celui des repas et des courses), `app: "client"` | `IMMO-SEEKER.md` §10 bis |
-| l'**annonceur** (agence, particulier) | **Dira Immo Pro** — iOS et Android | `publisher`, `app: "immo_pro"` | `IMMO-PUBLISHER.md` §10 bis |
-
-⚠️⚠️ **LE CHERCHEUR PARTAGE SON COMPTE AVEC L'APPLICATION CLIENTE**, et c'est
-ce qui demande deux précautions : **`POST /me/devices` porte `"app": "immo"`**
-dans Dira Immo — sans lui, les notifications des deux applications se croisent —
-et Dira Immo lit sa boîte avec **`GET /me/notifications?app=immo`**.
-L'application cliente, elle, n'a **aucun écran** de l'immobilier
-(`DIRA-CLIENT.md` §10).
-
-⚠️ **LE PAYS S'OUVRE UN PAR UN** : `GET /app/config` sert `features.immo`, **le
-second drapeau dont le défaut est `false`** (après `assistant_live`).
-L'exploitation l'ouvre dans la console (**Réglages → Éditions → Immobilier**).
-
-⚠️ **`share_url`** : l'adresse publique d'une annonce est **composée par le
-serveur**. Aucune des deux applications ne l'écrit en dur.
 
 ## ⚠️ v4.0.0 — UN vocabulaire d'état pour toute la plateforme
 
@@ -396,164 +356,93 @@ Chaque document porte la même version en en-tête, et son propre journal des ch
 
 ## Journal
 
+### 4.137.0 — 13 novembre 2026
+
+🔴 **L'IMMOBILIER NE FAIT PLUS PARTIE DE DIRA.** Ses deux contrats sont retirés de
+ce dossier, et tout ce que le socle servait pour lui disparaît. **Équipes mobiles :
+retirez le code qui s'en servait** — rien ne le remplace.
+
+| Ce qui disparaît | Ce qu'un appel d'avant reçoit désormais |
+|---|---|
+| `features.immo` dans `GET /app/config` | la clé n'est plus servie |
+| `app: "immo_pro"` à la connexion, à l'inscription et à la porte par code | `422`, `fields: ["app"]` |
+| le rôle `publisher` à l'inscription | `422`, `fields: ["role"]` |
+| `"app": "immo"` sur `POST /me/devices` | `422`, `fields: ["app"]`, `reason: unknown_field` |
+| `GET /me/notifications?app=immo`, `POST /me/notifications/read?app=immo` | `422`, `fields: ["app"]` — sans `app`, la boîte entière, comme avant |
+| les gabarits `immo_*` (visites, alertes de recherche, messagerie, annonces, collaborateurs, loyers) | plus rien ne part ; une entrée ancienne restée dans une boîte s'affiche comme toute clé inconnue, sans rien ouvrir |
+
+🔧 **Ce qui ne change pas** : la livraison, les courses, l'assistant, et toutes les
+autres routes. Une application qui ne lisait rien de l'immobilier n'a rien à faire.
+
 ### 4.136.0 — 11 novembre 2026
 
-🟢 **L'IMMOBILIER — les avis et relances de loyer** (`IMMO-SEEKER.md` §10,
-`IMMO-PUBLISHER.md` §9 quater.3) : au locataire, J-5, J0, J+3, J+10, J+30 tant
-que le bailleur n'a pas marqué le loyer payé — entre 8 h et 20 h locales, sans
-adresse ni nom du bailleur, sans accuser.
+*(Retiré en 4.137.0 : cette entrée concernait l'immobilier, qui ne fait plus partie de Dira.)*
 
 ### 4.135.0 — 11 novembre 2026
 
-🟢 **L'IMMOBILIER — la mise en avant payée** (`IMMO-PUBLISHER.md` §11.4,
-`IMMO-SEEKER.md` §4) : `POST /immo/publishers/me/listings/{id}/boost`, payée
-du portefeuille de la fiche (genre de débit `listing_boost`, sous l'identifiant
-de la mise en avant) ; dernier départage du classement, toujours marquée, une
-annonce sur cinq au plus.
+*(Retiré en 4.137.0 : cette entrée concernait l'immobilier, qui ne fait plus partie de Dira.)*
 
 ### 4.134.0 — 11 novembre 2026
-
-🟢 **L'IMMOBILIER — les pièces et leurs badges** (`IMMO-PUBLISHER.md` §11 bis,
-`IMMO-SEEKER.md` §0, §4) : décision du 11 novembre — identité et selfie pour
-tous, registre du commerce pour une agence, le **titre de chaque bien** (il
-appartient au bien), le **mandat** d'un bien d'agence. Envoyés en `multipart`
-au compartiment **privé** (`POST /immo/publishers/me/documents`), regardés par
-l'équipe, ils posent des **badges** (`identity`, `business`, `title`,
-`mandate`) servis sur l'annonce publique. **Aucune pièce ne bloque une
-publication.**
 
 🔧 **La file des pièces de l'exploitation se lit dans le pays de la requête**
 (livraison et courses) : rien ne change pour les applications.
 
+*(Le reste de cette entrée, retiré en 4.137.0, concernait l'immobilier, qui ne fait plus partie de Dira.)*
+
 ### 4.133.0 — 11 novembre 2026
 
-🟢 **L'IMMOBILIER — les baux** (`IMMO-PUBLISHER.md` §9 quater,
-`IMMO-SEEKER.md` §9 quater) : un bail lie un bien à un compte client ; cycle
-`draft → sent → signed → active → notice → ended → closed`, échéancier généré à
-l'activation (12 mois), loyers **marqués** payés ou mis sous échéancier par
-l'annonceur — aucun argent ne passe par Dira. Le locataire lit le sien
-(`GET /immo/me/leases`), brouillons exclus.
+*(Retiré en 4.137.0 : cette entrée concernait l'immobilier, qui ne fait plus partie de Dira.)*
 
 ### 4.132.0 — 11 novembre 2026
 
-🟢 **L'ANNONCEUR — publier se paie** (`IMMO-PUBLISHER.md` §11, §8.6, §14) :
-décision du 11 novembre — N annonces gratuites **par mois** (particulier et
-agence, `free_listings_agency` 🆕), puis des jetons, **du portefeuille de la
-FICHE** (commun à l'agence). `GET /immo/publishers/me/wallet`,
-`POST /immo/publishers/me/wallet/purchase` (porteur et `manager`), la
-soumission qui règle (`402 insufficient_tokens`, `billing` sur l'annonce),
-une fois par annonce.
+*(Retiré en 4.137.0 : cette entrée concernait l'immobilier, qui ne fait plus partie de Dira.)*
 
 ### 4.131.0 — 11 novembre 2026
 
-🔧 **L'ANNONCEUR** (`IMMO-PUBLISHER.md` §5.1, §6.11, §10, §12) — décisions du
-11 novembre :
-- un `agent` **voit** tous les biens de l'agence et ne **modifie / archive /
-  photographie** que ceux qu'il a saisis (`403 property_edit_reserved`, champ
-  `created_by` sur le bien) ;
-- `immo_visit_unanswered` : une demande laissée sans réponse est signalée au
-  porteur et aux `manager` (4 h, ou à mi-chemin du créneau) ;
-- `stay` est **ouvert** (sans réservation ni paiement pour l'instant).
+*(Retiré en 4.137.0 : cette entrée concernait l'immobilier, qui ne fait plus partie de Dira.)*
 
 ### 4.130.0 — 11 novembre 2026
 
-🔧 **L'ANNONCEUR** (`IMMO-PUBLISHER.md` §7.1) : **deux** photos prises loin de
-l'adresse (`on_site: mismatch`) sur un même bien mettent ses annonces dans la
-file de l'équipe — elles **restent en ligne**. Aucun champ ne change ; ce que
-l'application dit à l'annonceur, si.
+*(Retiré en 4.137.0 : cette entrée concernait l'immobilier, qui ne fait plus partie de Dira.)*
 
 ### 4.129.0 — 11 novembre 2026
 
-🟢 **L'IMMOBILIER — ce qui prévient enfin l'annonceur** (`IMMO-PUBLISHER.md`
-§10, `IMMO-SEEKER.md` §10) : la décision de l'équipe sur une annonce
-(`immo_listing_published` / `_returned` / `_moderated`, `data.type:
-"immo_listing"`), le rattachement et le détachement d'un collaborateur
-(`immo_member_attached` / `_detached`, `data.type: "immo_membership"`, rangés en
-sécurité), et la demande de visite expirée — des deux côtés
-(`immo_visit_expired` au chercheur, `immo_visit_expired_host` à l'annonceur).
-Ajout seulement : aucune route ne change, une clé inconnue s'affiche déjà dans
-la boîte.
+*(Retiré en 4.137.0 : cette entrée concernait l'immobilier, qui ne fait plus partie de Dira.)*
 
 ### 4.128.0 — 10 novembre 2026
 
-🔧 **L'ANNONCEUR** (`IMMO-PUBLISHER.md`) : les notifications d'un collaborateur
-détaché vont au porteur de la fiche ; la ville d'un bien est obligatoire
-(`address_city_required`) ; les annonces paginent comme les biens (`next_cursor`
-**absent** en fin, 20 par défaut).
+*(Retiré en 4.137.0 : cette entrée concernait l'immobilier, qui ne fait plus partie de Dira.)*
 
 ### 4.127.0 — 10 novembre 2026
 
-🟢 **L'IMMOBILIER — la messagerie avant la visite** (`IMMO-SEEKER.md` §9 ter,
-`IMMO-PUBLISHER.md` §9.7) : un fil par annonce et par chercheur, les messages de
-`pkg/chat` (même modération que les courses et les repas), les coordonnées
-**masquées** tant qu'aucune visite n'est confirmée, la notification
-`immo_thread_message`.
+*(Retiré en 4.137.0 : cette entrée concernait l'immobilier, qui ne fait plus partie de Dira.)*
 
 ### 4.126.0 — 10 novembre 2026
 
-🟢 **L'IMMOBILIER — « prise sur place »** (`IMMO-PUBLISHER.md` §7.1, `IMMO-SEEKER.md` §5) :
-le serveur compare la position GPS d'une photo à l'adresse du bien et ne garde que
-le verdict (`on_site`). Le public ne voit que le badge ; l'annonceur voit pourquoi
-une photo ne l'a pas. ⚠️ Une photo réduite sur le téléphone doit garder ses
-étiquettes GPS.
+*(Retiré en 4.137.0 : cette entrée concernait l'immobilier, qui ne fait plus partie de Dira.)*
 
 ### 4.125.0 — 10 novembre 2026
 
-🟢 **L'IMMOBILIER — clôturer une annonce ferme ses visites à venir** (`IMMO-PUBLISHER.md`
-§8.6, `IMMO-SEEKER.md` §9.4) : `closed_by: "listing"`, chercheurs prévenus ; une pause
-n'y touche pas. Un créneau commencé ne se retire plus (`409 visit_slot_started`) ;
-`presence_at` est servi.
+*(Retiré en 4.137.0 : cette entrée concernait l'immobilier, qui ne fait plus partie de Dira.)*
 
 ### 4.124.0 — 10 novembre 2026
 
-🔧 **L'ANNONCEUR — sept refus corrigés** (`IMMO-PUBLISHER.md`, dira-immo-api#72) : un
-collaborateur rattaché par identifiant doit être un annonceur du pays de l'agence ;
-un nom de fiche vide, un site inventé, un site retiré sous ses collaborateurs et un
-`PATCH {}` sont refusés ; une surface « mesurée » ne se saisit pas
-(`area_source_reserved`) ; le bien d'une autre agence est `404` ; l'auto-publication,
-le motif `moderated` et la caution ont chacun leur code. `listing_not_yours` n'est
-plus émis.
+*(Retiré en 4.137.0 : cette entrée concernait l'immobilier, qui ne fait plus partie de Dira.)*
 
 ### 4.123.0 — 10 novembre 2026
 
-🔧 **LE CHERCHEUR A SON APPLICATION, DIRA IMMO — pas un onglet de l'application
-cliente.** La 4.122.0 avait mal lu l'architecture de l'immobilier, qui prévoit deux
-applications natives (Dira Immo, Dira Immo Pro). `IMMO-SEEKER.md` §10 bis est
-réécrite, `DIRA-CLIENT.md` retire l'onglet et ne garde que ce qui la concerne : les
-notifications de l'immobilier qui y arrivent quand Dira Immo n'est pas installée.
-
-🟢 **DEUX APPLICATIONS CLIENTES, UN COMPTE** — `POST /me/devices` accepte
-`"app": "immo"` : les notifications `immo_*` vont au téléphone de Dira Immo (et
-replient sur les autres s'il n'y en a pas), les autres n'y vont **jamais**.
-`GET /me/notifications?app=immo` et `POST /me/notifications/read?app=immo` bornent
-la boîte et son badge. Une valeur inconnue est refusée (`422`, `fields: ["app"]`).
+*(Retiré en 4.137.0 : cette entrée concernait l'immobilier, qui ne fait plus partie de Dira.)*
 
 ### 4.122.0 — 10 novembre 2026
-
-🟢 **L'IMMOBILIER SUR TÉLÉPHONE** — l'onglet **Logement** de l'application cliente
-(`DIRA-CLIENT.md` §10, `IMMO-SEEKER.md` §10 bis) et l'**application des agents**
-(`IMMO-PUBLISHER.md` §10 bis) : l'ouverture, les notifications routées sur
-`data.type`, les photos sur réseau mobile (et depuis l'appareil photo), la carte et
-son cercle, l'appel réservé à la visite confirmée, le partage, et ce qui ne part
-jamais en file.
-
-🟢 **`GET /app/config` → `features.immo`** : il **s'allume pays par pays**
-(`rules.immo` à la console), et absent il vaut `false` — l'inverse des autres clés,
-comme `assistant_live`.
-
-🟢 **`share_url`** sur `GET /immo/listings/{ref}` : l'adresse publique de l'annonce,
-dans la langue de la requête.
 
 🔧 **`DIRA-CLIENT.md` citait `GET /notifications`, qui n'existe pas** (un `404`) :
 la boîte est `GET /me/notifications`, depuis toujours. Corrigé aux deux endroits.
 
+*(Le reste de cette entrée, retiré en 4.137.0, concernait l'immobilier, qui ne fait plus partie de Dira.)*
+
 ### 4.121.0 — 10 novembre 2026
 
-🟢 **L'IMMOBILIER** — deux contrats nouveaux : `IMMO-SEEKER.md` (recherche, annonce,
-photos, comparatif, favoris, recherches gardées et alertes, visites) et
-`IMMO-PUBLISHER.md` (fiche annonceur et collaborateurs, biens, photos, annonces,
-créneaux et visites). Nouvelle base d'URL `…/api/v1/immo/`. Rien ne change pour les
-applications existantes.
+*(Retiré en 4.137.0 : cette entrée concernait l'immobilier, qui ne fait plus partie de Dira.)*
 
 ### 4.120.0 — 5 novembre 2026
 

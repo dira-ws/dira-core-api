@@ -22,13 +22,13 @@ import (
 	"strings"
 )
 
-// Specs porte les NEUF contrats de rôle, plus le journal et le brief de design.
+// Specs porte les contrats de rôle, plus le journal et le brief de design.
 //
-// ⚠️ « Cinq » est resté dans ce commentaire deux versions de trop : l'un des
-// documents nommés ci-dessous n'était compté par personne, et c'est exactement
-// ce qu'un commentaire chiffré fait de pire — il se lit comme un inventaire et
-// n'en est pas un. Le seul inventaire qui tient est la directive `embed`, et le
-// test de présence qui la recopie.
+// ⚠️ PAS DE NOMBRE ICI. « Cinq » est resté dans ce commentaire deux versions de
+// trop, puis « neuf » : l'un des documents nommés ci-dessous n'était compté par
+// personne, et c'est exactement ce qu'un commentaire chiffré fait de pire — il
+// se lit comme un inventaire et n'en est pas un. Le seul inventaire qui tient
+// est la directive `embed`, et le test de présence qui la recopie.
 //
 // ⚠️ NOMMÉS UN PAR UN, PAS `*.md`. Ce dossier reçoit aussi les RELEVÉS des
 // équipes mobiles (`SERVEUR-…-et-decisions.md`), déposés là pour être lus à côté
@@ -38,7 +38,7 @@ import (
 // Un relevé dit ce qu'une équipe a OBSERVÉ ; un contrat dit ce qui est PROMIS.
 // Seul le second se sert à quelqu'un qui pose une question.
 //
-//go:embed README.md DESIGN-BRIEF.md DIRA-CLIENT.md FOOD-CLIENT.md FOOD-DELIVERY.md FOOD-MERCHANT.md IMMO-PUBLISHER.md IMMO-SEEKER.md PARTNER-FLEET.md VTC-CLIENT.md VTC-DRIVER.md
+//go:embed README.md DESIGN-BRIEF.md DIRA-CLIENT.md FOOD-CLIENT.md FOOD-DELIVERY.md FOOD-MERCHANT.md PARTNER-FLEET.md VTC-CLIENT.md VTC-DRIVER.md
 var Specs embed.FS
 
 // All rend le contenu de chaque document, par nom de fichier.
