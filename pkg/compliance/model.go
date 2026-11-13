@@ -95,36 +95,12 @@ const (
 	DocVehicleSide = "vehicle_side"
 )
 
-// LES PIÈCES DE L'IMMOBILIER (11 nov. 2026).
-//
-// ⚠️ LE MÊME CYCLE, D'AUTRES PAPIERS. Un annonceur dépose, un humain regarde,
-// la pièce couvre ou ne couvre plus : c'est exactement ce que ce paquet tient
-// pour un chauffeur. Ce qui change, c'est la LISTE — et c'est la verticale qui
-// la déclare (voir `Requirements`) : la livraison et les courses ne reçoivent
-// aucun de ces trois types.
-const (
-	// DocBusinessRegistration : le registre du commerce (RCCM) ou les statuts —
-	// le PORTEUR du dossier, quand c'est une société.
-	DocBusinessRegistration = "business_registration"
-	// DocPropertyTitle : le titre foncier, ou l'attestation qui en tient lieu —
-	// le BIEN.
-	//
-	// ⚠️ IL APPARTIENT AU BIEN, PAS À L'ANNONCEUR (décision du 11 nov. 2026) : le
-	// même titre suit l'appartement quand il change de mandataire, et une agence
-	// qui perd un mandat ne perd pas le titre du propriétaire.
-	DocPropertyTitle = "property_title"
-	// DocMandate : le mandat du propriétaire à l'agence qui commercialise — le
-	// BIEN, dans le dossier de CETTE agence.
-	DocMandate = "mandate"
-)
-
 // TransportKinds : tout ce que la livraison et les courses REÇOIVENT.
 //
-// ⚠️ C'EST LA RÈGLE PAR DÉFAUT, et elle est écrite pour que rien ne bouge chez
-// elles : un service sans `Requirements` refuse les trois types de
-// l'immobilier par `unknown_document_kind`, comme il refusait tout type qu'il
-// ne connaissait pas. Connaître un type (`docOwner`) et le RECEVOIR sont deux
-// questions.
+// ⚠️ C'EST LA RÈGLE PAR DÉFAUT : un service sans `Requirements` reçoit ces
+// dix types et refuse tout autre par `unknown_document_kind`. Connaître un type
+// (`docOwner`) et le RECEVOIR sont deux questions — une verticale peut n'en
+// déclarer qu'une partie.
 var TransportKinds = []string{
 	DocLicence, DocIDCard, DocCriminalRecord, DocSelfie,
 	DocRegistration, DocInsurance, DocInspection,
@@ -183,13 +159,6 @@ var docOwner = map[string]string{
 	DocVehicleFront:   ownerVehicle,
 	DocVehicleRear:    ownerVehicle,
 	DocVehicleSide:    ownerVehicle,
-	// L'immobilier. ⚠️ « person » est le PORTEUR du dossier — une personne ou
-	// une société —, « vehicle » est le BIEN qui lui est rattaché — un véhicule
-	// ou un logement. Les noms datent du transport ; la règle (exactement un
-	// propriétaire) est la même.
-	DocBusinessRegistration: ownerPerson,
-	DocPropertyTitle:        ownerVehicle,
-	DocMandate:              ownerVehicle,
 }
 
 const (

@@ -285,10 +285,12 @@ func parseRef(refKind, refID string) (*primitive.ObjectID, error) {
 	if refKind == "" || refID == "" {
 		return nil, apperr.Validation("a reference needs both a kind and an id")
 	}
+	// ⚠️ `RefListing` et `RefListingBoost` n'y sont plus : lisibles, refusés à
+	// l'écriture (voir `model.go`).
 	switch refKind {
-	case RefOrder, RefRide, RefTip, RefRideAdjustment, RefEquipment, RefListing, RefListingBoost:
+	case RefOrder, RefRide, RefTip, RefRideAdjustment, RefEquipment:
 	default:
-		return nil, apperr.Validation("reference kind must be order, ride, tip, ride_adjustment, equipment, listing or listing_boost")
+		return nil, apperr.Validation("reference kind must be order, ride, tip, ride_adjustment or equipment")
 	}
 	oid, err := primitive.ObjectIDFromHex(refID)
 	if err != nil {

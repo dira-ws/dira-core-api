@@ -80,6 +80,39 @@ func TestUnknownScopeIsRefused(t *testing.T) {
 	assert.Equal(t, "validation_failed", apperr.From(err).Code)
 }
 
+// ⚠️⚠️ UNE PORTÉE RETIRÉE, RENVOYÉE PAR UNE CONSOLE D'AVANT, EST JETÉE — pas
+// refusée. La console renvoie les portées qu'elle a lues sur la fiche : un
+// `422` aurait bloqué toute modification de ce membre. Seule, elle ne fait pas
+// une fiche (rien d'autre n'est accordé) ; une faute de frappe reste refusée.
+func TestARetiredScopeIsDroppedNotRefused(t *testing.T) {
+	out, err := normaliseScopes([]string{auth.ScopeCore, "immo", " IMMO ", auth.ScopeVTC})
+	require.NoError(t, err)
+	assert.Equal(t, []string{auth.ScopeCore, auth.ScopeVTC}, out)
+
+	_, err = normaliseScopes([]string{"immo"})
+	require.Error(t, err, "une portée retirée seule n'accorde rien : la fiche n'en serait pas une")
+	assert.Equal(t, "validation_failed", apperr.From(err).Code)
+
+	_, err = normaliseScopes([]string{auth.ScopeCore, "immobilier"})
+	require.Error(t, err, "une faute de frappe n'est pas une portée retirée")
+}
+
+// ⚠️⚠️ UNE PORTÉE RETIRÉE, RESTÉE ÉCRITE SUR UNE FICHE, NE SE REND PAS ET NE
+// S'ACCORDE PAS : ni dans la réponse de la console — qui la renverrait —, ni
+// dans le jeton.
+func TestARetiredScopeIsNeitherShownNorGranted(t *testing.T) {
+	legacy := &Member{Status: StatusActive, Scopes: []string{auth.ScopeCore, auth.ScopeFood, auth.ScopeVTC, "immo"}}
+	resp := toResponse(legacy)
+	assert.Equal(t, []string{auth.ScopeCore, auth.ScopeFood, auth.ScopeVTC}, resp.Scopes)
+	assert.True(t, resp.CoversEverything, "elle couvre toujours tout ce que le socle sert")
+	assert.Equal(t, []string{auth.ScopeCore, auth.ScopeFood, auth.ScopeVTC}, scopesFor(legacy))
+
+	only := &Member{Status: StatusActive, Scopes: []string{"immo"}}
+	assert.Equal(t, []string{}, toResponse(only).Scopes, "un tableau vide, pas un champ absent")
+	assert.False(t, toResponse(only).CoversEverything)
+	assert.Empty(t, scopesFor(only), "n'administre plus rien")
+}
+
 // ⚠️ Les TROIS cas de `scopesFor` rendent une liste vide, qui n'accorde rien.
 //
 // C'est ce que la convention littérale achète : suspendre quelqu'un, retirer

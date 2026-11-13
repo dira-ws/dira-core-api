@@ -1,6 +1,6 @@
 # App CLIENT UNIFIÉE — LIVRAISON **et** COURSES — contrat d'API
 
-> **Version 4.136.0** · 11 novembre 2026
+> **Version 4.137.0** · 13 novembre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Livraison : `…/api/v1/food` · Courses : `…/api/v1/vtc` · Combiné : `…/api/v1/analytics` · Suivi : `wss://tracking-staging.dira.llc`
 
 ---
@@ -232,8 +232,7 @@ GET /app/config          # SANS jeton — lu AVANT l'écran de connexion
     "promo_codes": false, "challenges": false, "raffle": false,
     "banners": false, "feed": true, "assistant": true,
     "assistant_auto_order": false, "voice_messages": true, "wallet": false,
-    "assistant_live": true, "assistant_support_request": true,
-    "immo": false
+    "assistant_live": true, "assistant_support_request": true
   },
   "lists": {
     "payment_methods": ["cash", "mobile_money"],
@@ -277,12 +276,6 @@ GET /app/config          # SANS jeton — lu AVANT l'écran de connexion
 > `live` est servi, et le serveur garantit que les deux ne se contredisent
 > jamais. Détail du mode : **§8 quater**.
 
-> 🆕 **`immo` dit si l'application Dira Immo est ouverte dans ce pays**
-> (v4.122.0). ⚠️ **L'application cliente n'en fait rien** : le logement n'est
-> pas un de ses onglets, c'est une **autre application** (§10). C'est le
-> **second drapeau qui s'allume** — défaut `false` —, servi à toutes les
-> applications parce que le catalogue l'est en entier.
-
 **Lisez-la une fois à l'ouverture**, gardez-la en mémoire, et **cachez vos
 entrées de menu** sur ce qu'elle dit. C'est ce qui évite de proposer un bouton
 qui échoue — et, pour Lite, d'avoir à lire à voix haute un refus qu'on pouvait
@@ -307,9 +300,13 @@ que votre application : traitez-la comme **disponible** (`true`), jamais comme
 coupée — sinon une fonction nouvelle disparaîtrait de vos écrans le jour où le
 serveur l'annonce.
 
-⚠️ **SAUF LES DEUX QUI S'ALLUMENT** : `assistant_live` et `immo` (v4.122.0).
-Absentes, elles valent **`false`** — le direct parce qu'il est facturé,
-l'immobilier parce qu'il n'a d'annonces que là où des agences publient.
+⚠️ **SAUF CELLE QUI S'ALLUME** : `assistant_live`. Absente, elle vaut
+**`false`** — le direct est facturé à la seconde.
+
+🔧 **`immo` N'EST PLUS SERVIE** (v4.137.0) : ce drapeau ne vous concernait pas,
+et il a disparu du catalogue. Retirez ce que votre code en lisait ; un serveur
+plus ancien qui l'enverrait encore se lit comme toute clé que vous n'utilisez
+pas.
 
 ### `lists` — des listes blanches, et une liste absente veut dire « tout »
 
@@ -960,9 +957,6 @@ Trois décisions qui n'existaient pas quand il y avait deux applications :
    repas dakarois et une course dakaroise ; ne gardez pas un pays par onglet.
 3. **L'accueil n'a pas d'onglet.** Sur un écran où les deux métiers cohabitent,
    **n'envoyez pas** `vertical` : c'est au serveur de trancher.
-4. 🆕 **Le logement n'est PAS un onglet** (v4.123.0) : c'est l'application
-   **Dira Immo**, à part, avec le **même compte** (§10). N'en dessinez aucun
-   écran ici.
 
 ---
 
@@ -984,8 +978,8 @@ POST /analytics/ai/chat
 serveur tranche de quel métier il s'agit, délègue à l'assistant de ce métier-là,
 et vous rend sa réponse **telle quelle**.
 
-⚠️ **L'IMMOBILIER N'Y EST PAS** (v4.122.0). `vertical` n'accepte que `vtc` et
-`food` : `"immo"` rend `422 validation_failed` (`fields: ["vertical"]`).
+⚠️ **`vertical` n'accepte que `vtc` et `food`** : toute autre valeur rend
+`422 validation_failed` (`fields: ["vertical"]`).
 
 ### `plan` est celui du métier qui a répondu
 
@@ -2613,9 +2607,6 @@ l'apparence d'un vrai.
 
 ## 9. 🆕 LE FIL D'ACTIVITÉ — courses et commandes, par semaine (v4.43.0)
 
-> ⚠️ **Les visites de l'immobilier n'y sont pas** (v4.122.0) : elles vivent dans
-> l'application Dira Immo (§10).
-
 ```
 GET /analytics/activity?weeks=4&before=2026-10-05T00:00:00Z
 ```
@@ -2795,22 +2786,6 @@ ceux des specs métier, qui restent à jour.
 départ : sans lui, vous lisez les modes et le catalogue du pays du **compte**,
 et vous recevez les prix du pays où la course se fera. Deux pays dans un seul
 écran.
-
-### 🆕 Logement → l'application **Dira Immo** — **pas ici** (v4.123.0)
-
-Le chercheur de logement a **son application**, Dira Immo (iOS et Android), et
-il y entre avec **le même compte** que celui des repas et des courses. Cette
-application-ci n'a **aucun écran** de l'immobilier, et ne doit pas en avoir.
-
-Ce qui vous concerne quand même :
-
-- ⚠️ **Ses notifications ne viennent pas ici** quand Dira Immo est installée :
-  le socle les envoie à **son** téléphone (`app: "immo"` à l'enregistrement).
-  **Sans Dira Immo**, elles arrivent **ici** — la personne a pu demander sa
-  visite depuis le site. Affichez-les dans la boîte **sans rien ouvrir** (ou un
-  lien vers Dira Immo), §12.
-- ⚠️ Et dans l'autre sens, **vos** notifications (courses, repas, support) ne
-  vont **jamais** au téléphone de Dira Immo : rien à faire de votre côté.
 
 ---
 
@@ -3010,15 +2985,20 @@ Détail complet, écran par écran : `VTC-CLIENT` et `FOOD-CLIENT`, section 🆘
 
 ## 12. ⚠️ Une seule boîte, deux vocabulaires
 
-`GET /me/notifications` (socle) rend **tout** : les commandes, les courses — et
-🆕 l'immobilier, puisque c'est le même compte —, dans une seule liste. Chaque entrée porte une **clé de gabarit** et des **données**.
+`GET /me/notifications` (socle) rend **tout** : les commandes et les courses,
+dans une seule liste. Chaque entrée porte une **clé de gabarit** et des
+**données**.
+
+⚠️ **`GET /me/notifications` ET `POST /me/notifications/read` NE PRENNENT PAS DE
+`?app=`** (v4.137.0) : un `app` envoyé est refusé, `422` avec
+`fields: ["app"]`. Et `POST /me/devices` ne porte pas de champ `app` : envoyé,
+il est refusé de même (`reason: unknown_field`).
 
 | Métier | Clés | Données |
 |---|---|---|
 | Livraison | `order_confirmed` · `order_preparing` · `order_ready` · `order_assigned` · `order_delivered` · `order_cancelled` | `type: "order_status"`, `order_id`, `status` |
 | Courses | `ride_accepted` · `ride_driver_on_the_way` · `ride_driver_arrived` · `ride_driver_honked` · `ride_cancelled` · `ride_search_exhausted` · `ride_fare_adjusted` · `ride_rate_prompt` | `type: "ride_status"`, `ride_id`, `status` |
 | Courses partagées | `ride_pool_matched` · `ride_pool_no_match` · `ride_pool_partner_left` | `type: "ride_status"`, `ride_id`, `dispatch_reason` |
-| 🆕 Logement (Dira Immo) | `immo_visit_*` · `immo_saved_search_match` · `immo_thread_message` | `type: "immo_visit"`, `"immo_saved_search"` ou `"immo_thread"` → ⚠️ **ici, n'ouvrez rien** : ils appartiennent à l'application Dira Immo (§10). Affichez-les, ou proposez de l'ouvrir |
 | Transverse | `ticket_reply` · `ticket_resolved` · `session_superseded` | selon le gabarit |
 
 ⚠️ **ROUTEZ SUR `data.type`, PAS SUR LA CLÉ.** `type` dit quel écran ouvrir,
@@ -3028,9 +3008,10 @@ un jour le mauvais écran. ⚠️ Et une clé **inconnue** doit s'afficher quand
 dans la boîte, sans rien ouvrir : une application qui ignore ce qu'elle ne
 connaît pas fait disparaître des messages.
 
-⚠️ **AUCUNE NOTIFICATION DE L'IMMOBILIER NE PORTE D'ADRESSE NI DE TÉLÉPHONE** :
-un écran verrouillé se lit par-dessus l'épaule. Ouvrez la visite pour les lire —
-et n'en composez pas une locale qui les ajouterait.
+🔧 **LES CLÉS `immo_*` NE PARTENT PLUS** (v4.137.0). Des entrées anciennes
+peuvent rester dans la boîte d'un compte : elles se lisent comme toute clé
+inconnue — leur titre et leur texte s'affichent, rien ne s'ouvre. Retirez le
+code qui les traitait à part.
 
 ⚠️ **UNE CLÉ NE DIT PAS SON MÉTIER.** `ticket_reply` peut concerner une
 commande ou une course. Ne devinez pas le métier d'après la clé ; lisez
@@ -3107,7 +3088,7 @@ du métier.
 - [ ] L'édition **republiée** par le serveur est lue au moins une fois : recevoir `full` en se croyant `lite` veut dire que l'en-tête n'arrive pas.
 - [ ] `POST /me/devices` porte `edition` : sans elle, une notification arrive **deux fois**, dont une dans l'application qui n'a rien commandé.
 - [ ] **`GET /app/config`** lu à l'ouverture (§4 ter), gardé en mémoire, et les menus cachés dessus.
-- [ ] Une clé **absente** de `features` est traitée comme **disponible**, jamais comme coupée — 🆕 **sauf `assistant_live` et `immo`**, qui s'allument : absentes, elles valent `false`.
+- [ ] Une clé **absente** de `features` est traitée comme **disponible**, jamais comme coupée — **sauf `assistant_live`**, qui s'allume : absente, elle vaut `false`.
 - [ ] Les listes de `lists` sont **croisées** avec les listes réelles du métier, jamais affichées telles quelles.
 - [ ] `403 feature_unavailable_in_edition` ne propose **pas** de se reconnecter ; `error.feature` dit quoi cacher.
 - [ ] **Le vocal** (§8) : les **quatre** `state` traités — `understood`, `ordered`, `needs_support`, `failed` —, et jamais « c'est commandé » déduit de la présence d'un `plan`.
@@ -3127,7 +3108,7 @@ du métier.
 - [ ] Fil d'activité : `next_before` redonné, semaines vides sautées, `timezone` utilisé, `sources` affiché quand un métier manque.
 - [ ] Deux sockets distincts, cycles de vie séparés ; `GET` à chaque reconnexion.
 - [ ] Notifications routées sur `data.type` ; clé inconnue affichée sans ouvrir.
-- [ ] 🆕 **Logement** : aucun écran ici — c'est l'application Dira Immo. Les notifications `immo_*` arrivées dans la boîte s'affichent **sans rien ouvrir**.
+- [ ] 🔧 **Rien de l'immobilier** (v4.137.0) : ni `features.immo`, ni traitement à part des notifications `immo_*` (une entrée ancienne s'affiche comme une clé inconnue), ni `app` sur `POST /me/devices` ou sur la boîte.
 - [ ] Un seul carnet d'adresses, un seul solde, une seule boîte.
 - [ ] 🆕 **Le direct** (§8 quater) : l'entrée « En direct » n'existe que si `features.assistant_live` **et** le bloc `live` sont servis ; jamais la seule sortie d'un écran.
 - [ ] 🆕 Le jeton du direct part dans l'en-tête `Authorization`, **jamais** dans l'URL de la socket.
@@ -3146,13 +3127,22 @@ du métier.
 
 ## 15. Journal
 
+### 4.137.0 — 13 novembre 2026
+
+🔴 **L'IMMOBILIER NE FAIT PLUS PARTIE DE DIRA.** Ce qui en restait ici disparaît —
+retirez le code qui le lisait :
+- `features.immo` n'est plus servi par `GET /app/config` ;
+- les notifications `immo_*` ne partent plus ; une entrée ancienne restée dans la
+  boîte s'affiche comme toute clé inconnue, sans rien ouvrir (§12) ;
+- `POST /me/devices` ne prend plus `app` (`422`, `reason: unknown_field`), et la
+  boîte ne prend plus `?app=` (`422`, `fields: ["app"]`).
+
+Rien d'autre ne change pour cette application.
+
 ### 4.123.0 — 10 novembre 2026
 
-🔧 **LE LOGEMENT N'EST PAS UN ONGLET D'ICI** : c'est l'application Dira Immo, avec le
-même compte (§10). La 4.122.0 en faisait un troisième onglet — retiré, avec sa
-cinquième base d'URL. Restent : `features.immo` dans `/app/config` (dont vous ne
-faites rien), et les notifications `immo_*` qui arrivent ici **quand Dira Immo
-n'est pas installée** — à afficher sans rien ouvrir (§12).
+*(Une partie de cette entrée, retirée en 4.137.0, concernait l'immobilier, qui ne
+fait plus partie de Dira.)*
 
 🔧 **`GET /notifications` n'existait pas** : c'est `GET /me/notifications` (corrigé
 en 4.122.0).

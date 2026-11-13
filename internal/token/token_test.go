@@ -1044,52 +1044,56 @@ func TestAWithdrawalLeavesATrailBothWays(t *testing.T) {
 		"et le solde est revenu à l'identique")
 }
 
-// ⚠️ LE PORTEFEUILLE D'UN ANNONCEUR (décision du 11 nov. 2026) : il s'ouvre au
-// nom de la FICHE, et la publication d'une annonce se paie UNE fois — une
-// soumission rejouée ne débite pas deux fois.
-func TestAPublisherWalletPaysAListingOnce(t *testing.T) {
+// ⚠️⚠️ CE QU'UNE VERTICALE RETIRÉE A LAISSÉ AU GRAND LIVRE SE LIT TOUJOURS, ET NE
+// S'ÉCRIT PLUS. Ses portefeuilles (type `publisher`) et ses débits (genres
+// `listing`, `listing_boost`) sont en préprod : une écriture passée ne se
+// réécrit pas, et un relevé qui tomberait sur un genre inconnu ne se lirait
+// plus. Mais rien de nouveau ne s'y ouvre, ne s'y débite ni ne s'y rattache.
+func TestWhatARetiredVerticalLeftInTheLedgerReadsButTakesNoNewWriting(t *testing.T) {
 	repo := newFakeRepo()
 	svc, _, _, _ := newTestService(repo)
-	fiche := primitive.NewObjectID().Hex()
-	require.NoError(t, svc.CreateWallet(context.Background(), fiche, WalletTypePublisher))
-	require.NoError(t, svc.CreateWallet(context.Background(), fiche, WalletTypePublisher), "idempotent")
-	w, err := svc.WalletOf(context.Background(), fiche)
-	require.NoError(t, err)
-	assert.Equal(t, WalletTypePublisher, w.Type)
+	ctx := context.Background()
 
-	oid, _ := primitive.ObjectIDFromHex(fiche)
-	require.NoError(t, svc.Credit(context.Background(), fiche, 3, "test"))
-	listing := primitive.NewObjectID().Hex()
-	require.NoError(t, svc.Consume(context.Background(), fiche, 1, "immo_listing", RefListing, listing, nil))
-	require.NoError(t, svc.Consume(context.Background(), fiche, 1, "immo_listing", RefListing, listing, nil))
-	assert.Equal(t, 2, repo.balanceOf(oid), "une annonce se paie une fois")
+	// L'état de la préprod, posé PAR LE DÉPÔT — comme une version d'avant
+	// l'a écrit.
+	owner := primitive.NewObjectID()
+	legacy := &Wallet{OwnerID: owner, Type: "publisher", Balance: 16, UpdatedAt: time.Now().UTC()}
+	require.NoError(t, repo.CreateWallet(ctx, legacy))
+	listing, boost := primitive.NewObjectID(), primitive.NewObjectID()
+	for _, tx := range []Transaction{
+		{WalletID: legacy.ID, Kind: KindConsume, Reason: "immo_listing", Amount: -1, RefKind: RefListing, RefID: &listing, CreatedAt: time.Now().UTC()},
+		{WalletID: legacy.ID, Kind: KindConsume, Reason: "immo_boost", Amount: -3, RefKind: RefListingBoost, RefID: &boost, CreatedAt: time.Now().UTC()},
+	} {
+		tx := tx
+		require.NoError(t, repo.InsertTransaction(ctx, &tx))
+	}
 
-	other := primitive.NewObjectID().Hex()
-	require.NoError(t, svc.Consume(context.Background(), fiche, 1, "immo_listing", RefListing, other, nil))
-	assert.Equal(t, 1, repo.balanceOf(oid), "une autre annonce, un autre jeton")
+	// LA LECTURE : le portefeuille et ses deux débits, tels qu'écrits.
+	w, err := svc.WalletOf(ctx, owner.Hex())
+	require.NoError(t, err, "le portefeuille se lit")
+	assert.Equal(t, "publisher", w.Type)
+	assert.Equal(t, 16, w.Balance)
+	items, _, err := svc.TransactionsOf(ctx, owner.Hex(), httpx.Page{Limit: 20})
+	require.NoError(t, err, "le grand livre se lit")
+	kinds := []string{}
+	for _, it := range items {
+		kinds = append(kinds, it.RefKind)
+	}
+	assert.ElementsMatch(t, []string{RefListing, RefListingBoost}, kinds)
 
-	err = svc.Consume(context.Background(), fiche, 5, "immo_listing", RefListing, primitive.NewObjectID().Hex(), nil)
+	// L'ÉCRITURE : refusée, et rien ne bouge.
+	err = svc.Consume(ctx, owner.Hex(), 1, "immo_listing", RefListing, primitive.NewObjectID().Hex(), nil)
 	require.Error(t, err)
-	assert.Equal(t, 1, repo.balanceOf(oid), "un solde insuffisant ne débite rien")
-}
+	assert.Equal(t, "validation_failed", apperr.From(err).Code)
+	err = svc.Consume(ctx, owner.Hex(), 3, "immo_boost", RefListingBoost, primitive.NewObjectID().Hex(), nil)
+	require.Error(t, err)
+	assert.Equal(t, "validation_failed", apperr.From(err).Code)
+	assert.Equal(t, 16, repo.balanceOf(owner), "aucun débit nouveau")
+	items, _, err = svc.TransactionsOf(ctx, owner.Hex(), httpx.Page{Limit: 20})
+	require.NoError(t, err)
+	assert.Len(t, items, 2, "aucune ligne nouvelle")
 
-// ⚠️ UNE MISE EN AVANT SE PAIE SOUS SON PROPRE IDENTIFIANT : l'annonce est déjà
-// payée sous le sien, et mettre deux fois la même annonce en avant fait deux
-// débits — alors que la même mise en avant, rejouée, n'en fait qu'un.
-func TestABoostIsPaidUnderItsOwnReference(t *testing.T) {
-	repo := newFakeRepo()
-	svc, _, _, _ := newTestService(repo)
-	fiche := primitive.NewObjectID().Hex()
-	require.NoError(t, svc.CreateWallet(context.Background(), fiche, WalletTypePublisher))
-	oid, _ := primitive.ObjectIDFromHex(fiche)
-	require.NoError(t, svc.Credit(context.Background(), fiche, 10, "test"))
-
-	listing := primitive.NewObjectID().Hex()
-	require.NoError(t, svc.Consume(context.Background(), fiche, 1, "immo_listing", RefListing, listing, nil))
-	first, second := primitive.NewObjectID().Hex(), primitive.NewObjectID().Hex()
-	require.NoError(t, svc.Consume(context.Background(), fiche, 3, "immo_boost", RefListingBoost, first, nil))
-	require.NoError(t, svc.Consume(context.Background(), fiche, 3, "immo_boost", RefListingBoost, first, nil))
-	assert.Equal(t, 6, repo.balanceOf(oid), "la même mise en avant, rejouée, ne paie qu'une fois")
-	require.NoError(t, svc.Consume(context.Background(), fiche, 3, "immo_boost", RefListingBoost, second, nil))
-	assert.Equal(t, 3, repo.balanceOf(oid), "une seconde mise en avant est un second débit")
+	err = svc.CreateWallet(ctx, primitive.NewObjectID().Hex(), "publisher")
+	require.Error(t, err, "un portefeuille de ce type ne s'ouvre plus")
+	assert.Equal(t, "validation_failed", apperr.From(err).Code)
 }

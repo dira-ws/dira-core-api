@@ -197,9 +197,9 @@ func (s *Service) GetSettings(ctx context.Context) (SettingsResponse, error) {
 // UpdateSettings applique ce qui est FOURNI et laisse le reste.
 //
 // ⚠️ UN PUT PARTIEL NE REMPLACE PAS TOUT, et c'est pour cela que les champs
-// sont des pointeurs. Un écriture « qui remplace » a déjà effacé trois prix de
-// l'immobilier le mois dernier : ici, elle aurait remis le plafond de retenue
-// au défaut en changeant seulement le jour de paie.
+// sont des pointeurs. Une écriture « qui remplace » a déjà effacé trois prix
+// ailleurs sur la plateforme : ici, elle aurait remis le plafond de retenue au
+// défaut en changeant seulement le jour de paie.
 func (s *Service) UpdateSettings(ctx context.Context, in SettingsInput) (SettingsResponse, error) {
 	code := country.FromContext(ctx)
 	set, err := s.repo.Settings(ctx, code)

@@ -70,7 +70,10 @@ func (h *Handler) Mount(r chi.Router, authMW func(http.Handler) http.Handler) {
 	})
 }
 
-// GET /admin/users?role=&status=&q=&cursor=&limit=
+// GET /admin/users?role=&status=&q=&interest=&cursor=&limit=
+//
+// ⚠️ `not_only` N'EST PLUS LU (voir `AccountFilter`) : ignoré, il rend la liste
+// entière, et c'est voulu.
 func (h *Handler) listAccounts(w http.ResponseWriter, r *http.Request) {
 	page := httpx.PageFromRequest(r)
 	items, next, err := h.svc.ListAccounts(r.Context(), AccountFilter{
@@ -78,7 +81,6 @@ func (h *Handler) listAccounts(w http.ResponseWriter, r *http.Request) {
 		Status:   r.URL.Query().Get("status"),
 		Query:    r.URL.Query().Get("q"),
 		Interest: r.URL.Query().Get("interest"),
-		NotOnly:  r.URL.Query().Get("not_only"),
 	}, page.Cursor, page.Limit)
 	if err != nil {
 		httpx.Error(w, r, err)

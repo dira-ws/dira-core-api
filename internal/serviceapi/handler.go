@@ -138,11 +138,6 @@ type Wallets interface {
 	// verticale demande avant d'engager un chauffeur sur une course que le
 	// solde devra payer à l'acceptation.
 	WalletOf(ctx context.Context, ownerID string) (token.WalletResponse, error)
-	// PurchaseForOwner lance l'achat de jetons POUR un portefeuille désigné
-	// par son propriétaire, au nom de `actorID` (celui qui paie, et qui lira
-	// son paiement) — le chemin d'une verticale dont le socle ne connaît pas
-	// les propriétaires (la fiche d'un annonceur).
-	PurchaseForOwner(ctx context.Context, actorID, ownerID string, tokens int) (token.PurchaseResponse, error)
 }
 
 // Payments starts a mobile-money payment ON BEHALF OF a person.
@@ -345,7 +340,6 @@ func (h *Handler) Mount(r chi.Router, serviceMW func(http.Handler) http.Handler)
 		// pose de l'ARGENT. Une seule route avec un champ « unité » aurait
 		// fini par créditer des francs à qui demandait des jetons.
 		g.Post("/internal/wallets/topup", h.topUp)
-		g.Post("/internal/wallets/purchase", h.purchaseForOwner)
 		g.Post("/internal/wallets/pay", h.payRef)
 		g.Post("/internal/wallets/refund", h.refundRef)
 		g.Post("/internal/wallets/balance", h.balance)
@@ -438,7 +432,7 @@ func (h *Handler) ensureMerchant(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) ensureAccount(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		Role  string `json:"role" validate:"required,oneof=client driver merchant publisher admin"`
+		Role  string `json:"role" validate:"required,oneof=client driver merchant admin"`
 		Phone string `json:"phone" validate:"required,e164"`
 		Name  string `json:"name" validate:"required,min=1,max=120"`
 		// ⚠️ L'e-mail n'est pas décoratif : la console d'administration se
@@ -498,7 +492,7 @@ func (h *Handler) claimAgentApp(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) addInterest(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		UserID   string `json:"user_id" validate:"required,len=24,hexadecimal"`
-		Interest string `json:"interest" validate:"required,oneof=food vtc immo"`
+		Interest string `json:"interest" validate:"required,oneof=food vtc"`
 	}
 	if err := httpx.DecodeService(r, &req); err != nil {
 		httpx.Error(w, r, err)
@@ -539,50 +533,27 @@ type walletRequest struct {
 	Amount  int    `json:"amount" validate:"required,gt=0"`
 	// CommissionXOF : la part de la plateforme retenue sur `credit-earnings`
 	// (mode `commission` de la verticale). Zéro = tout revient à l'agent.
-	CommissionXOF int            `json:"commission_xof" validate:"omitempty,min=0"`
-	Reason        string         `json:"reason" validate:"omitempty,max=60"`
-	RefID         string         `json:"ref_id" validate:"omitempty,len=24,hexadecimal"`
-	RefKind       string         `json:"ref_kind" validate:"omitempty,oneof=order ride tip ride_adjustment listing listing_boost"`
-	Ref           map[string]any `json:"ref"`
-	Type          string         `json:"type" validate:"omitempty,oneof=driver merchant client publisher"`
-}
-
-// purchaseForOwner : une verticale achète des jetons pour un portefeuille
-// qu'elle seule sait attribuer (la fiche d'un annonceur), au nom de celui qui
-// paie. Le paiement est le sien : il le suit par `GET /payments/{id}`, et le
-// portefeuille est crédité à la confirmation, comme tout achat.
-//
-// ⚠️ LA VERTICALE A VÉRIFIÉ LE DROIT D'ACHETER (le porteur, un `manager`) —
-// le socle ne connaît ni la fiche ni ses rangs. Le secret de service garde la
-// route.
-func (h *Handler) purchaseForOwner(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		OwnerID string `json:"owner_id" validate:"required,len=24,hexadecimal"`
-		ActorID string `json:"actor_id" validate:"required,len=24,hexadecimal"`
-		Tokens  int    `json:"tokens" validate:"required,gt=0,lte=100000"`
-	}
-	if err := httpx.DecodeService(r, &req); err != nil {
-		httpx.Error(w, r, err)
-		return
-	}
-	out, err := h.wallets.PurchaseForOwner(r.Context(), req.ActorID, req.OwnerID, req.Tokens)
-	if err != nil {
-		httpx.Error(w, r, err)
-		return
-	}
-	httpx.JSON(w, http.StatusCreated, out)
+	CommissionXOF int    `json:"commission_xof" validate:"omitempty,min=0"`
+	Reason        string `json:"reason" validate:"omitempty,max=60"`
+	RefID         string `json:"ref_id" validate:"omitempty,len=24,hexadecimal"`
+	// RefKind : ce que ce mouvement paie. ⚠️ `listing` et `listing_boost`, que
+	// le grand livre porte encore, ne s'acceptent plus : ils venaient d'une
+	// verticale qui ne fait plus partie de Dira (voir `token.RefListing`).
+	RefKind string         `json:"ref_kind" validate:"omitempty,oneof=order ride tip ride_adjustment"`
+	Ref     map[string]any `json:"ref"`
+	Type    string         `json:"type" validate:"omitempty,oneof=driver merchant client"`
 }
 
 func (h *Handler) createWallet(w http.ResponseWriter, r *http.Request) {
 	// ⚠️⚠️ SA PROPRE STRUCTURE. Elle décodait `walletRequest`, celle des
 	// débits, dont `amount` est OBLIGATOIRE : ouvrir un portefeuille sans
 	// montant était refusé en `422`, et la livraison envoyait un `amount: 1`
-	// de contournement. L'immobilier, qui ne l'envoyait pas, voyait chaque
+	// de contournement. Une verticale qui ne l'envoyait pas voyait chaque
 	// lecture de portefeuille échouer en préprod (11 nov. 2026).
 	// `amount` reste ACCEPTÉ (et ignoré) : ceux qui l'envoient ne cassent pas.
 	var req struct {
 		OwnerID string `json:"owner_id" validate:"required,len=24,hexadecimal"`
-		Type    string `json:"type" validate:"required,oneof=driver merchant client publisher"`
+		Type    string `json:"type" validate:"required,oneof=driver merchant client"`
 		Amount  int    `json:"amount"`
 	}
 	if err := httpx.DecodeService(r, &req); err != nil {
@@ -942,9 +913,9 @@ func (h *Handler) recordAudit(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) notifyStaff(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		// ⚠️ PAS DE `oneof` ICI, ET C'EST UNE CORRECTION. La liste écrite à la
-		// main disait `core food vtc` : la quatrième verticale, l'immobilier,
-		// était refusée en `422` sur une route dont rien n'annonçait qu'elle
-		// tenait un catalogue de portées. Le socle en avait déjà deux copies
+		// main disait `core food vtc` : une verticale ajoutée était refusée en
+		// `422` sur une route dont rien n'annonçait qu'elle tenait un
+		// catalogue de portées. Le socle en avait déjà deux copies
 		// de ce genre — `staff.Scopes`, corrigée dans le même lot — et le
 		// commentaire d'`AllScopes` annonçait précisément cela : « deux listes
 		// divergeraient au premier métier ajouté ».
@@ -1079,7 +1050,7 @@ func (h *Handler) listPayments(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) accountSearch(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Q     string   `json:"q" validate:"required,min=2,max=80"`
-		Roles []string `json:"roles" validate:"omitempty,max=5,dive,oneof=client driver merchant publisher admin"`
+		Roles []string `json:"roles" validate:"omitempty,max=4,dive,oneof=client driver merchant admin"`
 		Limit int      `json:"limit" validate:"omitempty,min=1,max=200"`
 	}
 	if err := httpx.DecodeService(r, &req); err != nil {

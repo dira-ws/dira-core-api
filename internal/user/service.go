@@ -188,13 +188,9 @@ func (s *Service) Register(ctx context.Context, req RegisterRequest) (AuthRespon
 	// formulaire d'inscription. Le provisionnement d'un administrateur passe
 	// par `EnsureAccount`, derrière le secret de service.
 	switch role {
-	// ⚠️ `publisher` EST ADMIS ICI, comme `merchant` : un particulier qui met
-	// son appartement en ligne s'inscrit lui-même, depuis l'application pro,
-	// et attendre qu'un administrateur lui ouvre un compte aurait fait du
-	// premier bien publié une démarche administrative.
-	case auth.RoleClient, auth.RoleDriver, auth.RoleMerchant, auth.RolePublisher:
+	case auth.RoleClient, auth.RoleDriver, auth.RoleMerchant:
 	default:
-		return AuthResponse{}, apperr.Validation("role must be client, driver, merchant or publisher")
+		return AuthResponse{}, apperr.Validation("role must be client, driver or merchant")
 	}
 	return s.register(ctx, req, role)
 }
@@ -415,11 +411,7 @@ var appRole = map[string]string{
 	// de route venait à manquer : il est refusé à la CONNEXION,
 	// `403 wrong_app`, avant d'avoir un jeton.
 	"partner": auth.RolePartner,
-	// ⚠️ L'ANNONCEUR A SON APPLICATION, et c'est le même verrou que pour le
-	// partenaire : un compte pro qui tenterait la console d'exploitation est
-	// refusé à la CONNEXION, `403 wrong_app`, avant d'avoir un jeton.
-	"immo_pro": auth.RolePublisher,
-	"console":  auth.RoleAdmin,
+	"console": auth.RoleAdmin,
 }
 
 // appOfRole nomme l'application où ce compte doit aller — pour le DIRE à la
@@ -429,13 +421,16 @@ var appRole = map[string]string{
 // que le compte ne porte pas d'appartenance : deux métiers se partagent ce
 // rôle, et le socle ne peut pas deviner lequel. Dès que l'appartenance est
 // connue, `allowedInApp` s'en sert à la place — elle est exacte.
+//
+// ⚠️ UN RÔLE QUE LA PLATEFORME NE SERT PLUS n'a pas d'application : le refus
+// part alors avec un `reason` vide, que les applications replient sur le
+// message — jamais une phrase à trou. Un tel compte n'a plus rien à ouvrir ici.
 var appOfRole = map[string]string{
-	auth.RoleClient:    "client",
-	auth.RoleDriver:    AgentAppDriver,
-	auth.RoleMerchant:  "merchant",
-	auth.RolePartner:   "partner",
-	auth.RolePublisher: "immo_pro",
-	auth.RoleAdmin:     "console",
+	auth.RoleClient:   "client",
+	auth.RoleDriver:   AgentAppDriver,
+	auth.RoleMerchant: "merchant",
+	auth.RolePartner:  "partner",
+	auth.RoleAdmin:    "console",
 }
 
 // refuseApp compose le refus « ce n'est pas votre application », en NOMMANT
@@ -1112,9 +1107,9 @@ func (s *Service) EnsureAccount(ctx context.Context, role, phone, name, email, p
 	// un service qui peut créer un administrateur peut tout.
 	switch role {
 	case auth.RoleClient, auth.RoleDriver, auth.RoleMerchant, auth.RoleAdmin,
-		auth.RolePartner, auth.RolePublisher:
+		auth.RolePartner:
 	default:
-		return "", apperr.Validation("role must be client, driver, merchant, admin, partner or publisher")
+		return "", apperr.Validation("role must be client, driver, merchant, admin or partner")
 	}
 	existing, err := s.repo.FindByPhone(ctx, phone)
 	if err != nil {
@@ -1175,12 +1170,14 @@ func (s *Service) EnsureAccount(ctx context.Context, role, phone, name, email, p
 // --- administration des comptes ---
 
 // ListAccounts searches accounts for an administration screen.
+//
+// ⚠️ UN BADGE RETIRÉ EST REFUSÉ COMME UN BADGE INCONNU : il reste écrit sur des
+// comptes anciens, mais il ne se montre plus (`AccountRow.fill`) — filtrer
+// dessus rendrait des lignes qui n'affichent pas ce qu'on a demandé.
 func (s *Service) ListAccounts(ctx context.Context, f AccountFilter, cursor string, limit int) ([]AccountRow, string, error) {
-	for name, v := range map[string]string{"interest": f.Interest, "not_only": f.NotOnly} {
-		if v != "" && !interest.Valid(v) {
-			return nil, "", apperr.Validation("unknown interest").
-				WithMeta(map[string]any{"fields": []string{name}, "reason": v})
-		}
+	if f.Interest != "" && !interest.Valid(f.Interest) {
+		return nil, "", apperr.Validation("unknown interest").
+			WithMeta(map[string]any{"fields": []string{"interest"}, "reason": f.Interest})
 	}
 	return s.repo.ListAccounts(ctx, f, cursor, limit)
 }

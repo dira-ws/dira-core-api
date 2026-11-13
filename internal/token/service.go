@@ -158,9 +158,9 @@ func NewService(repo Repo, auditRec *audit.Recorder, payments PurchaseInitiator,
 // ne protège rien : elle perd de l'argent en silence.
 func (s *Service) CreateWallet(ctx context.Context, ownerID, walletType string) error {
 	switch walletType {
-	case WalletTypeDriver, WalletTypeMerchant, WalletTypeClient, WalletTypePublisher:
+	case WalletTypeDriver, WalletTypeMerchant, WalletTypeClient:
 	default:
-		return apperr.Validation("wallet type must be driver, merchant, client or publisher")
+		return apperr.Validation("wallet type must be driver, merchant or client")
 	}
 	oid, err := primitive.ObjectIDFromHex(ownerID)
 	if err != nil {

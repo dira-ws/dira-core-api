@@ -92,20 +92,22 @@ func (r *Repository) UpsertDevice(ctx context.Context, d *Device) error {
 	now := time.Now().UTC()
 	_, err := r.devices.UpdateOne(ctx, bson.M{"token": d.Token}, bson.M{
 		"$set": bson.M{
-			"user_id":  d.UserID,
-			"platform": d.Platform,
-			"locale":   d.Locale,
-			"edition":  d.Edition,
-			// ⚠️ ÉCRIT MÊME VIDE : un jeton passé d'une application à l'autre
-			// (réinstallation, même jeton) ne doit pas garder l'ancienne.
-			"app":          d.App,
+			"user_id":      d.UserID,
+			"platform":     d.Platform,
+			"locale":       d.Locale,
+			"edition":      d.Edition,
 			"last_seen_at": now,
 		},
 		"$setOnInsert": bson.M{"token": d.Token, "created_at": now},
 		// Un jeton qu'on réenregistre est vivant : on relève la marque de
 		// mort laissée par un échec précédent, sinon un utilisateur qui
 		// rouvre l'application resterait injoignable pour toujours.
-		"$unset": bson.M{"disabled_at": "", "disabled_reason": ""},
+		//
+		// ⚠️ ET IL PERD LA MARQUE D'UNE APPLICATION RETIRÉE (`app`, voir
+		// `app.go`) : celui qui l'enregistre ici est une application de Dira
+		// — l'autre ne passe plus le décodeur. Un jeton passé d'une
+		// application à l'autre (réinstallation, même jeton) redevient joignable.
+		"$unset": bson.M{"disabled_at": "", "disabled_reason": "", "app": ""},
 	}, options.Update().SetUpsert(true))
 	if err != nil {
 		return fmt.Errorf("notify: upsert device: %w", err)
@@ -165,7 +167,9 @@ func (r *Repository) activeDevices(ctx context.Context, userID primitive.ObjectI
 	if err := cur.All(ctx, &out); err != nil {
 		return nil, fmt.Errorf("notify: decode devices: %w", err)
 	}
-	return out, nil
+	// ⚠️ ICI, ET NULLE PART AILLEURS : chaque envoi — notification, appel,
+	// campagne — passe par cette lecture. Voir `app.go`.
+	return servedDevices(out), nil
 }
 
 // DisableDevice marque un jeton que FCM a déclaré mort.

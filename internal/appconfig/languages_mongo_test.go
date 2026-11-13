@@ -23,12 +23,22 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.mongodb.org/mongo-driver/mongo"
 
 	"github.com/kgtech-org/dira-core-api/pkg/auth"
 	"github.com/kgtech-org/dira-core-api/pkg/db"
 )
 
 func routesSurBase(t *testing.T) http.Handler {
+	t.Helper()
+	h, _ := routesEtBase(t)
+	return h
+}
+
+// routesEtBase rend aussi la collection du registre : une épreuve qui doit
+// partir d'un document ÉCRIT AVANT — par une version d'avant — le pose à la
+// main, sans passer par une route qui le nettoierait.
+func routesEtBase(t *testing.T) (http.Handler, *mongo.Collection) {
 	t.Helper()
 	uri := os.Getenv("DIRA_TEST_MONGO_URI")
 	if uri == "" {
@@ -51,7 +61,7 @@ func routesSurBase(t *testing.T) http.Handler {
 	}
 	pass := func(next http.Handler) http.Handler { return next }
 	NewHandler(NewService(repo), repo).Mount(r, admin, pass)
-	return r
+	return r, m.Collection(Collection)
 }
 
 func appelle(t *testing.T, h http.Handler, method, path, body string) (int, map[string]any) {
@@ -139,24 +149,4 @@ func TestARefusalThroughTheRealRoute(t *testing.T) {
 
 	_, view := appelle(t, h, http.MethodGet, "/admin/languages", "")
 	assert.Equal(t, false, view["saved"], "un refus n'écrit rien")
-}
-
-// ⚠️⚠️ L'IMMOBILIER S'ÉCRIT VRAIMENT, et se relit — sur une vraie base, à travers
-// la vraie route. C'est le chemin qu'un `$set` oublié aurait cassé sans bruit :
-// la console aurait affiché les pays qu'elle venait d'envoyer, et Dira Immo ne
-// se serait jamais ouvert.
-func TestImmoCountriesRoundTripOnARealBase(t *testing.T) {
-	h := routesSurBase(t)
-	code, out := appelle(t, h, http.MethodPut, "/admin/app-config", `{"immo":["td","GA"]}`)
-	require.Equal(t, http.StatusOK, code, "%v", out)
-
-	_, again := appelle(t, h, http.MethodGet, "/admin/app-config", "")
-	rules := again["rules"].(map[string]any)
-	assert.Equal(t, []any{"GA", "TD"}, rules["immo"])
-
-	code, out = appelle(t, h, http.MethodPut, "/admin/app-config", `{"immo":["GA","Gabon"]}`)
-	require.Equal(t, http.StatusUnprocessableEntity, code)
-	refus := out["error"].(map[string]any)
-	assert.Equal(t, "Gabon", refus["reason"], "la console affiche ce champ")
-	assert.Equal(t, []any{"immo"}, refus["fields"])
 }

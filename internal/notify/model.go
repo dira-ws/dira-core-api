@@ -70,8 +70,10 @@ type Device struct {
 	// impossible de distinguer ses deux téléphones — ou ses deux applications
 	// sur le même téléphone.
 	Edition string `bson:"edition,omitempty"`
-	// App : `immo` quand le jeton est celui de l'application Dira Immo ; absent
-	// sinon (voir `app.go`). ⚠️ PROPRIÉTÉ DE L'INSTALLATION, comme l'édition.
+	// App : LU, PLUS JAMAIS ÉCRIT. Il marquait les jetons d'une application qui
+	// ne fait plus partie de Dira ; un jeton qui le porte n'est plus joint
+	// (`servedDevices`), et un jeton réenregistré par une application de Dira
+	// le perd (`UpsertDevice`). Voir `app.go`.
 	App        string    `bson:"app,omitempty"`
 	CreatedAt  time.Time `bson:"created_at"`
 	LastSeenAt time.Time `bson:"last_seen_at"`
@@ -421,56 +423,6 @@ const (
 	// période suffisent à reconnaître de quoi on parle ; le motif d'une retenue
 	// sur un écran verrouillé se lit par-dessus l'épaule.
 	KeyPayrollPaid = "payroll_paid"
-	// L'IMMOBILIER (`dira-immo-api`) — une recherche gardée a de nouvelles
-	// annonces. UNE par recherche et par passage (toutes les 30 minutes au
-	// plus), quel que soit le nombre d'annonces : « 3 nouvelles », pas trois
-	// messages. Le titre de l'annonce est public — il est déjà sur le site.
-	KeyImmoSavedSearchMatch = "immo_saved_search_match"
-	// LES VISITES DE L'IMMOBILIER (`dira-immo-api`, module `visit`). L'heure est
-	// l'heure LOCALE du pays de la visite, composée par l'immobilier.
-	//
-	// ⚠️ NI ADRESSE NI TÉLÉPHONE DANS LE TEXTE : un écran verrouillé se lit
-	// par-dessus l'épaule, et l'adresse exacte d'un particulier n'est levée
-	// que dans l'application, pour la visite confirmée.
-	KeyImmoVisitRequested = "immo_visit_requested" // → l'annonceur
-	KeyImmoVisitConfirmed = "immo_visit_confirmed" // → le chercheur
-	KeyImmoVisitDeclined  = "immo_visit_declined"  // → le chercheur
-	KeyImmoVisitCancelled = "immo_visit_cancelled" // → l'autre partie
-	KeyImmoVisitReminder  = "immo_visit_reminder"  // → les deux, deux heures avant
-	// LA MESSAGERIE DE L'IMMOBILIER (`dira-immo-api`, module `thread`) : un
-	// message sur une annonce, avant la visite. ⚠️ NI NOM NI NUMÉRO, comme
-	// `chat_message` — et le corps est déjà MASQUÉ par l'immobilier (un numéro
-	// écrit avant une visite confirmée ne passe pas).
-	KeyImmoThreadMessage = "immo_thread_message"
-	// CE QUI PRÉVIENT ENFIN L'ANNONCEUR (dira-immo-api#72, point 21). ⚠️ Le
-	// texte ne porte ni la note de l'équipe ni le motif d'un retrait : ils se
-	// lisent dans l'application, pas sur un écran verrouillé.
-	KeyImmoListingPublished = "immo_listing_published" // l'équipe a publié
-	KeyImmoListingReturned  = "immo_listing_returned"  // l'équipe renvoie en brouillon
-	KeyImmoListingModerated = "immo_listing_moderated" // l'équipe a retiré
-	KeyImmoMemberAttached   = "immo_member_attached"   // au collaborateur rattaché
-	KeyImmoMemberDetached   = "immo_member_detached"   // au collaborateur détaché
-	// Une demande de visite jamais tranchée, close par le serveur à l'heure :
-	// une phrase par côté — le chercheur a attendu, l'annonceur a oublié.
-	KeyImmoVisitExpired     = "immo_visit_expired"      // → le chercheur
-	KeyImmoVisitExpiredHost = "immo_visit_expired_host" // → l'annonceur
-	// KeyImmoVisitUnanswered : une demande qu'un agent laisse sans réponse,
-	// signalée au porteur et aux `manager` de l'agence (4 h, ou à mi-chemin du
-	// créneau si c'est plus tôt).
-	KeyImmoVisitUnanswered = "immo_visit_unanswered"
-	// LES LOYERS DE L'IMMOBILIER (`dira-immo-api`, module `lease`), AU
-	// LOCATAIRE : l'avis cinq jours avant, le rappel le jour même, puis les
-	// relances à J+3, J+10 et J+30 tant que le loyer n'est pas marqué payé.
-	//
-	// ⚠️ AUCUN ARGENT NE PASSE PAR DIRA : c'est le BAILLEUR qui marque un loyer
-	// payé. La relance le dit donc sans accuser — « pas encore marqué payé »,
-	// et « déjà réglé ? dites-le à votre bailleur ».
-	//
-	// ⚠️ NI ADRESSE NI NOM DU BAILLEUR SUR L'ÉCRAN VERROUILLÉ : la référence du
-	// bail suffit à le reconnaître, comme le montant.
-	KeyImmoRentNotice = "immo_rent_notice" // J-5
-	KeyImmoRentDue    = "immo_rent_due"    // le jour même
-	KeyImmoRentLate   = "immo_rent_late"   // J+3, J+10, J+30
 )
 
 // defaults sont les gabarits COMPILÉS, servis tant que la base n'en porte pas.
@@ -1248,160 +1200,6 @@ var defaults = map[string]Template{
 			LocaleEN: {Title: "Pay sent", Body: "Your pay for [period] has been sent: [amount]."},
 		},
 	},
-	KeyImmoSavedSearchMatch: {
-		Key:         KeyImmoSavedSearchMatch,
-		Description: "Immobilier — une recherche sauvegardée a de nouvelles annonces (une alerte par recherche et par passage).",
-		Enabled:     true,
-		Locales: map[string]Text{
-			LocaleFR: {Title: "Du nouveau pour « [name] »", Body: "[title] vient d'être publiée. Nouvelles annonces : [count]."},
-			LocaleEN: {Title: "New for “[name]”", Body: "[title] was just listed. New listings: [count]."},
-		},
-	},
-	KeyImmoVisitRequested: {
-		Key:         KeyImmoVisitRequested,
-		Description: "Immobilier — un chercheur demande une visite (à l'annonceur, qui confirme ou refuse).",
-		Enabled:     true,
-		Locales: map[string]Text{
-			LocaleFR: {Title: "Demande de visite", Body: "Une visite est demandée pour « [listing_title] », le [date] à [time]. Confirmez-la ou refusez-la."},
-			LocaleEN: {Title: "Visit request", Body: "A visit is requested for “[listing_title]” on [date] at [time]. Confirm or decline it."},
-		},
-	},
-	KeyImmoVisitConfirmed: {
-		Key:         KeyImmoVisitConfirmed,
-		Description: "Immobilier — l'annonceur a confirmé la visite (au chercheur ; l'adresse et le contact s'ouvrent dans l'application).",
-		Enabled:     true,
-		Locales: map[string]Text{
-			LocaleFR: {Title: "Visite confirmée", Body: "Votre visite de « [listing_title] » est confirmée : le [date] à [time]. L'adresse et le contact sont dans l'application."},
-			LocaleEN: {Title: "Visit confirmed", Body: "Your visit to “[listing_title]” is confirmed: [date] at [time]. The address and contact are in the app."},
-		},
-	},
-	KeyImmoVisitDeclined: {
-		Key:         KeyImmoVisitDeclined,
-		Description: "Immobilier — l'annonceur n'a pas accepté la demande de visite (au chercheur).",
-		Enabled:     true,
-		Locales: map[string]Text{
-			LocaleFR: {Title: "Visite non acceptée", Body: "La visite de « [listing_title] » du [date] à [time] n'a pas été acceptée. D'autres créneaux sont peut-être libres."},
-			LocaleEN: {Title: "Visit not accepted", Body: "The visit to “[listing_title]” on [date] at [time] was not accepted. Other slots may be free."},
-		},
-	},
-	KeyImmoVisitCancelled: {
-		Key:         KeyImmoVisitCancelled,
-		Description: "Immobilier — une visite est annulée (à l'autre partie, ou au chercheur quand le créneau est retiré).",
-		Enabled:     true,
-		Locales: map[string]Text{
-			LocaleFR: {Title: "Visite annulée", Body: "La visite de « [listing_title] » du [date] à [time] est annulée."},
-			LocaleEN: {Title: "Visit cancelled", Body: "The visit to “[listing_title]” on [date] at [time] is cancelled."},
-		},
-	},
-	KeyImmoThreadMessage: {
-		Key:         KeyImmoThreadMessage,
-		Description: "Immobilier — un message sur une annonce, avant la visite (à l'autre partie). Ne nomme JAMAIS l'expéditeur.",
-		Enabled:     true,
-		Locales: map[string]Text{
-			LocaleFR: {Title: "Message sur « [listing_title] »", Body: "[body]"},
-			LocaleEN: {Title: "Message about “[listing_title]”", Body: "[body]"},
-		},
-	},
-	KeyImmoListingPublished: {
-		Key: KeyImmoListingPublished, Enabled: true,
-		Description: "Immobilier — l'équipe Dira a publié l'annonce (au compte qui l'a saisie, ou au porteur s'il est détaché).",
-		Locales: map[string]Text{
-			LocaleFR: {Title: "Annonce en ligne", Body: "« [listing_title] » est publiée : les chercheurs la voient."},
-			LocaleEN: {Title: "Listing online", Body: "“[listing_title]” is published: seekers can see it."},
-		},
-	},
-	KeyImmoListingReturned: {
-		Key: KeyImmoListingReturned, Enabled: true,
-		Description: "Immobilier — l'équipe Dira renvoie l'annonce en brouillon, avec une note (lue dans l'application).",
-		Locales: map[string]Text{
-			LocaleFR: {Title: "Annonce à revoir", Body: "L'équipe Dira vous renvoie « [listing_title] » : ouvrez-la pour lire sa note."},
-			LocaleEN: {Title: "Listing to review", Body: "The Dira team sent “[listing_title]” back to you: open it to read their note."},
-		},
-	},
-	KeyImmoListingModerated: {
-		Key: KeyImmoListingModerated, Enabled: true,
-		Description: "Immobilier — l'équipe Dira a retiré l'annonce après examen (le motif se lit dans l'application).",
-		Locales: map[string]Text{
-			LocaleFR: {Title: "Annonce retirée", Body: "L'équipe Dira a retiré « [listing_title] ». Ouvrez-la pour lire le motif."},
-			LocaleEN: {Title: "Listing withdrawn", Body: "The Dira team withdrew “[listing_title]”. Open it to read why."},
-		},
-	},
-	KeyImmoMemberAttached: {
-		Key: KeyImmoMemberAttached, Enabled: true,
-		Description: "Immobilier — le compte a été rattaché à une agence (au collaborateur).",
-		Locales: map[string]Text{
-			LocaleFR: {Title: "Bienvenue chez [publisher_name]", Body: "Vous publiez désormais au nom de « [publisher_name] »."},
-			LocaleEN: {Title: "Welcome to [publisher_name]", Body: "You now publish on behalf of “[publisher_name]”."},
-		},
-	},
-	KeyImmoMemberDetached: {
-		Key: KeyImmoMemberDetached, Enabled: true,
-		Description: "Immobilier — le compte a été détaché de son agence (au collaborateur).",
-		Locales: map[string]Text{
-			LocaleFR: {Title: "Rattachement terminé", Body: "Vous ne faites plus partie de « [publisher_name] »."},
-			LocaleEN: {Title: "No longer attached", Body: "You are no longer part of “[publisher_name]”."},
-		},
-	},
-	KeyImmoVisitExpired: {
-		Key: KeyImmoVisitExpired, Enabled: true,
-		Description: "Immobilier — la demande de visite n'a pas été tranchée à temps (au chercheur).",
-		Locales: map[string]Text{
-			LocaleFR: {Title: "Visite sans réponse", Body: "L'annonceur n'a pas répondu à temps pour « [listing_title] » le [date] à [time]. D'autres créneaux sont peut-être libres."},
-			LocaleEN: {Title: "Visit not answered", Body: "The publisher did not answer in time for “[listing_title]” on [date] at [time]. Other slots may be free."},
-		},
-	},
-	KeyImmoVisitExpiredHost: {
-		Key: KeyImmoVisitExpiredHost, Enabled: true,
-		Description: "Immobilier — une demande de visite a expiré sans réponse (à l'annonceur).",
-		Locales: map[string]Text{
-			LocaleFR: {Title: "Demande expirée", Body: "La demande de visite de « [listing_title] » du [date] à [time] a expiré sans réponse."},
-			LocaleEN: {Title: "Request expired", Body: "The visit request for “[listing_title]” on [date] at [time] expired unanswered."},
-		},
-	},
-	KeyImmoVisitUnanswered: {
-		Key: KeyImmoVisitUnanswered, Enabled: true,
-		Description: "Immobilier — une demande de visite attend toujours une réponse (au porteur et aux responsables de l'agence).",
-		Locales: map[string]Text{
-			LocaleFR: {Title: "Demande sans réponse", Body: "La demande de visite de « [listing_title] » du [date] à [time] attend toujours une réponse de votre équipe."},
-			LocaleEN: {Title: "Request not answered", Body: "The visit request for “[listing_title]” on [date] at [time] is still waiting for an answer from your team."},
-		},
-	},
-	KeyImmoRentNotice: {
-		Key:         KeyImmoRentNotice,
-		Description: "Immobilier — l'avis d'échéance, cinq jours avant un loyer (au locataire).",
-		Enabled:     true,
-		Locales: map[string]Text{
-			LocaleFR: {Title: "Loyer du [date]", Body: "Votre loyer de [amount] (bail [lease_ref]) est dû le [date]."},
-			LocaleEN: {Title: "Rent due on [date]", Body: "Your rent of [amount] (lease [lease_ref]) is due on [date]."},
-		},
-	},
-	KeyImmoRentDue: {
-		Key:         KeyImmoRentDue,
-		Description: "Immobilier — le rappel, le jour où un loyer est dû (au locataire).",
-		Enabled:     true,
-		Locales: map[string]Text{
-			LocaleFR: {Title: "Loyer dû aujourd'hui", Body: "Votre loyer de [amount] (bail [lease_ref]) est dû aujourd'hui."},
-			LocaleEN: {Title: "Rent due today", Body: "Your rent of [amount] (lease [lease_ref]) is due today."},
-		},
-	},
-	KeyImmoRentLate: {
-		Key:         KeyImmoRentLate,
-		Description: "Immobilier — la relance d'un loyer pas encore marqué payé, à J+3, J+10 et J+30 (au locataire).",
-		Enabled:     true,
-		Locales: map[string]Text{
-			LocaleFR: {Title: "Loyer en attente", Body: "Votre loyer de [amount] (bail [lease_ref]), dû le [date], n'est pas encore marqué payé — [days] jours. Déjà réglé ? Dites-le à votre bailleur."},
-			LocaleEN: {Title: "Rent pending", Body: "Your rent of [amount] (lease [lease_ref]), due on [date], is not marked as paid yet — [days] days. Already paid? Tell your landlord."},
-		},
-	},
-	KeyImmoVisitReminder: {
-		Key:         KeyImmoVisitReminder,
-		Description: "Immobilier — rappel deux heures avant une visite confirmée (aux deux parties).",
-		Enabled:     true,
-		Locales: map[string]Text{
-			LocaleFR: {Title: "Visite à [time]", Body: "Rappel : visite de « [listing_title] » aujourd'hui à [time]."},
-			LocaleEN: {Title: "Visit at [time]", Body: "Reminder: visit to “[listing_title]” today at [time]."},
-		},
-	},
 }
 
 // provided déclare, par clé, les variables que la PLATEFORME sait remplir.
@@ -1536,32 +1334,6 @@ var provided = map[string][]string{
 	KeySupportReply: {"country"},
 	// La période et le NET versé — rien du détail : voir `KeyPayrollPaid`.
 	KeyPayrollPaid: {"period", "amount"},
-	// Le nom donné à la recherche, le titre de la plus récente, le nombre
-	// d'annonces nouvelles, le pays de la recherche.
-	KeyImmoSavedSearchMatch: {"name", "title", "count", "country"},
-	// Le titre de l'annonce, le jour (`JJ/MM`) et l'heure (`HH:MM`), LOCAUX.
-	KeyImmoVisitRequested: {"listing_title", "date", "time"},
-	KeyImmoVisitConfirmed: {"listing_title", "date", "time"},
-	KeyImmoVisitDeclined:  {"listing_title", "date", "time"},
-	KeyImmoVisitCancelled: {"listing_title", "date", "time"},
-	KeyImmoVisitReminder:  {"listing_title", "date", "time"},
-	// Le titre de l'annonce (public), et l'aperçu du message — déjà masqué.
-	KeyImmoThreadMessage: {"listing_title", "body"},
-	// Le titre de l'annonce (public) ; le nom PUBLIC de la fiche.
-	KeyImmoListingPublished: {"listing_title"},
-	KeyImmoListingReturned:  {"listing_title"},
-	KeyImmoListingModerated: {"listing_title"},
-	KeyImmoMemberAttached:   {"publisher_name"},
-	KeyImmoMemberDetached:   {"publisher_name"},
-	KeyImmoVisitExpired:     {"listing_title", "date", "time"},
-	KeyImmoVisitExpiredHost: {"listing_title", "date", "time"},
-	KeyImmoVisitUnanswered:  {"listing_title", "date", "time"},
-	// Le montant DÉJÀ FORMÉ avec sa monnaie (« 150 000 F CFA »), la référence
-	// courte du bail, le jour d'échéance LOCAL (`JJ/MM`), et pour la relance le
-	// nombre de jours de retard.
-	KeyImmoRentNotice: {"amount", "lease_ref", "date"},
-	KeyImmoRentDue:    {"amount", "lease_ref", "date"},
-	KeyImmoRentLate:   {"amount", "lease_ref", "date", "days"},
 }
 
 // Provided rend les variables que la plateforme remplit pour une clé.

@@ -27,10 +27,6 @@ var labels = map[string]map[string]string{
 		DocVehicleFront:   "photo du véhicule — avant",
 		DocVehicleRear:    "photo du véhicule — arrière",
 		DocVehicleSide:    "photo du véhicule — côté",
-		// L'immobilier.
-		DocBusinessRegistration: "registre du commerce",
-		DocPropertyTitle:        "titre de propriété",
-		DocMandate:              "mandat de l'agence",
 	},
 	"en": {
 		DocLicence:        "driving licence",
@@ -43,10 +39,6 @@ var labels = map[string]map[string]string{
 		DocVehicleFront:   "vehicle photo - front",
 		DocVehicleRear:    "vehicle photo - rear",
 		DocVehicleSide:    "vehicle photo - side",
-		// Real estate.
-		DocBusinessRegistration: "business registration",
-		DocPropertyTitle:        "property title",
-		DocMandate:              "agency mandate",
 	},
 }
 

@@ -56,9 +56,7 @@ func categoryOf(key string) string {
 	// l'oublier ici l'aurait rangé dans la catégorie par défaut — donc sous un
 	// autre interrupteur que les messages écrits, ce qu'aucun utilisateur
 	// n'attend.
-	case KeyChatMessage, KeyChatVoiceMessage, KeyImmoThreadMessage:
-		// ⚠️ LA MESSAGERIE DE L'IMMOBILIER AUSSI : c'est une conversation, et
-		// la personne qui coupe les messages ne les veut d'aucun métier.
+	case KeyChatMessage, KeyChatVoiceMessage:
 		return CategoryChatMessages
 	case KeyDriverCall:
 		return CategoryDriverCall
@@ -111,24 +109,6 @@ func categoryOf(key string) string {
 		// doit pas cesser d'apprendre qu'il a été payé. La ranger dans les
 		// promotions aurait fait disparaître l'annonce la plus attendue du mois.
 		return CategorySupport
-	case KeyImmoVisitRequested, KeyImmoVisitConfirmed, KeyImmoVisitDeclined, KeyImmoVisitCancelled,
-		KeyImmoVisitReminder, KeyImmoVisitExpired, KeyImmoVisitExpiredHost, KeyImmoVisitUnanswered,
-		KeyImmoListingPublished, KeyImmoListingReturned, KeyImmoListingModerated,
-		KeyImmoRentNotice, KeyImmoRentDue, KeyImmoRentLate:
-		// Rangées avec les mises à jour, comme la nouvelle commande d'un
-		// marchand : une visite est une affaire en cours, pas une promotion.
-		return CategoryOrderUpdates
-	case KeyImmoMemberAttached, KeyImmoMemberDetached:
-		// ⚠️ NON COUPABLE : un changement d'ACCÈS — publier au nom d'une
-		// agence, ou ne plus le pouvoir — se dit toujours, comme une alerte de
-		// sécurité. Le couper laisserait quelqu'un publier sans savoir pour qui.
-		return CategorySecurity
-	case KeyImmoSavedSearchMatch:
-		// ⚠️ COUPABLE, ET C'EST VOULU : c'est une alerte qu'on a DEMANDÉE, pas
-		// une réponse qu'on attend. Rangée avec les mises à jour (et non dans
-		// les promotions, qu'on coupe d'un geste) ; chaque recherche s'éteint
-		// aussi seule, côté immobilier.
-		return CategoryOrderUpdates
 	case KeyMerchantNewOrder:
 		// Rangée avec les mises à jour de commande : c'est ce que c'est pour
 		// le marchand, et lui donner une catégorie à part lui offrirait un
@@ -180,8 +160,13 @@ func (r *Repository) InsertInbox(ctx context.Context, n *Inbox) error {
 }
 
 // ListInbox rend les notifications d'un compte, de la plus récente.
-func (r *Repository) ListInbox(ctx context.Context, userID primitive.ObjectID, cursor primitive.ObjectID, limit int, app string) ([]Inbox, error) {
-	filter := inboxScope(bson.M{"user_id": userID}, app)
+//
+// ⚠️ UNE ENTRÉE DONT LE GABARIT A ÉTÉ RETIRÉ SE LIT COMME LES AUTRES : son titre
+// et son texte ont été rendus et rangés à l'ENVOI, et la lecture ne relit
+// aucun gabarit. Une clé qu'aucune application ne connaît s'affiche, sans rien
+// ouvrir.
+func (r *Repository) ListInbox(ctx context.Context, userID primitive.ObjectID, cursor primitive.ObjectID, limit int) ([]Inbox, error) {
+	filter := bson.M{"user_id": userID}
 	if !cursor.IsZero() {
 		filter["_id"] = bson.M{"$lt": cursor}
 	}
@@ -198,10 +183,10 @@ func (r *Repository) ListInbox(ctx context.Context, userID primitive.ObjectID, c
 }
 
 // CountUnread compte ce que le compte n'a pas lu — le badge de l'écran Compte.
-func (r *Repository) CountUnread(ctx context.Context, userID primitive.ObjectID, app string) (int64, error) {
-	n, err := r.inbox.CountDocuments(ctx, inboxScope(bson.M{
+func (r *Repository) CountUnread(ctx context.Context, userID primitive.ObjectID) (int64, error) {
+	n, err := r.inbox.CountDocuments(ctx, bson.M{
 		"user_id": userID, "read_at": bson.M{"$exists": false},
-	}, app))
+	})
 	if err != nil {
 		return 0, fmt.Errorf("notify: count unread: %w", err)
 	}
@@ -226,11 +211,8 @@ func (r *Repository) SentSince(ctx context.Context, userID primitive.ObjectID, k
 }
 
 // MarkInboxRead marque une notification lue, ou TOUTES quand id est nul.
-//
-// ⚠️ BORNÉE À L'APPLICATION qui le demande : « tout marquer lu » dans Dira Immo
-// ne doit pas éteindre le badge des commandes dans l'application cliente.
-func (r *Repository) MarkInboxRead(ctx context.Context, userID, id primitive.ObjectID, at time.Time, app string) (int64, error) {
-	filter := inboxScope(bson.M{"user_id": userID, "read_at": bson.M{"$exists": false}}, app)
+func (r *Repository) MarkInboxRead(ctx context.Context, userID, id primitive.ObjectID, at time.Time) (int64, error) {
+	filter := bson.M{"user_id": userID, "read_at": bson.M{"$exists": false}}
 	if !id.IsZero() {
 		filter["_id"] = id
 	}
@@ -244,9 +226,7 @@ func (r *Repository) MarkInboxRead(ctx context.Context, userID, id primitive.Obj
 // --- service ---
 
 // ListInbox rend le centre de notifications d'un compte, avec le non-lu.
-//
-// `app` borne la boîte à une application (`immo`), "" la rend entière.
-func (s *Service) ListInbox(ctx context.Context, userID, cursor string, limit int, app string) ([]InboxResponse, int, string, error) {
+func (s *Service) ListInbox(ctx context.Context, userID, cursor string, limit int) ([]InboxResponse, int, string, error) {
 	uid, err := primitive.ObjectIDFromHex(userID)
 	if err != nil {
 		return nil, 0, "", apperr.Validation("invalid user id").WithCause(err)
@@ -260,11 +240,11 @@ func (s *Service) ListInbox(ctx context.Context, userID, cursor string, limit in
 	if limit <= 0 || limit > 100 {
 		limit = 30
 	}
-	items, err := s.repo.ListInbox(ctx, uid, after, limit, app)
+	items, err := s.repo.ListInbox(ctx, uid, after, limit)
 	if err != nil {
 		return nil, 0, "", err
 	}
-	unread, err := s.repo.CountUnread(ctx, uid, app)
+	unread, err := s.repo.CountUnread(ctx, uid)
 	if err != nil {
 		// Un compteur perdu ne doit pas emporter la liste elle-même.
 		unread = 0
@@ -281,7 +261,7 @@ func (s *Service) ListInbox(ctx context.Context, userID, cursor string, limit in
 }
 
 // MarkRead marque une notification lue, ou toutes quand notificationID est vide.
-func (s *Service) MarkRead(ctx context.Context, userID, notificationID, app string) (int, error) {
+func (s *Service) MarkRead(ctx context.Context, userID, notificationID string) (int, error) {
 	uid, err := primitive.ObjectIDFromHex(userID)
 	if err != nil {
 		return 0, apperr.Validation("invalid user id").WithCause(err)
@@ -292,7 +272,7 @@ func (s *Service) MarkRead(ctx context.Context, userID, notificationID, app stri
 			return 0, apperr.NotFound("notification_not_found", "notification not found").WithCause(err)
 		}
 	}
-	n, err := s.repo.MarkInboxRead(ctx, uid, id, time.Now().UTC(), app)
+	n, err := s.repo.MarkInboxRead(ctx, uid, id, time.Now().UTC())
 	return int(n), err
 }
 

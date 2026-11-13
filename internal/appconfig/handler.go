@@ -3,6 +3,7 @@ package appconfig
 // LES ROUTES — une pour les applications, cinq pour la console.
 
 import (
+	"encoding/json"
 	"net/http"
 	"time"
 
@@ -98,14 +99,26 @@ func (h *Handler) adminConfig(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// saveRequest est le registre tel que la console le renvoie.
+//
+// ⚠️⚠️ `immo` Y EST ACCEPTÉ, ET IGNORÉ. Une console d'avant renvoie le registre
+// ENTIER qu'elle a lu, avec la liste de pays d'une fonction que le socle ne
+// sert plus. Le décodeur strict l'aurait refusée (`422 unknown_field`), et plus
+// personne n'aurait pu régler une édition depuis elle : c'est la leçon du champ
+// retiré sous un décodeur strict. Accepté, jamais relu, jamais écrit.
+type saveRequest struct {
+	pkgconf.Registry
+	Retired json.RawMessage `json:"immo,omitempty"`
+}
+
 func (h *Handler) saveConfig(w http.ResponseWriter, r *http.Request) {
-	var req pkgconf.Registry
+	var req saveRequest
 	if err := httpx.Decode(r, &req); err != nil {
 		httpx.Error(w, r, err)
 		return
 	}
 	actor, _ := auth.UserFromContext(r.Context())
-	if err := h.svc.Save(r.Context(), req, actor); err != nil {
+	if err := h.svc.Save(r.Context(), req.Registry, actor); err != nil {
 		httpx.Error(w, r, err)
 		return
 	}

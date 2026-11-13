@@ -41,7 +41,8 @@ type AssetInput struct {
 // ⚠️ CHAQUE CHAMP EST UN POINTEUR : sans cela, « ne pas toucher à la
 // redevance » et « remettre la redevance à zéro » s'écrivent pareil — et
 // corriger une faute de frappe dans le modèle effacerait les conditions. C'est
-// la faute que la couche Immo a payée : un PUT partiel avait effacé trois prix.
+// une faute déjà payée ailleurs sur la plateforme : un PUT partiel avait effacé
+// trois prix.
 type AssetPatch struct {
 	ClassKey           *string     `json:"class_key" validate:"omitempty,min=2,max=40"`
 	Verticals          *[]string   `json:"verticals" validate:"omitempty,dive,oneof=food vtc"`

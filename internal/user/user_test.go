@@ -426,6 +426,23 @@ func TestRegisterAdminRoleRejected(t *testing.T) {
 	assert.Equal(t, 0, repo.userCount(), "no account created for rejected role")
 }
 
+// ⚠️ UN RÔLE RETIRÉ NE S'INSCRIT PLUS : le refus vient du service, pas
+// seulement du `oneof` du corps — une route qui l'oublierait ne rouvrirait
+// rien.
+func TestRegisterRetiredRoleRejected(t *testing.T) {
+	svc, repo, _ := newUserTestService()
+
+	req := registerReq()
+	req.Role = "publisher"
+	_, err := svc.Register(context.Background(), req)
+	assertUserCode(t, err, "validation_failed")
+	assert.Equal(t, 0, repo.userCount(), "no account created for a retired role")
+
+	_, err = svc.EnsureAccount(context.Background(), "publisher", "+22890123456", "Agence", "", "secret123", "")
+	assertUserCode(t, err, "validation_failed")
+	assert.Equal(t, 0, repo.userCount(), "le provisionnement non plus")
+}
+
 func TestRegisterDriverCreatesWallet(t *testing.T) {
 	svc, _, wallets := newUserTestService()
 

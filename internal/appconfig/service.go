@@ -3,6 +3,7 @@ package appconfig
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -111,6 +112,15 @@ func (s *Service) Resolve(ctx context.Context) appconfig.Resolved {
 	return s.Registry(ctx).Resolve(country.FromContext(ctx), edition.FromContext(ctx))
 }
 
+// retiredFeatures : les fonctions que le catalogue a portées et ne porte plus.
+//
+// ⚠️⚠️ TOLÉRÉES À L'ÉCRITURE, ET JETÉES. Une console d'avant renvoie le registre
+// qu'elle a lu, règles des fonctions retirées comprises : les refuser comme une
+// faute de frappe (`unknown feature`) l'aurait empêchée de régler quoi que ce
+// soit d'autre. Une VRAIE faute de frappe, elle, reste refusée — c'est pour
+// cela que la liste est nommée, et non « toute clé inconnue ».
+var retiredFeatures = []string{"immo"}
+
 // Save écrit le registre, après l'avoir validé.
 //
 // ⚠️⚠️ UNE CLÉ INCONNUE EST REFUSÉE, ET C'EST LE SEUL MOMENT OÙ ON PEUT LE
@@ -120,6 +130,9 @@ func (s *Service) Resolve(ctx context.Context) appconfig.Resolved {
 func (s *Service) Save(ctx context.Context, reg appconfig.Registry, actor string) error {
 	clean := appconfig.Registry{}
 	for key, rule := range reg.Features {
+		if slices.Contains(retiredFeatures, key) {
+			continue
+		}
 		if !appconfig.Known(key) {
 			return apperr.Validation("unknown feature: " + key).
 				WithMeta(map[string]any{"fields": []string{"features"}, "feature": key})
@@ -152,12 +165,6 @@ func (s *Service) Save(ctx context.Context, reg appconfig.Registry, actor string
 		return err
 	}
 	clean.Live = live
-	immo, bad := appconfig.CleanCountries(reg.Immo)
-	if bad != "" {
-		return apperr.Validation("a country is two letters: " + bad).
-			WithMeta(map[string]any{"fields": []string{"immo"}, "reason": bad})
-	}
-	clean.Immo = immo
 	if err := s.repo.Save(ctx, clean, actor); err != nil {
 		return err
 	}

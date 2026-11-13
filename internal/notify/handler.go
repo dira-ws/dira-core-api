@@ -191,13 +191,12 @@ func (h *Handler) listInbox(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	page := httpx.PageFromRequest(r)
-	// `?app=immo` : la boîte de l'application Dira Immo seulement (`app.go`).
-	app, err := ParseApp(r.URL.Query().Get("app"))
-	if err != nil {
+	// ⚠️ `?app=` EST REFUSÉ, PAS IGNORÉ : voir `app.go`.
+	if err := refuseAppParam(r.URL.Query().Get("app")); err != nil {
 		httpx.Error(w, r, err)
 		return
 	}
-	items, unread, next, err := h.svc.ListInbox(r.Context(), userID, page.Cursor, page.Limit, app)
+	items, unread, next, err := h.svc.ListInbox(r.Context(), userID, page.Cursor, page.Limit)
 	if err != nil {
 		httpx.Error(w, r, err)
 		return
@@ -221,12 +220,11 @@ func (h *Handler) markRead(w http.ResponseWriter, r *http.Request, id string) {
 		httpx.Error(w, r, apperr.Unauthorized("missing_token", "missing bearer token"))
 		return
 	}
-	app, err := ParseApp(r.URL.Query().Get("app"))
-	if err != nil {
+	if err := refuseAppParam(r.URL.Query().Get("app")); err != nil {
 		httpx.Error(w, r, err)
 		return
 	}
-	n, err := h.svc.MarkRead(r.Context(), userID, id, app)
+	n, err := h.svc.MarkRead(r.Context(), userID, id)
 	if err != nil {
 		httpx.Error(w, r, err)
 		return

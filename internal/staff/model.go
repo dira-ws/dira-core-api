@@ -52,14 +52,40 @@ var Functions = []string{FunctionOps, FunctionSupport, FunctionFinance, Function
 // redéclarer ici ferait deux vocabulaires pour une seule notion.
 //
 // ⚠️ C'EST UN ALIAS, PAS UNE COPIE — et il l'est devenu en payant le prix
-// annoncé. Cette ligne énumérait les trois portées à la main, à côté d'un
+// annoncé. Cette ligne énumérait les portées à la main, à côté d'un
 // commentaire d'`AllScopes` qui disait mot pour mot que « deux listes
-// divergeraient au premier métier ajouté ». Le quatrième métier est arrivé :
-// `immo` entrait dans `AllScopes`, que `cmd/seed` passe à `EnsureMember`, qui
-// le refusait ici comme portée inconnue. Le seed tombait — et une copie qui
+// divergeraient au premier métier ajouté ». Un métier est arrivé : sa portée
+// entrait dans `AllScopes`, que `cmd/seed` passe à `EnsureMember`, qui la
+// refusait ici comme portée inconnue. Le seed tombait — et une copie qui
 // tombe bruyamment est la chance, pas la règle : la console aurait tout
 // aussi bien pu simplement ne jamais proposer la case.
 var Scopes = auth.AllScopes
+
+// retiredScopes : les portées que le socle a servies et ne sert plus — celle
+// d'une verticale qui ne fait plus partie de Dira.
+//
+// ⚠️⚠️ TOLÉRÉES À L'ÉCRITURE, JAMAIS RENDUES NI ACCORDÉES. Elles restent écrites
+// sur des fiches anciennes (on ne réécrit pas une fiche pour les taire) : la
+// lecture les écarte (`served`). Une console d'avant qui renverrait la liste
+// qu'elle avait en mémoire ne doit pas se voir refuser la fiche entière en
+// `422` : elles sont jetées en silence de ce qui s'écrit. Une VRAIE faute de
+// frappe, elle, reste refusée — c'est pour cela que la liste est nommée.
+var retiredScopes = []string{"immo"}
+
+// served garde les portées que le socle connaît, dans l'ordre de la fiche.
+//
+// ⚠️ TOUJOURS UN TABLEAU, `[]` quand il ne reste rien : une fiche qui n'avait
+// qu'une portée retirée n'administre plus rien, et la console doit le lire
+// comme tel — pas comme un champ absent.
+func served(scopes []string) []string {
+	out := make([]string, 0, len(scopes))
+	for _, s := range scopes {
+		if slices.Contains(Scopes, s) {
+			out = append(out, s)
+		}
+	}
+	return out
+}
 
 const (
 	StatusActive    = "active"
@@ -82,9 +108,11 @@ type Member struct {
 	// le jeton, et c'est ce qui permet de suspendre quelqu'un en la vidant.
 	//
 	// Il n'existe pas de valeur « all » : elle aurait fait deux façons
-	// d'exprimer la même chose, et le jour où une quatrième verticale
-	// apparaît, « all » aurait continué de désigner les trois d'hier — sans
-	// que rien ne le signale.
+	// d'exprimer la même chose, et le jour où une verticale apparaît, « all »
+	// aurait continué de désigner celles d'hier — sans que rien ne le signale.
+	//
+	// ⚠️ ELLE PEUT PORTER UNE PORTÉE RETIRÉE (`retiredScopes`) : on la lit à
+	// travers `served`, jamais telle quelle.
 	Scopes []string `bson:"scopes"`
 	// Title est l'intitulé humain, celui de la fiche de paie. Libre : « Chargé
 	// de support niveau 2 » n'entre dans aucune énumération, et forcer un

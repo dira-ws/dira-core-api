@@ -1,6 +1,7 @@
 package notify
 
-// DEUX APPLICATIONS CLIENTES, UN COMPTE — qui reçoit quoi.
+// CE QU'UNE APPLICATION RETIRÉE A LAISSÉ — ses jetons, ses messages, ses
+// gabarits personnalisés — et ce qu'il en advient.
 
 import (
 	"context"
@@ -19,6 +20,7 @@ import (
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 
+	"github.com/kgtech-org/dira-core-api/pkg/apperr"
 	"github.com/kgtech-org/dira-core-api/pkg/auth"
 	"github.com/kgtech-org/dira-core-api/pkg/db"
 	"github.com/kgtech-org/dira-core-api/pkg/edition"
@@ -32,43 +34,39 @@ func tokens(ds []Device) []string {
 	return out
 }
 
-// ⚠️⚠️ L'ASYMÉTRIE : l'immobilier va à Dira Immo et REPLIE sur les autres ; un
-// autre métier ne va JAMAIS à Dira Immo, même quand il n'y a qu'elle.
-func TestEachMessageGoesToTheAppThatCanOpenIt(t *testing.T) {
-	client := Device{Token: "client"}
-	lite := Device{Token: "lite", Edition: edition.Lite}
-	immo := Device{Token: "immo", App: AppImmo}
-
-	cases := []struct {
-		name    string
-		devices []Device
-		key     string
-		want    []string
-	}{
-		{"une visite, les deux applications", []Device{client, immo}, "immo_visit_confirmed", []string{"immo"}},
-		{"une visite, sans Dira Immo : le repli", []Device{client, lite}, "immo_visit_confirmed", []string{"client", "lite"}},
-		{"une alerte de recherche", []Device{immo, client}, "immo_saved_search_match", []string{"immo"}},
-		{"une course, les deux applications", []Device{client, immo}, "ride_accepted", []string{"client"}},
-		{"une course, Dira Immo seule : personne", []Device{immo}, "ride_accepted", []string{}},
-		{"un ticket du support", []Device{immo, lite}, "ticket_reply", []string{"lite"}},
-		{"une clé qui CONTIENT immo sans en être", []Device{immo, client}, "promo_immo_week", []string{"client"}},
+func pushed(msgs []PushMessage) []string {
+	out := make([]string, 0, len(msgs))
+	for _, m := range msgs {
+		out = append(out, m.Token)
 	}
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			assert.Equal(t, c.want, tokens(routeByApp(c.devices, c.key)))
-		})
-	}
+	return out
 }
 
-func TestTheAppParameterIsRefusedWhenUnknown(t *testing.T) {
-	for raw, want := range map[string]string{"": "", "immo": AppImmo, " immo ": AppImmo} {
-		got, err := ParseApp(raw)
-		require.NoError(t, err, raw)
-		assert.Equal(t, want, got)
+// ⚠️⚠️ UN JETON MARQUÉ D'UNE APPLICATION N'EST PLUS JOINT — quelle qu'elle soit :
+// aucune application de Dira ne s'enregistre avec `app`. Un jeton sans marque
+// est servi, comme avant.
+func TestOnlyTheTokensOfDiraAppsAreServed(t *testing.T) {
+	devices := []Device{
+		{Token: "client"},
+		{Token: "lite", Edition: edition.Lite},
+		{Token: "retiree", App: "immo"},
+		{Token: "autre", App: "kiosque"},
+		{Token: "blanc", App: "  "},
 	}
-	for _, raw := range []string{"immobilier", "IMMO", "client"} {
-		_, err := ParseApp(raw)
-		assert.Error(t, err, "%q rendrait toute la boîte dans Dira Immo", raw)
+	assert.Equal(t, []string{"client", "lite", "blanc"}, tokens(servedDevices(devices)))
+	assert.Empty(t, servedDevices(nil))
+}
+
+// ⚠️ `?app=` EST REFUSÉ, PAS IGNORÉ : ignoré, il rendrait la boîte ENTIÈRE à qui
+// demandait la sienne. Le refus nomme le champ.
+func TestTheAppParameterIsRefused(t *testing.T) {
+	for _, raw := range []string{"", "  "} {
+		assert.NoError(t, refuseAppParam(raw), "%q : la boîte entière, comme toujours", raw)
+	}
+	for _, raw := range []string{"immo", " immo ", "client"} {
+		err := refuseAppParam(raw)
+		require.Error(t, err, raw)
+		assert.Equal(t, []string{"app"}, apperr.From(err).Meta["fields"], raw)
 	}
 }
 
@@ -86,114 +84,141 @@ func baseDeNotifs(t *testing.T) *Repository {
 	return NewRepository(m)
 }
 
-// ⚠️⚠️ SUR UNE VRAIE BASE : l'application s'écrit avec le jeton, et le tri passe
-// AVANT le repli sur l'édition — sinon Dira Immo + Lite ne prévenait personne.
-func TestTheAppIsStoredWithTheTokenAndRoutesBeforeTheEditionFallback(t *testing.T) {
+// ⚠️⚠️ SUR UNE VRAIE BASE : le jeton qu'une application retirée a laissé n'est
+// joint par AUCUN chemin d'envoi — une notification, un appel —, et le repli
+// sur l'édition se fait SANS lui : sinon un compte dont la seule « complète »
+// est ce jeton-là verrait sa course partir dans le vide, alors que Lite
+// l'attend. Réenregistré par une application de Dira (même jeton), il perd sa
+// marque et redevient joignable.
+func TestARetiredAppsTokenIsReachedByNoPathOnARealBase(t *testing.T) {
 	repo := baseDeNotifs(t)
 	svc := NewService(repo)
+	pusher := &fakePusher{}
+	svc.SetPusher(pusher)
 	ctx := context.Background()
-	user := primitive.NewObjectID().Hex()
-	uid, _ := primitive.ObjectIDFromHex(user)
+	uid := primitive.NewObjectID()
+	user := uid.Hex()
 
-	require.NoError(t, svc.RegisterDevice(ctx, user, RegisterDeviceRequest{Token: "immo", Platform: "android", App: AppImmo}))
+	// Le jeton tel qu'une version d'avant l'a écrit, avec sa marque.
+	_, err := repo.devices.InsertOne(ctx, bson.M{
+		"user_id": uid, "token": "retiree", "platform": "android", "app": "immo",
+		"created_at": time.Now().UTC(), "last_seen_at": time.Now().UTC(),
+	})
+	require.NoError(t, err)
 	require.NoError(t, svc.RegisterDevice(ctx, user, RegisterDeviceRequest{Token: "lite", Platform: "android", Edition: edition.Lite}))
 
-	got, err := svc.devicesFor(ctx, uid, edition.Full, "ride_accepted")
+	got, err := svc.devicesFor(ctx, uid, edition.Full)
 	require.NoError(t, err)
-	assert.Equal(t, []string{"lite"}, tokens(got),
-		"la seule « complète » est Dira Immo : la course doit replier sur Lite, pas se perdre")
+	assert.Equal(t, []string{"lite"}, tokens(got), "le repli sur l'édition se fait sans le jeton retiré")
+	got, err = svc.devicesFor(ctx, uid, "")
+	require.NoError(t, err)
+	assert.Equal(t, []string{"lite"}, tokens(got))
 
-	got, err = svc.devicesFor(ctx, uid, "", "immo_visit_confirmed")
+	svc.Notify(ctx, user, KeyRideAccepted, map[string]string{"driver": "Kodjo"}, map[string]string{"ride_id": "r1"})
+	assert.Equal(t, []string{"lite"}, pushed(pusher.sent), "une notification")
+	pusher.sent = nil
+	n, err := svc.Signal(ctx, user, map[string]string{"type": "call", "call_id": "c1"}, 30*time.Second)
 	require.NoError(t, err)
-	assert.Equal(t, []string{"immo"}, tokens(got))
+	assert.Equal(t, 1, n)
+	assert.Equal(t, []string{"lite"}, pushed(pusher.sent), "un appel")
 
-	// Le même jeton réenregistré SANS application la perd : réinstallé dans
-	// l'application cliente, il ne doit pas garder l'étiquette de Dira Immo.
-	require.NoError(t, svc.RegisterDevice(ctx, user, RegisterDeviceRequest{Token: "immo", Platform: "android"}))
-	got, err = svc.devicesFor(ctx, uid, "", "ride_accepted")
+	// Réinstallée dans une application de Dira, même jeton : la marque part.
+	require.NoError(t, svc.RegisterDevice(ctx, user, RegisterDeviceRequest{Token: "retiree", Platform: "android"}))
+	got, err = svc.devicesFor(ctx, uid, "")
 	require.NoError(t, err)
-	assert.ElementsMatch(t, []string{"immo", "lite"}, tokens(got))
+	assert.ElementsMatch(t, []string{"retiree", "lite"}, tokens(got))
+	var raw bson.M
+	require.NoError(t, repo.devices.FindOne(ctx, bson.M{"token": "retiree"}).Decode(&raw))
+	assert.NotContains(t, raw, "app", "la marque est effacée, pas réécrite vide")
 }
 
-// ⚠️ LA BOÎTE DE DIRA IMMO NE MONTRE QUE L'IMMOBILIER — et « tout marquer lu »
-// n'y éteint pas le badge des commandes. Sans `app`, la boîte reste entière.
-func TestTheImmoInboxIsScopedOnARealBase(t *testing.T) {
+// ⚠️⚠️ UNE BOÎTE QUI PORTE LES MESSAGES D'UN MÉTIER RETIRÉ SE LIT ENTIÈRE, sur une
+// vraie base : leur titre et leur texte ont été rendus et rangés à l'ENVOI, et
+// la lecture ne relit aucun gabarit — un gabarit retiré ne casse pas
+// l'affichage. Le badge les compte, « tout marquer lu » les éteint.
+func TestAnInboxWithARetiredVerticalsMessagesStillReadsOnARealBase(t *testing.T) {
 	repo := baseDeNotifs(t)
 	svc := NewService(repo)
 	ctx := context.Background()
 	uid := primitive.NewObjectID()
-	for _, key := range []string{"order_ready", "immo_visit_confirmed", "ride_accepted", "immo_saved_search_match"} {
-		require.NoError(t, repo.InsertInbox(ctx, &Inbox{ID: primitive.NewObjectID(), UserID: uid, Key: key, CreatedAt: time.Now().UTC()}))
+	for _, n := range []Inbox{
+		{Key: "order_ready", Category: CategoryOrderUpdates, Title: "Commande prête", Body: "Votre commande est prête."},
+		{Key: "immo_visit_confirmed", Category: CategoryOrderUpdates, Title: "Visite confirmée",
+			Body: "Votre visite de « T3 Bè » est confirmée le 15/11 à 10:00.", Data: map[string]string{"type": "immo_visit"}},
+	} {
+		n.ID, n.UserID, n.CreatedAt = primitive.NewObjectID(), uid, time.Now().UTC()
+		require.NoError(t, repo.InsertInbox(ctx, &n))
 	}
 
-	items, unread, _, err := svc.ListInbox(ctx, uid.Hex(), "", 30, AppImmo)
+	items, unread, _, err := svc.ListInbox(ctx, uid.Hex(), "", 30)
 	require.NoError(t, err)
-	keys := []string{}
+	require.Len(t, items, 2)
+	assert.Equal(t, 2, unread)
+	var retired InboxResponse
 	for _, it := range items {
-		keys = append(keys, it.Key)
+		if it.Key == "immo_visit_confirmed" {
+			retired = it
+		}
 	}
-	assert.ElementsMatch(t, []string{"immo_visit_confirmed", "immo_saved_search_match"}, keys)
-	assert.Equal(t, 2, unread, "le badge de Dira Immo ne compte que ses messages")
+	assert.Equal(t, "Visite confirmée", retired.Title, "le titre rangé à l'envoi")
+	assert.Equal(t, "Votre visite de « T3 Bè » est confirmée le 15/11 à 10:00.", retired.Body)
 
-	marked, err := svc.MarkRead(ctx, uid.Hex(), "", AppImmo)
+	marked, err := svc.MarkRead(ctx, uid.Hex(), "")
 	require.NoError(t, err)
 	assert.Equal(t, 2, marked)
-
-	all, unread, _, err := svc.ListInbox(ctx, uid.Hex(), "", 30, "")
-	require.NoError(t, err)
-	assert.Len(t, all, 4, "sans `app`, la boîte entière — celle de l'application cliente")
-	assert.Equal(t, 2, unread, "les commandes et les courses restent NON LUES")
-
-	n, err := repo.inbox.CountDocuments(ctx, bson.M{"user_id": uid, "key": bson.M{"$regex": "^immo_"}, "read_at": bson.M{"$exists": true}})
-	require.NoError(t, err)
-	assert.EqualValues(t, 2, n)
 }
 
-// ⚠️ PAR LA VRAIE ROUTE : le décodeur strict et la validation vivent au-dessus du
-// service. Une application inconnue est refusée À L'ENREGISTREMENT — rangée en
-// silence, elle ferait recevoir à Dira Immo les courses du compte — et à la
-// lecture de la boîte. Le refus nomme le champ.
-func TestAnUnknownAppIsRefusedThroughTheRoutes(t *testing.T) {
-	r := chi.NewRouter()
-	session := func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-			next.ServeHTTP(w, req.WithContext(auth.WithClaims(req.Context(), auth.Claims{
-				UserID: primitive.NewObjectID().Hex(), Role: auth.RoleClient, Type: "access",
-			})))
-		})
-	}
-	NewHandler(NewService(nil)).Mount(r, session)
+// ⚠️⚠️ UN GABARIT PERSONNALISÉ SOUS UNE CLÉ RETIRÉE, RESTÉ EN BASE, NE SE LISTE
+// PLUS ET NE PART PLUS — sur une vraie base. Sans cette garde, un appelant qui
+// enverrait encore cette clé ferait partir vers les téléphones de Dira le
+// message d'un métier qui n'en fait plus partie.
+func TestACustomTemplateOfARetiredKeyIsNeitherListedNorSentOnARealBase(t *testing.T) {
+	repo := baseDeNotifs(t)
+	svc := NewService(repo)
+	pusher := &fakePusher{}
+	svc.SetPusher(pusher)
+	ctx := context.Background()
+	uid := primitive.NewObjectID()
 
-	call := func(method, path, body string) *httptest.ResponseRecorder {
-		req := httptest.NewRequest(method, path, strings.NewReader(body))
-		req.Header.Set("Content-Type", "application/json")
-		w := httptest.NewRecorder()
-		r.ServeHTTP(w, req)
-		return w
-	}
-	w := call(http.MethodPost, "/me/devices", `{"token":"t","platform":"android","app":"immobilier"}`)
-	assert.Equal(t, http.StatusUnprocessableEntity, w.Code, w.Body.String())
-	assert.Contains(t, w.Body.String(), "app")
+	_, err := repo.templates.InsertOne(ctx, bson.M{
+		"key": "immo_visit_confirmed", "enabled": true, "updated_at": time.Now().UTC(),
+		"locales": bson.M{"fr": bson.M{"title": "Visite confirmée", "body": "Votre visite est confirmée."}},
+	})
+	require.NoError(t, err)
+	require.NoError(t, svc.RegisterDevice(ctx, uid.Hex(), RegisterDeviceRequest{Token: "client", Platform: "android"}))
 
-	for _, path := range []string{"/me/notifications?app=immobilier", "/me/notifications/read?app=immobilier"} {
-		method := http.MethodGet
-		if strings.HasSuffix(strings.Split(path, "?")[0], "/read") {
-			method = http.MethodPost
-		}
-		w = call(method, path, "")
-		assert.Equal(t, http.StatusUnprocessableEntity, w.Code, path)
-		assert.Contains(t, w.Body.String(), `"fields":["app"]`, path)
+	list, err := svc.ListTemplates(ctx)
+	require.NoError(t, err)
+	for _, tpl := range list {
+		assert.NotEqual(t, "immo_visit_confirmed", tpl.Key, "la console ne liste plus un gabarit qui ne part plus")
 	}
+	assert.NotEmpty(t, list, "les autres gabarits restent")
+
+	svc.Notify(ctx, uid.Hex(), "immo_visit_confirmed", nil, nil)
+	assert.Empty(t, pusher.sent, "rien ne part")
+	items, _, _, err := svc.ListInbox(ctx, uid.Hex(), "", 30)
+	require.NoError(t, err)
+	assert.Empty(t, items, "rien ne s'archive")
+
+	_, err = svc.Preview(ctx, "immo_visit_confirmed", "fr", nil)
+	require.Error(t, err)
+	assert.Equal(t, "template_not_found", apperr.From(err).Code)
+
+	// Et une clé servie part toujours.
+	svc.Notify(ctx, uid.Hex(), KeyOrderReady, nil, map[string]string{"order_id": "o1"})
+	assert.Equal(t, []string{"client"}, pushed(pusher.sent))
 }
 
-// ⚠️ ET À TRAVERS LES ROUTES, SUR UNE VRAIE BASE : le paramètre doit arriver
-// jusqu'au dépôt — un handler qui le lirait sans le passer éteindrait le badge
-// des commandes depuis Dira Immo, sans que l'épreuve du service le voie.
-func TestTheImmoInboxIsScopedThroughTheRoutes(t *testing.T) {
+// ⚠️ PAR LA VRAIE ROUTE, SUR UNE VRAIE BASE : le décodeur strict et la
+// validation vivent au-dessus du service. `app` à l'enregistrement est refusé
+// en le nommant — rangé en silence, le jeton d'une autre application recevrait
+// des messages qu'il ne sait pas ouvrir —, comme `?app=` sur la boîte ; sans
+// lui, la boîte entière.
+func TestTheAppIsRefusedThroughTheRoutesOnARealBase(t *testing.T) {
 	repo := baseDeNotifs(t)
 	uid := primitive.NewObjectID()
 	ctx := context.Background()
-	for _, key := range []string{"order_ready", "immo_visit_confirmed", "ride_accepted", "immo_visit_reminder"} {
+	for _, key := range []string{"order_ready", "immo_visit_confirmed"} {
 		require.NoError(t, repo.InsertInbox(ctx, &Inbox{ID: primitive.NewObjectID(), UserID: uid, Key: key, CreatedAt: time.Now().UTC()}))
 	}
 	r := chi.NewRouter()
@@ -204,93 +229,33 @@ func TestTheImmoInboxIsScopedThroughTheRoutes(t *testing.T) {
 			})))
 		})
 	})
-	call := func(method, path string) string {
+	call := func(method, path, body string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(method, path, strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
 		w := httptest.NewRecorder()
-		r.ServeHTTP(w, httptest.NewRequest(method, path, nil))
-		require.Equal(t, http.StatusOK, w.Code, w.Body.String())
-		return w.Body.String()
+		r.ServeHTTP(w, req)
+		return w
 	}
-	assert.Contains(t, call(http.MethodGet, "/me/notifications?app=immo"), `"unread":2`)
-	assert.Contains(t, call(http.MethodPost, "/me/notifications/read?app=immo"), `"marked":2`)
-	assert.Contains(t, call(http.MethodGet, "/me/notifications"), `"unread":2`,
-		"les commandes et les courses restent non lues dans l'application cliente")
-}
 
-// ⚠️ LA MESSAGERIE DE L'IMMOBILIER VA À DIRA IMMO, ET SE COUPE AVEC LES AUTRES
-// MESSAGES : un gabarit hors du préfixe `immo_` partirait vers l'application
-// des courses ; rangé ailleurs, il échapperait à l'interrupteur des messages.
-func TestTheImmoThreadMessageGoesToDiraImmoAndIsAMessage(t *testing.T) {
-	assert.Equal(t, AppImmo, AppOfKey(KeyImmoThreadMessage))
-	assert.Equal(t, CategoryChatMessages, categoryOf(KeyImmoThreadMessage))
-	tmpl, ok := defaults[KeyImmoThreadMessage]
-	require.True(t, ok)
-	for _, loc := range []string{LocaleFR, LocaleEN} {
-		assert.Contains(t, tmpl.Locales[loc].Title, "[listing_title]")
-		assert.Equal(t, "[body]", tmpl.Locales[loc].Body)
-	}
-}
+	w := call(http.MethodPost, "/me/devices", `{"token":"t","platform":"android","app":"immo"}`)
+	assert.Equal(t, http.StatusUnprocessableEntity, w.Code, w.Body.String())
+	assert.Contains(t, w.Body.String(), `"fields":["app"]`)
+	n, err := repo.devices.CountDocuments(ctx, bson.M{"user_id": uid})
+	require.NoError(t, err)
+	assert.Zero(t, n, "rien n'est enregistré sur un refus")
 
-// ⚠️ #72, point 21 : CE QUI PRÉVIENT ENFIN L'ANNONCEUR va à Dira Immo, se range
-// avec les mises à jour — sauf un changement d'ACCÈS (rattaché, détaché), qui
-// ne se coupe pas — et ne promet aucune variable qu'il n'écrit pas.
-func TestTheImmoPublisherNoticesAreRoutedAndRanked(t *testing.T) {
-	updates := []string{KeyImmoListingPublished, KeyImmoListingReturned, KeyImmoListingModerated,
-		KeyImmoVisitExpired, KeyImmoVisitExpiredHost, KeyImmoVisitUnanswered,
-		KeyImmoRentNotice, KeyImmoRentDue, KeyImmoRentLate}
-	access := []string{KeyImmoMemberAttached, KeyImmoMemberDetached}
-	for _, key := range append(append([]string{}, updates...), access...) {
-		assert.Equal(t, AppImmo, AppOfKey(key), key)
-		tmpl, ok := defaults[key]
-		require.True(t, ok, key)
-		for _, loc := range []string{LocaleFR, LocaleEN} {
-			assert.NotEmpty(t, tmpl.Locales[loc].Title, "%s/%s", key, loc)
-			assert.NotEmpty(t, tmpl.Locales[loc].Body, "%s/%s", key, loc)
-		}
+	for _, c := range []struct{ method, path string }{
+		{http.MethodGet, "/me/notifications?app=immo"},
+		{http.MethodPost, "/me/notifications/read?app=immo"},
+	} {
+		w = call(c.method, c.path, "")
+		assert.Equal(t, http.StatusUnprocessableEntity, w.Code, c.path)
+		assert.Contains(t, w.Body.String(), `"fields":["app"]`, c.path)
 	}
-	for _, key := range updates {
-		assert.Equal(t, CategoryOrderUpdates, categoryOf(key), key)
-	}
-	for _, key := range access {
-		assert.Equal(t, CategorySecurity, categoryOf(key), key)
-		assert.False(t, Muteable(categoryOf(key)), "%s : un changement d'accès ne se coupe pas", key)
-	}
-}
 
-// ⚠️ LES RELANCES DE LOYER N'ACCUSENT PAS ET NE DISENT PAS L'ADRESSE : aucun
-// argent ne passe par Dira (c'est le bailleur qui marque payé), et un écran
-// verrouillé se lit par-dessus l'épaule. Chaque variable écrite est fournie.
-func TestRentRemindersSpeakSoftlyAndOnlyWithWhatIsProvided(t *testing.T) {
-	for _, key := range []string{KeyImmoRentNotice, KeyImmoRentDue, KeyImmoRentLate} {
-		tmpl := defaults[key]
-		for _, loc := range []string{LocaleFR, LocaleEN} {
-			text := tmpl.Locales[loc].Title + " " + tmpl.Locales[loc].Body
-			for _, v := range []string{"[amount]", "[lease_ref]"} {
-				assert.Contains(t, tmpl.Locales[loc].Body, v, "%s/%s", key, loc)
-			}
-			for _, banned := range []string{"[address]", "[property]", "[publisher_name]"} {
-				assert.NotContains(t, text, banned, "%s/%s", key, loc)
-			}
-			for _, v := range bracketVars(text) {
-				assert.Contains(t, provided[key], v, "%s/%s : [%s] n'est fourni par personne", key, loc, v)
-			}
-		}
-	}
-	assert.Contains(t, defaults[KeyImmoRentLate].Locales[LocaleFR].Body, "Dites-le à votre bailleur")
-}
-
-// bracketVars : les variables `[nom]` d'un texte de gabarit.
-func bracketVars(text string) []string {
-	var out []string
-	for {
-		i := strings.IndexByte(text, '[')
-		if i < 0 {
-			return out
-		}
-		j := strings.IndexByte(text[i:], ']')
-		if j < 0 {
-			return out
-		}
-		out = append(out, text[i+1:i+j])
-		text = text[i+j+1:]
-	}
+	w = call(http.MethodGet, "/me/notifications", "")
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	assert.Contains(t, w.Body.String(), `"unread":2`, "la boîte entière")
+	w = call(http.MethodPost, "/me/devices", `{"token":"t","platform":"android"}`)
+	assert.Less(t, w.Code, 300, w.Body.String())
 }
