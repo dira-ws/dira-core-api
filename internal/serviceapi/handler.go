@@ -547,11 +547,13 @@ type walletRequest struct {
 	// le grand livre porte encore, ne s'acceptent plus : ils venaient d'une
 	// verticale qui ne fait plus partie de Dira (voir `token.RefListing`).
 	//
-	// ⚠️ LA JUMELLE DE `token.parseRef` : les trois genres du colis
-	// (`shipment`, `shipment_charge`, `shipment_leg`) y sont aussi. Un genre
-	// que le grand livre accepte et que cette liste oublie est refusé en `422`
-	// avant d'atteindre le grand livre (`refkinds_test.go`).
-	RefKind string         `json:"ref_kind" validate:"omitempty,oneof=order ride tip ride_adjustment shipment shipment_charge shipment_leg"`
+	// ⚠️ LA JUMELLE DE `token.parseRef`, et la liste de `pkg/refkind`, que les
+	// verticales lisent : un genre que le grand livre accepte et que ce `oneof`
+	// oublie est refusé en `422` avant d'atteindre le grand livre. Un tag ne
+	// sait pas lire une variable : `refkinds_test.go` le tient égal à la liste.
+	// `ride_subscription` y est, comme dans le `purpose` de son paiement en
+	// ligne.
+	RefKind string         `json:"ref_kind" validate:"omitempty,oneof=order ride tip ride_adjustment ride_subscription shipment shipment_charge shipment_leg"`
 	Ref     map[string]any `json:"ref"`
 	Type    string         `json:"type" validate:"omitempty,oneof=driver merchant client business"`
 }

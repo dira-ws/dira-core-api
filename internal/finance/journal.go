@@ -209,9 +209,14 @@ func lines(debit, credit string, amount int) []Line {
 // ⚠️ LES TROIS GENRES DU COLIS ONT LE LEUR. Sans eux, ils tomberaient ici
 // « à classer » — et le prix d'un envoi, son remboursement, le frais de son
 // retour finiraient dans le compte d'attente que le balayage signale.
+//
+// ⚠️ UN ABONNEMENT DE COURSES PASSE PAR CELUI DES COURSES. Ses courses ne se
+// paient pas une à une : chacune se règle au chauffeur sur ce passage
+// (`ride_settled`, moyen `subscription`), comme une course payée en ligne. Payé
+// au solde ou par paiement mobile, c'est le même argent, au même endroit.
 func clearingOf(refKind string) string {
 	switch refKind {
-	case token.RefRide, token.RefRideAdjustment, token.RefTip:
+	case token.RefRide, token.RefRideAdjustment, token.RefTip, token.RefRideSubscription:
 		return AccRideClearing
 	case token.RefOrder:
 		return AccOrderClearing

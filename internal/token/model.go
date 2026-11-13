@@ -7,6 +7,8 @@ import (
 	"time"
 
 	"go.mongodb.org/mongo-driver/bson/primitive"
+
+	"github.com/kgtech-org/dira-core-api/pkg/refkind"
 )
 
 // Collection names.
@@ -155,24 +157,34 @@ const (
 )
 
 // Ce à quoi un mouvement se rattache.
+//
+// ⚠️ LES GENRES QU'UNE ÉCRITURE NOUVELLE PEUT PORTER SONT CEUX DE
+// `pkg/refkind`, la liste que les verticales lisent aussi. Les constantes
+// ci-dessous la nomment ; les genres RETIRÉS (lisibles, plus acceptés) ne
+// vivent qu'ici.
 const (
-	RefOrder = "order"
-	RefRide  = "ride"
+	RefOrder = refkind.Order
+	RefRide  = refkind.Ride
 	// RefTip : le POURBOIRE d'une course. Un genre à part, et non `ride` :
 	// le paiement d'une course est unique par course (c'est sa clé
 	// d'idempotence), et un pourboire sur la même course est un SECOND
 	// mouvement — il lui faut sa propre clé, `payment:tip:<ride>`, et sa
 	// propre ligne au relevé, qui dit « pourboire » et non « course ».
-	RefTip = "tip"
+	RefTip = refkind.Tip
 	// RefRideAdjustment : la DIFFÉRENCE de prix d'une course dont le trajet
 	// a changé en route. Un genre à part, et son propre identifiant (celui
 	// de l'ajustement, pas de la course) : la course est déjà payée sous la
 	// sienne, et chaque ajustement est un mouvement distinct — deux arrêts
 	// ajoutés sont deux débits, pas un rejeu.
-	RefRideAdjustment = "ride_adjustment"
+	RefRideAdjustment = refkind.RideAdjustment
+	// RefRideSubscription : un ABONNEMENT de courses, payé d'avance — au
+	// solde, comme par paiement mobile, où il porte le même nom (`purpose`).
+	// Sous l'identifiant de l'abonnement : les courses qu'il lancera ne sont
+	// pas débitées une à une.
+	RefRideSubscription = refkind.RideSubscription
 	// RefEquipment : un CONTRAT de matériel (`internal/equipment`). Chaque
 	// prélèvement et chaque remboursement de caution s'y rattache.
-	RefEquipment = "equipment"
+	RefEquipment = refkind.Equipment
 	// RefListing et RefListingBoost : deux genres qu'une verticale qui ne fait
 	// plus partie de Dira a inscrits au grand livre.
 	//
@@ -204,9 +216,9 @@ const (
 	//
 	// ⚠️ ET AUCUN DE CES GENRES N'EST `order`. Rangé sous `order`, l'argent d'un
 	// colis passerait au journal par le compte des commandes de repas.
-	RefShipment       = "shipment"
-	RefShipmentCharge = "shipment_charge"
-	RefShipmentLeg    = "shipment_leg"
+	RefShipment       = refkind.Shipment
+	RefShipmentCharge = refkind.ShipmentCharge
+	RefShipmentLeg    = refkind.ShipmentLeg
 )
 
 // Unités du grand livre.
