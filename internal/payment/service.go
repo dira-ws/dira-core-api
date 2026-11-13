@@ -408,6 +408,29 @@ func (s *Service) Get(ctx context.Context, requesterID, requesterRole, paymentID
 	return &resp, nil
 }
 
+// PaidOf rend ce que le socle sait d'un paiement : QUI l'a payé, COMBIEN, et
+// dans QUELLE monnaie — ce que l'annonce d'un paiement abouti porte à la
+// verticale (`callback.Payments`).
+//
+// ⚠️ LA MONNAIE N'EST JAMAIS VIDE. Un montant sans monnaie n'est pas un
+// montant : une ligne qui n'en porterait pas reçoit le repli du socle, celui
+// qu'elle aurait reçu à l'initiation (`currencyOf`).
+func (s *Service) PaidOf(ctx context.Context, paymentID string) (payerID string, amount int, currency string, err error) {
+	id, err := primitive.ObjectIDFromHex(paymentID)
+	if err != nil {
+		return "", 0, "", errPaymentNotFound.WithCause(err)
+	}
+	p, err := s.repo.FindByID(ctx, id)
+	if err != nil {
+		return "", 0, "", err
+	}
+	currency = p.Currency
+	if currency == "" {
+		currency = DefaultCurrency
+	}
+	return p.UserID.Hex(), p.Amount, currency, nil
+}
+
 // HandleWebhook verifies and processes a provider webhook. It is strictly
 // idempotent: a payment already confirmed is acknowledged without any side
 // effect, and the pending->final status transition is the atomic gate that

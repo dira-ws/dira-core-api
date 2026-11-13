@@ -204,6 +204,36 @@ func (c *Client) Enabled() bool { return c != nil && c.baseURL != "" }
 // exactement ce que ce paquet existe pour empêcher.
 var ErrNotConfigured = errors.New("callback: vertical not configured")
 
+// Paid est ce que le socle annonce d'un paiement abouti.
+//
+// ⚠️ LE MONTANT ET LA MONNAIE VOYAGENT AVEC LE FAIT. La verticale tient ce
+// qu'elle facture — le total figé d'une commande, le prix d'une course —, le
+// socle tient ce que l'opérateur a encaissé : c'est chez elle que les deux se
+// rapprochent, puisqu'elle seule sait ce qu'un `ref_id` devait coûter.
+//
+// Tous les champs ajoutés sont ADDITIFS : une verticale qui les ignore se
+// comporte comme avant (elle décode avec `httpx.DecodeService`).
+type Paid struct {
+	// ⚠️ LE `purpose` PART AVEC. Une verticale peut se faire confirmer
+	// PLUSIEURS sortes d'objets — une course et un abonnement de courses
+	// arrivent par la même porte —, et `ref_id` seul ne dit pas lequel. Sans
+	// ce mot, il faudrait chercher l'identifiant dans chaque collection
+	// jusqu'à en trouver une qui réponde : un abonnement payé finirait rejeté
+	// parce qu'aucune course ne porte son identifiant.
+	Purpose   string `json:"purpose"`
+	RefID     string `json:"ref_id"`
+	PaymentID string `json:"payment_id"`
+	// PayerID est le compte qui a payé. Ce n'est pas forcément le titulaire
+	// de l'objet : rien n'empêche un client de régler la commande d'un autre,
+	// et c'est au payeur, pas au titulaire, que revient ce que la verticale
+	// n'applique pas.
+	PayerID string `json:"payer_id,omitempty"`
+	// Amount est dans la plus petite unité de `Currency` — un entier, comme
+	// tout montant de la plateforme.
+	Amount   int    `json:"amount"`
+	Currency string `json:"currency"`
+}
+
 // RefPaid tells the vertical that one of its objects is paid.
 //
 // ⚠️ Le chemin n'a PAS le préfixe `/food`. Ce préfixe est posé par la
@@ -211,18 +241,8 @@ var ErrNotConfigured = errors.New("callback: vertical not configured")
 // servir `/api/v1/...` chez lui. Un appel de service va DIRECTEMENT au
 // service — passer par la passerelle publique ajouterait un saut et ferait
 // dépendre un rappel interne de la santé de l'étage public.
-// ⚠️ LE `purpose` PART AVEC. Une verticale peut se faire confirmer PLUSIEURS
-// sortes d'objets — une course et un abonnement de courses arrivent par la
-// même porte —, et `ref_id` seul ne dit pas lequel. Sans ce mot, il faudrait
-// chercher l'identifiant dans chaque collection jusqu'à en trouver une qui
-// réponde : un abonnement payé finirait rejeté parce qu'aucune course ne
-// porte son identifiant.
-//
-// Le champ est ADDITIF : une verticale qui l'ignore se comporte comme avant.
-func (c *Client) RefPaid(ctx context.Context, purpose, refID, paymentID string) error {
-	return c.post(ctx, "/api/v1/internal/payments/ref-paid", map[string]string{
-		"purpose": purpose, "ref_id": refID, "payment_id": paymentID,
-	})
+func (c *Client) RefPaid(ctx context.Context, paid Paid) error {
+	return c.post(ctx, "/api/v1/internal/payments/ref-paid", paid)
 }
 
 // AccountErased dit à une verticale qu'un compte vient d'être EFFACÉ, pour

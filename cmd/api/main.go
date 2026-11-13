@@ -981,7 +981,9 @@ func run(logger *slog.Logger) error {
 		Logger:      asynqSlog{},
 	})
 	mux := asynq.NewServeMux()
-	cbWorker := callback.NewWorker(verticals)
+	// Le montant, la monnaie et le payeur partent avec chaque annonce : le
+	// consommateur relit le paiement au moment de prévenir la verticale.
+	cbWorker := callback.NewWorker(verticals, paymentSvc)
 	mux.HandleFunc(jobs.TypeRefPaid, cbWorker.HandleRefPaid)
 	mux.HandleFunc(jobs.TypeAccountErased, cbWorker.HandleAccountErased)
 	if err := asynqSrv.Start(mux); err != nil {
