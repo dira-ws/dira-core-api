@@ -3,12 +3,15 @@ package callback
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"strings"
 
 	"github.com/hibiken/asynq"
 
+	"github.com/kgtech-org/dira-core-api/pkg/apperr"
 	"github.com/kgtech-org/dira-core-api/pkg/jobs"
 )
 
@@ -29,9 +32,62 @@ import (
 // la latence de nos mises en production.
 type Worker struct {
 	verticals *Registry
+	payments  Payments
 }
 
-func NewWorker(verticals *Registry) *Worker { return &Worker{verticals: verticals} }
+// Payments relit un paiement au moment de l'annoncer : qui l'a payé, combien,
+// et dans quelle monnaie.
+//
+// ⚠️ RELU AU DÉPART, ET NON RECOPIÉ DANS LA TÂCHE. Une tâche mise en file par
+// une version précédente du socle ne porte que les trois identifiants ; relire
+// le paiement au moment de partir fait que TOUTE annonce porte son montant, y
+// compris celles qui attendaient leur reprise pendant un déploiement. Et c'est
+// la ligne du paiement qui fait foi, pas une copie prise ailleurs.
+type Payments interface {
+	PaidOf(ctx context.Context, paymentID string) (payerID string, amount int, currency string, err error)
+}
+
+// NewWorker branche les verticales à prévenir et la lecture des paiements.
+//
+// ⚠️ LES DEUX SONT REQUISES : une annonce de paiement part avec son montant ou
+// ne part pas — voir `announce`.
+func NewWorker(verticals *Registry, payments Payments) *Worker {
+	return &Worker{verticals: verticals, payments: payments}
+}
+
+// errNoPaymentReader : le câblage n'a pas branché la lecture des paiements.
+var errNoPaymentReader = errors.New("callback: no payment reader wired")
+
+// announce compose l'annonce d'un paiement abouti, montant et monnaie compris.
+//
+// ⚠️ UNE ANNONCE SANS MONTANT NE PART PAS. Elle laisserait la verticale sans
+// rien à rapprocher de ce qu'elle facture. Un paiement momentanément
+// illisible REVIENT (la base qui tousse se rétablit) ; un paiement INTROUVABLE
+// est abandonné — il ne réapparaîtra pas au vingtième essai — et le journal le
+// crie, parce qu'une annonce mise en file pour un paiement qui n'existe pas
+// est une incohérence, pas une panne.
+func (w *Worker) announce(ctx context.Context, p jobs.RefPaidPayload) (Paid, error) {
+	paid := Paid{Purpose: p.Purpose, RefID: p.RefID, PaymentID: p.PaymentID}
+	if w.payments == nil {
+		slog.ErrorContext(ctx, "callback: payments not wired, the payment cannot be announced",
+			"purpose", p.Purpose, "ref_id", p.RefID, "payment_id", p.PaymentID)
+		return paid, errNoPaymentReader
+	}
+	payer, amount, currency, err := w.payments.PaidOf(ctx, p.PaymentID)
+	if err != nil {
+		if apperr.From(err).HTTPStatus == http.StatusNotFound {
+			slog.ErrorContext(ctx, "callback: the announced payment does not exist, dropping",
+				"purpose", p.Purpose, "ref_id", p.RefID, "payment_id", p.PaymentID)
+			return paid, fmt.Errorf("callback: payment %s not found: %w: %w", p.PaymentID, err, asynq.SkipRetry)
+		}
+		retried, _ := asynq.GetRetryCount(ctx)
+		slog.WarnContext(ctx, "callback: payment unreadable, will retry",
+			"purpose", p.Purpose, "payment_id", p.PaymentID, "attempt", retried+1, "error", err)
+		return paid, err
+	}
+	paid.PayerID, paid.Amount, paid.Currency = payer, amount, currency
+	return paid, nil
+}
 
 // HandleRefPaid rappelle la verticale.
 //
@@ -57,7 +113,11 @@ func (w *Worker) HandleRefPaid(ctx context.Context, t *asynq.Task) error {
 			"hint", "set FOOD_BASE_URL / VTC_BASE_URL and their callback tokens")
 		return fmt.Errorf("callback: no vertical for purpose %q: %w", p.Purpose, asynq.SkipRetry)
 	}
-	if err := v.RefPaid(ctx, p.Purpose, p.RefID, p.PaymentID); err != nil {
+	paid, err := w.announce(ctx, p)
+	if err != nil {
+		return err
+	}
+	if err := v.RefPaid(ctx, paid); err != nil {
 		// ⚠️ On JOURNALISE à chaque échec, avec le compte d'essais. Une file
 		// qui réessaie en silence pendant vingt minutes ressemble, vue de
 		// l'extérieur, à une plateforme qui a perdu un paiement.
@@ -68,7 +128,8 @@ func (w *Worker) HandleRefPaid(ctx context.Context, t *asynq.Task) error {
 		return err
 	}
 	slog.InfoContext(ctx, "callback: vertical notified of the payment",
-		"purpose", p.Purpose, "ref_id", p.RefID, "payment_id", p.PaymentID)
+		"purpose", p.Purpose, "ref_id", p.RefID, "payment_id", p.PaymentID,
+		"amount", paid.Amount, "currency", paid.Currency)
 	return nil
 }
 
