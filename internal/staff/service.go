@@ -85,7 +85,7 @@ type Response struct {
 func toResponse(m *Member) Response {
 	return Response{
 		ID: m.ID.Hex(), UserID: m.UserID.Hex(), Function: m.Function, Title: m.Title,
-		Scopes: m.Scopes, CoversEverything: m.CoversEverything(), Status: m.Status,
+		Scopes: served(m.Scopes), CoversEverything: m.CoversEverything(), Status: m.Status,
 		CreatedAt: m.CreatedAt.Format("2006-01-02T15:04:05Z"),
 		UpdatedAt: m.UpdatedAt.Format("2006-01-02T15:04:05Z"),
 	}
@@ -384,7 +384,9 @@ func scopesFor(m *Member) []string {
 	if m.Status == StatusSuspended {
 		return nil // habilitations retirées
 	}
-	return m.Scopes
+	// ⚠️ UNE PORTÉE RETIRÉE NE PART PAS DANS LE JETON : elle n'ouvrirait plus
+	// aucune route, mais un jeton qui la porte se lirait comme une habilitation.
+	return served(m.Scopes)
 }
 
 // normaliseScopes valide et déduplique.
@@ -395,7 +397,7 @@ func normaliseScopes(in []string) ([]string, error) {
 	out := make([]string, 0, len(in))
 	for _, s := range in {
 		s = strings.TrimSpace(strings.ToLower(s))
-		if s == "" {
+		if s == "" || slices.Contains(retiredScopes, s) {
 			continue
 		}
 		if !slices.Contains(Scopes, s) {
@@ -408,11 +410,11 @@ func normaliseScopes(in []string) ([]string, error) {
 	if len(out) == 0 {
 		return nil, errNoScope
 	}
-	// ⚠️ AUCUNE réduction : les trois portées se stockent telles quelles. Les
+	// ⚠️ AUCUNE réduction : les portées se stockent telles quelles. Les
 	// remplacer par une valeur « toutes » aurait fait deux façons d'écrire la
-	// même chose — et le jour où une quatrième verticale apparaît, cette
-	// valeur aurait continué de désigner les trois d'hier, sans que rien ne le
-	// signale. Écrire la liste, c'est écrire une date.
+	// même chose — et le jour où une verticale apparaît, cette valeur aurait
+	// continué de désigner celles d'hier, sans que rien ne le signale. Écrire
+	// la liste, c'est écrire une date.
 	return out, nil
 }
 

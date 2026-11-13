@@ -14,23 +14,29 @@ import (
 	"github.com/kgtech-org/dira-core-api/pkg/country"
 )
 
-// --- LA LISTE DÉCLARÉE PAR LA VERTICALE (immo#54) ---
+// --- LA LISTE DÉCLARÉE PAR LA VERTICALE ---
+
+// retiredKinds : les trois types de pièces d'une verticale qui ne fait plus
+// partie de Dira. Écrits en clair : ils n'ont plus de constante, et c'est le
+// point.
+var retiredKinds = []string{"business_registration", "property_title", "mandate"}
 
 // ⚠️⚠️ SANS DÉCLARATION, RIEN NE BOUGE POUR LA LIVRAISON ET LES COURSES : elles
-// reçoivent exactement les dix types d'avant, et refusent les trois de
-// l'immobilier comme un type inconnu. C'est la promesse faite à deux
-// verticales vivantes, et elle s'éprouve type par type.
+// reçoivent exactement les dix types d'avant, et refusent tout autre comme un
+// type inconnu. C'est la promesse faite à deux verticales vivantes, et elle
+// s'éprouve type par type.
 func TestTransportStillReceivesExactlyItsTenKinds(t *testing.T) {
 	fx := newFixture()
 	driver, vehicle := fx.newDriver(t, 5)
-	for _, kind := range []string{DocBusinessRegistration, DocPropertyTitle, DocMandate} {
-		req := SubmitDocumentRequest{Kind: kind, FileURL: "https://f/" + kind + ".jpg"}
-		if docOwner[kind] == ownerVehicle {
-			req.VehicleID = vehicle
+	for _, kind := range retiredKinds {
+		// Avec ET sans véhicule : un type retiré est inconnu, quel que soit
+		// ce à quoi on l'attache.
+		for _, v := range []string{"", vehicle} {
+			_, err := fx.svc.SubmitDocument(context.Background(), driver,
+				SubmitDocumentRequest{Kind: kind, FileURL: "https://f/" + kind + ".jpg", VehicleID: v})
+			require.Error(t, err, kind)
+			assert.Equal(t, "unknown_document_kind", apperr.From(err).Code, kind)
 		}
-		_, err := fx.svc.SubmitDocument(context.Background(), driver, req)
-		require.Error(t, err, kind)
-		assert.Equal(t, "unknown_document_kind", apperr.From(err).Code, kind)
 	}
 	assert.Len(t, TransportKinds, 10)
 	for _, kind := range TransportKinds {
@@ -46,14 +52,14 @@ func TestTransportStillReceivesExactlyItsTenKinds(t *testing.T) {
 	}
 }
 
-// Une flotte non plus ne reçoit pas un papier de l'immobilier, même porté par
-// un de ses véhicules.
-func TestAFleetDoesNotReceiveRealEstatePapers(t *testing.T) {
+// Une flotte non plus ne reçoit pas un type que ce paquet ne connaît plus,
+// même porté par un de ses véhicules.
+func TestAFleetDoesNotReceiveARetiredKind(t *testing.T) {
 	fx := newFixture()
 	fleetID, vehicle := primitive.NewObjectID().Hex(), primitive.NewObjectID().Hex()
 	fx.fleet.fleetOf[vehicle] = fleetID
 	_, err := fx.svc.SubmitFleetDocument(context.Background(), fleetID, SubmitDocumentRequest{
-		Kind: DocPropertyTitle, FileURL: "https://f/t.jpg", VehicleID: vehicle,
+		Kind: "property_title", FileURL: "https://f/t.jpg", VehicleID: vehicle,
 	})
 	require.Error(t, err)
 	assert.Equal(t, "unknown_document_kind", apperr.From(err).Code)
@@ -71,54 +77,41 @@ func TestTransportExpectationsAreTheOldRule(t *testing.T) {
 	assert.Equal(t, KindsFor(velo), exp.Assets[velo.ID])
 }
 
-// realEstate : une verticale qui déclare SES pièces — l'immobilier.
-type realEstate struct{ agencies map[string]bool }
+// identityOnly : une verticale qui déclare SES pièces — l'identité et le
+// visage, rien d'autre, quels que soient les véhicules rattachés.
+type identityOnly struct{}
 
-func (r realEstate) Accepts(kind string) bool {
-	switch kind {
-	case DocIDCard, DocSelfie, DocBusinessRegistration, DocPropertyTitle, DocMandate:
-		return true
-	}
-	return false
+func (identityOnly) Accepts(kind string) bool { return kind == DocIDCard || kind == DocSelfie }
+
+func (identityOnly) Expected(_ context.Context, _ string, _ []VehicleRef) (Expectations, error) {
+	return Expectations{Subject: []string{DocIDCard, DocSelfie}}, nil
 }
 
-func (r realEstate) Expected(_ context.Context, subject string, assets []VehicleRef) (Expectations, error) {
-	out := Expectations{Subject: []string{DocIDCard, DocSelfie}, Assets: map[string][]string{}}
-	if r.agencies[subject] {
-		out.Subject = append(out.Subject, DocBusinessRegistration)
-	}
-	for _, a := range assets {
-		out.Assets[a.ID] = []string{DocPropertyTitle}
-		if r.agencies[subject] {
-			out.Assets[a.ID] = append(out.Assets[a.ID], DocMandate)
-		}
-	}
-	return out, nil
-}
-
-// publisherFixture : une agence et un bien, la liste déclarée.
-func publisherFixture(t *testing.T, agency bool) (fx *fixture, user, subject, property string) {
+// declaredFixture : un porteur et un véhicule MOTORISÉ, sous la liste déclarée.
+func declaredFixture(t *testing.T) (fx *fixture, user string) {
 	t.Helper()
 	fx = newFixture()
-	user, subject = primitive.NewObjectID().Hex(), primitive.NewObjectID().Hex()
+	user, subject := primitive.NewObjectID().Hex(), primitive.NewObjectID().Hex()
 	fx.fleet.byUser[user] = subject
 	fx.fleet.accounts[subject] = user
-	// ⚠️ MOTORISÉ EXPRÈS : la règle du transport réclamerait alors le PERMIS.
-	// Si elle fuyait sous la déclaration, l'épreuve le verrait.
-	property = fx.fleet.addVehicleOf(subject, true)
-	fx.svc.SetRequirements(realEstate{agencies: map[string]bool{subject: agency}})
-	return fx, user, subject, property
+	// ⚠️ MOTORISÉ EXPRÈS : la règle du transport réclamerait alors le PERMIS
+	// et les papiers du véhicule. Si elle fuyait sous la déclaration,
+	// l'épreuve le verrait.
+	fx.fleet.addVehicleOf(subject, true)
+	fx.svc.SetRequirements(identityOnly{})
+	return fx, user
 }
 
-// ⚠️⚠️ LE DÉFAUT QUI A FAIT ÉCRIRE CE FICHIER : monté tel quel sur un annonceur,
-// le paquet réclamait un CASIER JUDICIAIRE à quelqu'un qui loue son appartement.
-// Sous la liste déclarée, il n'est ni réclamé ni reçu ; le permis non plus.
+// ⚠️⚠️ SOUS LA LISTE DÉCLARÉE, LA RÈGLE DU TRANSPORT NE FUIT PAS : ni le permis,
+// ni le casier, ni les papiers d'un véhicule pourtant motorisé ne sont
+// réclamés — et un type que la verticale ne reçoit pas est refusé comme un
+// type inconnu.
 func TestDeclaredKindsReplaceTheTransportRule(t *testing.T) {
-	fx, user, _, property := publisherFixture(t, false)
+	fx, user := declaredFixture(t)
 
 	got, err := fx.svc.Compliance(context.Background(), user)
 	require.NoError(t, err)
-	assert.Equal(t, []string{DocIDCard, DocSelfie, DocPropertyTitle + ":" + property}, got.Missing)
+	assert.Equal(t, []string{DocIDCard, DocSelfie}, got.Missing)
 	assert.False(t, got.Compliant)
 
 	_, err = fx.svc.SubmitDocument(context.Background(), user, SubmitDocumentRequest{
@@ -126,58 +119,71 @@ func TestDeclaredKindsReplaceTheTransportRule(t *testing.T) {
 	})
 	require.Error(t, err)
 	assert.Equal(t, "unknown_document_kind", apperr.From(err).Code,
-		"un annonceur n'a pas de casier à déposer")
+		"un type que la verticale ne reçoit pas est refusé comme un type inconnu")
 }
 
-// Une AGENCE doit en plus son registre du commerce, et le mandat de chaque bien.
-func TestAnAgencyOwesItsRegistrationAndEachMandate(t *testing.T) {
-	fx, user, _, property := publisherFixture(t, true)
-	got, err := fx.svc.Compliance(context.Background(), user)
-	require.NoError(t, err)
-	assert.Equal(t, []string{
-		DocIDCard, DocSelfie, DocBusinessRegistration,
-		DocPropertyTitle + ":" + property, DocMandate + ":" + property,
-	}, got.Missing)
-
-	// Le dossier complet et validé est EN RÈGLE.
+// Le dossier déclaré, complet et validé, est EN RÈGLE.
+func TestADeclaredFileBecomesCompliant(t *testing.T) {
+	fx, user := declaredFixture(t)
 	admin := newAdmin()
 	for _, req := range []SubmitDocumentRequest{
 		{Kind: DocIDCard, FileURL: "https://f/i.jpg"},
 		{Kind: DocSelfie, FileURL: "https://f/s.jpg"},
-		{Kind: DocBusinessRegistration, FileURL: "https://f/r.jpg"},
-		{Kind: DocPropertyTitle, FileURL: "https://f/t.jpg", VehicleID: property},
-		{Kind: DocMandate, FileURL: "https://f/m.jpg", VehicleID: property},
 	} {
 		d := submit(t, fx, user, req)
 		_, err := fx.svc.ReviewDocument(context.Background(), admin, d.ID, ReviewDocumentRequest{Status: DocValid})
 		require.NoError(t, err)
 	}
-	got, err = fx.svc.Compliance(context.Background(), user)
+	got, err := fx.svc.Compliance(context.Background(), user)
 	require.NoError(t, err)
 	assert.Empty(t, got.Missing)
 	assert.True(t, got.Compliant)
 }
 
-// Le titre et le mandat appartiennent au BIEN : sans bien, refusés.
-func TestATitleNeedsItsProperty(t *testing.T) {
-	fx, user, _, _ := publisherFixture(t, true)
-	_, err := fx.svc.SubmitDocument(context.Background(), user, SubmitDocumentRequest{
-		Kind: DocPropertyTitle, FileURL: "https://f/t.jpg",
-	})
-	require.Error(t, err)
-	assert.Equal(t, "document_needs_vehicle", apperr.From(err).Code)
-	_, err = fx.svc.SubmitDocument(context.Background(), user, SubmitDocumentRequest{
-		Kind: DocBusinessRegistration, FileURL: "https://f/r.jpg", VehicleID: primitive.NewObjectID().Hex(),
-	})
-	require.Error(t, err, "un registre du commerce ne se rattache pas à un bien")
-}
+// ⚠️⚠️ UNE PIÈCE D'UN TYPE RETIRÉ, DÉJÀ EN BASE, SE LIT SANS RIEN CASSER. Le type
+// n'existe plus, mais une ligne déposée avant reste là : le dossier de son
+// porteur, la file de l'exploitation et l'arbitrage doivent la rendre — sous
+// sa clé, faute de libellé —, sans qu'elle couvre quoi que ce soit.
+func TestAStoredDocumentOfARetiredKindStillReads(t *testing.T) {
+	fx := newFixture()
+	user, _ := fx.newDriver(t, 5)
+	// ⚠️ UNE PIÈCE APPARTIENT AU CHAUFFEUR, pas au compte : c'est la clé que
+	// le dépôt range.
+	owner := mustOID(t, fx.fleet.byUser[user])
+	stray := Document{
+		ID: primitive.NewObjectID(), OwnerID: owner, Kind: "property_title",
+		FileURL: "https://f/t.jpg", Status: DocValid, Country: "TG",
+		CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC(),
+	}
+	pending := stray
+	pending.ID, pending.Kind, pending.Status = primitive.NewObjectID(), "mandate", DocPending
+	fx.repo.documents = append(fx.repo.documents, stray, pending)
 
-// Les libellés des trois nouveaux types existent dans les deux langues : une
-// alerte « pièce à vérifier » ne doit jamais afficher `property_title`.
-func TestRealEstateKindsHaveLabels(t *testing.T) {
-	for _, kind := range []string{DocBusinessRegistration, DocPropertyTitle, DocMandate} {
-		assert.NotEqual(t, kind, Label(kind, "fr"), kind)
-		assert.NotEqual(t, kind, Label(kind, "en"), kind)
+	got, err := fx.svc.Compliance(inCountryCtx("TG"), user)
+	require.NoError(t, err, "le dossier se lit")
+	kinds := []string{}
+	for _, d := range got.Documents {
+		kinds = append(kinds, d.Kind)
+	}
+	assert.Contains(t, kinds, "property_title", "la pièce reste visible")
+	assert.False(t, got.Compliant, "et elle ne couvre rien : le dossier du transport reste à faire")
+
+	q, err := fx.svc.ComplianceQueue(inCountryCtx("TG"), 50)
+	require.NoError(t, err, "la file se lit")
+	queued := []string{}
+	for _, it := range q {
+		queued = append(queued, it.Kind)
+	}
+	assert.Contains(t, queued, "mandate")
+
+	_, err = fx.svc.ReviewDocument(inCountryCtx("TG"), newAdmin(), pending.ID.Hex(),
+		ReviewDocumentRequest{Status: DocRejected, Reason: "ce type n'est plus reçu"})
+	assert.NoError(t, err, "et l'exploitation peut la sortir de sa file")
+
+	// Faute de libellé, la clé elle-même — jamais un blanc.
+	for _, kind := range retiredKinds {
+		assert.Equal(t, kind, Label(kind, "fr"))
+		assert.Equal(t, kind, Label(kind, "en"))
 	}
 }
 

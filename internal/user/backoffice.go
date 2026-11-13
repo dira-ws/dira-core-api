@@ -15,6 +15,7 @@ import (
 
 	"github.com/kgtech-org/dira-core-api/pkg/apperr"
 	"github.com/kgtech-org/dira-core-api/pkg/country"
+	"github.com/kgtech-org/dira-core-api/pkg/interest"
 )
 
 // Ce fichier sert l'ADMINISTRATION DES COMPTES : chercher une personne,
@@ -52,8 +53,8 @@ type AccountRow struct {
 	// ; sans ce champ sur la fiche, l'opérateur devrait le déclencher à
 	// l'aveugle sur un compte dont il ignore s'il appartient à quelque chose.
 	AgentApp string `bson:"agent_app,omitempty" json:"agent_app,omitempty"`
-	// Interests : les badges d'intérêt (`food`, `vtc`, `immo`). ⚠️ TOUJOURS
-	// un tableau, `[]` sans badge : la console affiche « aucun » plutôt que de
+	// Interests : les badges d'intérêt (`food`, `vtc`). ⚠️ TOUJOURS un
+	// tableau, `[]` sans badge : la console affiche « aucun » plutôt que de
 	// confondre l'absence avec un champ oublié.
 	Interests []string `bson:"interests,omitempty" json:"interests"`
 	Status    string   `bson:"status" json:"status"`
@@ -78,9 +79,18 @@ type AccountRow struct {
 
 func (a *AccountRow) fill() {
 	a.ID = a.OID.Hex()
-	if a.Interests == nil {
-		a.Interests = []string{}
+	// ⚠️⚠️ UN BADGE RETIRÉ NE SE MONTRE PLUS. Celui d'une verticale qui ne fait
+	// plus partie de Dira reste écrit sur des comptes anciens (on ne réécrit
+	// pas un compte pour le taire) ; rendu, la console afficherait un badge
+	// qu'elle ne sait plus nommer, et chaque verticale qui lit ces lignes
+	// le recevrait. Seuls les badges servis sortent.
+	kept := make([]string, 0, len(a.Interests))
+	for _, v := range a.Interests {
+		if interest.Valid(v) {
+			kept = append(kept, v)
+		}
 	}
+	a.Interests = kept
 }
 
 // AccountFilter narrows an account search.
@@ -88,14 +98,13 @@ type AccountFilter struct {
 	Role   string
 	Status string
 	Query  string // nom ou téléphone, sous-chaîne insensible à la casse
-	// Interest : seulement les comptes portant ce badge — la console de
-	// l'immobilier passe `immo`.
+	// Interest : seulement les comptes portant ce badge (`food`, `vtc`).
+	//
+	// ⚠️ IL N'Y A PLUS DE `not_only`. Il n'existait que pour écarter de la
+	// console les clients d'une verticale qui ne fait plus partie de Dira ; une
+	// console d'avant qui l'envoie encore reçoit la liste entière — ce que
+	// l'actuelle demande —, pas un refus qui viderait son écran.
 	Interest string
-	// NotOnly : ÉCARTER les comptes dont ce badge est le SEUL — la console mère
-	// passe `immo` : un client qui n'a jamais fait que chercher un logement
-	// n'est pas un client des repas ni des courses. ⚠️ Un compte SANS badge
-	// reste : il n'a rien fait nulle part, il n'est pas « de l'immobilier ».
-	NotOnly string
 }
 
 // AudienceIDs rend les identifiants des comptes ACTIFS de ces rôles, après
@@ -199,12 +208,6 @@ func (r *Repository) ListAccounts(ctx context.Context, f AccountFilter, cursor s
 	}
 	if f.Interest != "" {
 		filter["interests"] = f.Interest
-	}
-	if f.NotOnly != "" {
-		// ⚠️ L'ÉGALITÉ DE TABLEAU EXACTE : `["immo"]` seul est écarté,
-		// `["immo","food"]` reste. Combiné à `interest`, les deux portent sur
-		// le même champ : d'où `$and`.
-		filter["$and"] = bson.A{bson.M{"interests": bson.M{"$ne": bson.A{f.NotOnly}}}}
 	}
 	if f.Query != "" {
 		// QuoteMeta : une recherche est un texte que quelqu'un tape, pas une

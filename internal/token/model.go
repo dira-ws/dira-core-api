@@ -25,14 +25,10 @@ const (
 	// aucun usage. `Balance` y reste donc à zéro, et c'est `BalanceXOF` qui
 	// vit.
 	WalletTypeClient = "client"
-	// WalletTypePublisher : le portefeuille de JETONS d'un annonceur de
-	// l'immobilier. ⚠️ owner_id = la FICHE d'annonceur (l'agence, ou le
-	// particulier), PAS le compte : les collaborateurs d'une agence dépensent
-	// un solde COMMUN que le porteur recharge — décision du propriétaire du
-	// 11 nov. 2026 (« toute agence, comme la flotte, a son portefeuille »).
-	// Le socle ne connaît pas les fiches : seule la verticale l'ouvre et y
-	// achète, par `/internal/wallets/*`.
-	WalletTypePublisher = "publisher"
+	// ⚠️ UN QUATRIÈME TYPE, `publisher`, existe encore EN BASE : les
+	// portefeuilles d'une verticale qui ne fait plus partie de Dira. Ils se
+	// LISENT comme les autres (le type n'est qu'une étiquette à la lecture) ;
+	// `CreateWallet` n'en ouvre plus.
 )
 
 // Transaction kinds.
@@ -148,16 +144,15 @@ const (
 	// RefEquipment : un CONTRAT de matériel (`internal/equipment`). Chaque
 	// prélèvement et chaque remboursement de caution s'y rattache.
 	RefEquipment = "equipment"
-	// RefListing : une ANNONCE de l'immobilier — sa publication se paie une
-	// fois, et la référence rend le débit idempotent (une soumission rejouée
-	// ne paie pas deux fois).
-	RefListing = "listing"
-	// RefListingBoost : une MISE EN AVANT d'annonce de l'immobilier. Un genre à
-	// part, et son PROPRE identifiant (celui de la mise en avant, pas de
-	// l'annonce) — exactement comme `RefRideAdjustment` : l'annonce est déjà
-	// payée sous la sienne, et chaque mise en avant est un mouvement distinct.
-	// Deux mises en avant de la même annonce sont deux débits ; la même, rejouée,
-	// n'en est qu'un.
+	// RefListing et RefListingBoost : deux genres qu'une verticale qui ne fait
+	// plus partie de Dira a inscrits au grand livre.
+	//
+	// ⚠️⚠️ LISIBLES, PLUS ACCEPTÉS. Des écritures passées les portent, et une
+	// écriture passée ne se réécrit pas : un relevé, le grand livre de la
+	// console, le journal comptable et le balayage d'intégrité les lisent
+	// toujours — à la lecture, un genre n'est qu'une étiquette. `parseRef` les
+	// refuse : aucune écriture nouvelle ne s'y rattache.
+	RefListing      = "listing"
 	RefListingBoost = "listing_boost"
 	// RefChallenge : un OBJECTIF (`internal/challenge`). La référence rend le
 	// versement idempotent — un bonus payé deux fois est de l'argent perdu que

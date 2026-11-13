@@ -106,10 +106,11 @@ type User struct {
 	// quand un magasin est lent à valider, et une application pas encore mise
 	// à jour ne doit pas voir ses utilisateurs enfermés dehors.
 	AgentApp string `bson:"agent_app,omitempty"`
-	// Interests : les BADGES D'INTÉRÊT d'un client — `food`, `vtc`, `immo`
+	// Interests : les BADGES D'INTÉRÊT d'un client — `food`, `vtc`
 	// (`pkg/interest`), posés par l'usage de chaque verticale. ⚠️ Jamais
-	// retirés : un client qui a cherché un logement une fois reste visible de
-	// la console de l'immobilier.
+	// retirés : un client qui a commandé un repas une fois reste un client des
+	// repas. Un badge que plus aucune verticale ne pose peut rester écrit ici ;
+	// il ne sort plus (`AccountRow.fill`).
 	Interests []string `bson:"interests,omitempty"`
 }
 

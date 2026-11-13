@@ -3,14 +3,13 @@ package compliance
 // CE QU'UNE VERTICALE ATTEND, DÉCLARÉ PAR ELLE.
 //
 // ⚠️⚠️ LA LISTE DES PIÈCES ÉTAIT CELLE DU TRANSPORT, ÉCRITE DANS LE PAQUET.
-// Monté tel quel sur un annonceur immobilier, il aurait réclamé un extrait de
-// casier judiciaire à quelqu'un qui loue son appartement, et n'aurait jamais
-// demandé le mandat d'une agence ni le titre d'un bien (immo#54). Ce n'était
-// pas un câblage manquant : la liste vivait au mauvais endroit.
+// Monté tel quel sur un métier qui n'a ni véhicule ni dispatch, il aurait
+// réclamé un permis et un extrait de casier à des gens qui n'en ont que faire.
+// Ce n'était pas un câblage manquant : la liste vivait au mauvais endroit.
 //
-// La verticale DÉCLARE donc ce qu'elle reçoit et ce qu'elle attend ; le paquet
-// garde ce qui est commun — le cycle d'une pièce, qui la regarde, quand elle
-// cesse de couvrir.
+// La verticale DÉCLARE donc ce qu'elle reçoit et ce qu'elle attend, parmi les
+// types que ce paquet connaît (`docOwner`) ; le paquet garde ce qui est
+// commun — le cycle d'une pièce, qui la regarde, quand elle cesse de couvrir.
 //
 // ⚠️ ET SANS DÉCLARATION, RIEN NE BOUGE : la livraison et les courses ne
 // branchent rien, et reçoivent exactement la règle d'avant (`transport`) —
@@ -30,8 +29,8 @@ type Requirements interface {
 	// Expected rend les pièces attendues d'un porteur et de chacun de ses biens.
 	//
 	// ⚠️ UN CONTEXTE ET UNE ERREUR, parce que la réponse peut dépendre de ce
-	// que la verticale est seule à savoir — une agence doit son registre du
-	// commerce, un particulier non — et qu'elle le lit dans sa base.
+	// que la verticale est seule à savoir — le statut d'un dossier, le genre
+	// d'un bien — et qu'elle le lit dans sa base.
 	Expected(ctx context.Context, subjectID string, assets []VehicleRef) (Expectations, error)
 }
 

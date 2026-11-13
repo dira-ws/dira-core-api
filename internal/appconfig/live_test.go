@@ -90,17 +90,24 @@ func TestNoLiveSettingStoresNothing(t *testing.T) {
 	assert.Nil(t, got)
 }
 
-// L'IMMOBILIER S'ÉCRIT, et un pays faux est refusé EN LE NOMMANT : la console
-// affiche `reason`, et « validation échouée » sur une liste de quatorze cases
-// ne dit pas laquelle.
-func TestImmoCountriesAreSavedCleanAndAWrongOneIsNamed(t *testing.T) {
+// ⚠️⚠️ UNE FONCTION RETIRÉE DU CATALOGUE, RENVOYÉE PAR UNE CONSOLE D'AVANT, EST
+// JETÉE — pas refusée. La console renvoie le registre entier qu'elle a lu : un
+// `422 unknown feature` sur cette clé l'aurait empêchée de régler quoi que ce
+// soit d'autre. Le reste du registre s'écrit, et une vraie faute de frappe
+// reste refusée.
+func TestARetiredFeatureIsDroppedOnSaveAndATypoStillRefused(t *testing.T) {
 	repo := &fakeStore{}
 	svc := NewService(repo)
-	require.NoError(t, svc.Save(t.Context(), pkgconf.Registry{Immo: []string{"td", "GA", "GA"}}, "test"))
+	require.NoError(t, svc.Save(t.Context(), pkgconf.Registry{Features: map[string]pkgconf.Rule{
+		"immo":              {Editions: []string{"lite"}},
+		pkgconf.FeaturePool: {Editions: []string{"lite"}},
+	}}, "test"))
 	require.NotNil(t, repo.saved)
-	assert.Equal(t, []string{"GA", "TD"}, repo.saved.Immo)
+	assert.Equal(t, map[string]pkgconf.Rule{pkgconf.FeaturePool: {Editions: []string{"lite"}}},
+		repo.saved.Features, "la fonction retirée n'est pas écrite, le reste l'est")
 
-	err := svc.Save(t.Context(), pkgconf.Registry{Immo: []string{"GA", "Gabon"}}, "test")
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "Gabon")
+	err := svc.Save(t.Context(), pkgconf.Registry{Features: map[string]pkgconf.Rule{
+		"immobilier": {Editions: []string{"lite"}},
+	}}, "test")
+	require.Error(t, err, "une clé que personne n'a jamais servie reste une faute de frappe")
 }

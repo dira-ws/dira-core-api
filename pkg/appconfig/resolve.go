@@ -89,11 +89,6 @@ type Registry struct {
 	// en majuscules). Pays absent = le direct est éteint là-bas — voir
 	// `live.go`.
 	Live map[string]LiveRule `bson:"live,omitempty" json:"live,omitempty"`
-	// Immo : les pays où l'application cliente montre l'immobilier (`immo.go`).
-	//
-	// ⚠️ UNE LISTE QUI OUVRE, à l'inverse des règles qui retirent : absente,
-	// l'immobilier n'est ouvert NULLE PART.
-	Immo []string `bson:"immo,omitempty" json:"immo,omitempty"`
 	// ListRules : clé de liste → sa règle (c'est `Allow` qui y compte).
 	ListRules map[string]Rule `bson:"lists,omitempty" json:"lists,omitempty"`
 	// Languages : le catalogue des langues, dans l'ordre de la console. Vide =
@@ -257,7 +252,6 @@ func (r *Registry) Resolve(countryCode, ed string) Resolved {
 	// et l'application aurait ouvert un micro vers un relais qui refuse.
 	block, live := r.LiveFor(countryCode, ed)
 	out.Features[FeatureAssistantLive] = live
-	out.Features[FeatureImmo] = r.ImmoOpen(countryCode, ed)
 	if live {
 		out.Live = &block
 	}

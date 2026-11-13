@@ -120,7 +120,6 @@ func (s *Service) RegisterDevice(ctx context.Context, userID string, req Registe
 		Platform: req.Platform,
 		Locale:   normalizeLocale(req.Locale),
 		Edition:  ed,
-		App:      req.App,
 	})
 }
 
@@ -135,27 +134,26 @@ func (s *Service) RegisterDevice(ctx context.Context, userID string, req Registe
 //
 // Mieux vaut une notification dans la mauvaise application qu'un passager qui
 // attend une voiture déjà repartie.
-func (s *Service) devicesFor(ctx context.Context, uid primitive.ObjectID, ed, key string) ([]Device, error) {
-	// ⚠️ L'APPLICATION QUI SAIT OUVRIR CE MESSAGE EST TRIÉE AVANT LE REPLI SUR
-	// L'ÉDITION (`app.go`). Triée après, un compte qui n'a de « complète » que
-	// Dira Immo (Dira Immo + Lite) voyait la course partir vers Dira Immo, puis
-	// en être retirée : personne n'était prévenu, alors que Lite l'attendait.
+//
+// ⚠️ LES JETONS D'UNE APPLICATION RETIRÉE SONT DÉJÀ ÉCARTÉS PAR LE DÉPÔT, AVANT
+// CE REPLI (`app.go`). Écartés après, un compte dont la seule « complète » est
+// cette application-là verrait la course partir vers elle et s'y perdre, alors
+// que son téléphone Lite l'attend.
+func (s *Service) devicesFor(ctx context.Context, uid primitive.ObjectID, ed string) ([]Device, error) {
 	if ed == "" {
-		all, err := s.repo.ActiveDevices(ctx, uid)
-		return routeByApp(all, key), err
+		return s.repo.ActiveDevices(ctx, uid)
 	}
 	only, err := s.repo.ActiveDevicesOfEdition(ctx, uid, ed)
 	if err != nil {
 		return nil, err
 	}
-	if only = routeByApp(only, key); len(only) > 0 {
+	if len(only) > 0 {
 		return only, nil
 	}
 	all, err := s.repo.ActiveDevices(ctx, uid)
 	if err != nil {
 		return nil, err
 	}
-	all = routeByApp(all, key)
 	if len(all) > 0 {
 		slog.InfoContext(ctx, "notify: no device of that edition, falling back to all of them",
 			"user_id", uid.Hex(), "edition", ed, "devices", len(all))
@@ -230,7 +228,7 @@ func (s *Service) notify(ctx context.Context, userID, ed, key string, vars map[s
 		}
 	}
 
-	devices, err := s.devicesFor(ctx, uid, ed, key)
+	devices, err := s.devicesFor(ctx, uid, ed)
 	if err != nil {
 		slog.WarnContext(ctx, "notify: devices unavailable", "user_id", userID, "error", err)
 		devices = nil
@@ -364,7 +362,18 @@ func collapseOf(data map[string]string) string {
 // --- gabarits ---
 
 // template rend le gabarit d'une clé : celui de la base, sinon le compilé.
+//
+// ⚠️⚠️ UNE CLÉ QUE LE CODE N'ÉMET PLUS N'A PLUS DE GABARIT, MÊME EN BASE. Un texte
+// personnalisé à la console survit au retrait de sa clé ; sans cette garde, un
+// appelant qui l'enverrait encore ferait partir, vers les téléphones de Dira,
+// le message d'un métier qui n'en fait plus partie. Une clé n'entre en base que
+// par `SaveTemplate`, qui exige qu'elle soit compilée : la base ne peut donc
+// rien connaître que le code n'ait connu.
 func (s *Service) template(ctx context.Context, key string) (Template, bool) {
+	d, known := defaults[key]
+	if !known {
+		return Template{}, false
+	}
 	s.mu.RLock()
 	fresh := time.Since(s.cachedAt) < cacheTTL
 	t, hit := s.cache[key]
@@ -383,8 +392,7 @@ func (s *Service) template(ctx context.Context, key string) (Template, bool) {
 		// envoyer. Un texte non personnalisé vaut mieux qu'un silence.
 		slog.WarnContext(ctx, "notify: template unreadable, using compiled default", "key", key, "error", err)
 	}
-	d, ok := defaults[key]
-	return d, ok
+	return d, true
 }
 
 // ListTemplates rend tous les gabarits : ceux de la base, complétés par les
@@ -404,6 +412,13 @@ func (s *Service) ListTemplates(ctx context.Context) ([]TemplateResponse, error)
 	}
 	custom := map[string]bool{}
 	for _, t := range stored {
+		// ⚠️ UN GABARIT DONT LA CLÉ A ÉTÉ RETIRÉE DU CODE ne se liste plus : il
+		// ne partirait plus (`template`), et l'écran ne pourrait plus
+		// l'enregistrer (`unknown_template`). Le montrer ferait croire à un
+		// réglage qui agit.
+		if _, known := byKey[t.Key]; !known {
+			continue
+		}
 		byKey[t.Key] = t
 		custom[t.Key] = true
 	}

@@ -62,7 +62,29 @@ func (r *Repository) Load(ctx context.Context) (*appconfig.Registry, error) {
 	case err != nil:
 		return nil, fmt.Errorf("appconfig: load: %w", err)
 	}
+	doc.Features = servedFeatures(doc.Features)
 	return &doc.Registry, nil
+}
+
+// servedFeatures garde les règles des fonctions que le catalogue connaît.
+//
+// ⚠️⚠️ UNE RÈGLE SOUS UNE CLÉ QUE LE CATALOGUE NE CONNAÎT PLUS — une fonction
+// retirée — reste écrite dans le document, et elle n'y gêne personne. La
+// SERVIR, en revanche, bloquerait la console : elle relit le registre, le
+// renvoie ENTIER à l'enregistrement, et l'écriture refuse une clé inconnue
+// (`unknown feature`). Plus personne n'aurait pu régler une édition. Ce qui ne
+// se règle plus ne se lit plus. (Les champs du document que la `Registry` ne
+// déclare plus, eux, sont déjà ignorés au décodage.)
+func servedFeatures(in map[string]appconfig.Rule) map[string]appconfig.Rule {
+	for key := range in {
+		if !appconfig.Known(key) {
+			delete(in, key)
+		}
+	}
+	if len(in) == 0 {
+		return nil
+	}
+	return in
 }
 
 // Save remplace le registre.
@@ -81,7 +103,6 @@ func (r *Repository) Save(ctx context.Context, reg appconfig.Registry, actor str
 			// jusqu'au prochain rechargement. Une épreuve de parité tient
 			// cette liste à jour.
 			"live":       reg.Live,
-			"immo":       reg.Immo,
 			"updated_at": time.Now().UTC(),
 			"updated_by": actor,
 		},

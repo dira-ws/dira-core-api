@@ -1,19 +1,23 @@
-// Package interest : les BADGES D'INTÉRÊT d'un client — `food`, `vtc`, `immo`.
+// Package interest : les BADGES D'INTÉRÊT d'un client — `food`, `vtc`.
 //
 // Demande du propriétaire du 11 nov. 2026 : identifier les clients par les
 // métiers qui les intéressent, selon la plateforme où ils se connectent, et
-// ensuite dès qu'ils réservent ou même cherchent. La console de l'immobilier
-// liste les clients `immo` ; la console mère ÉCARTE ceux qui n'ont QUE `immo`.
+// ensuite dès qu'ils réservent ou même cherchent. La console les montre sur la
+// fiche d'un client, et filtre ses listes par badge (`?interest=food`).
 //
 // ⚠️⚠️ LA CONNEXION NE LE DIT PAS. `app: "client"` sert TOUTES les applications
-// de clients — les repas, les courses, et Dira Immo —, et un compte client est
-// UNIQUE à travers elles. Ce qui le dit, c'est l'USAGE : un appel authentifié
-// d'un client à une verticale (une recherche, une commande, une course) vaut
+// de clients — les repas et les courses —, et un compte client est UNIQUE à
+// travers elles. Ce qui le dit, c'est l'USAGE : un appel authentifié d'un
+// client à une verticale (une recherche, une commande, une course) vaut
 // intérêt pour elle. D'où un middleware que chaque verticale pose derrière son
 // authentification (`Reporter.After`), et non un champ de connexion.
 //
 // ⚠️ LES FAITS NE SUFFISAIENT PAS : la livraison n'y met pas le client
-// (`actor`), et la recherche immobilière, exprès, non plus.
+// (`actor`).
+//
+// ⚠️ UN BADGE RETIRÉ (une verticale qui ne fait plus partie de Dira) reste
+// écrit sur des comptes anciens. Il n'est plus `Valid` : le socle ne le pose
+// plus, ne le montre plus, et refuse de filtrer dessus.
 package interest
 
 import (
@@ -34,11 +38,10 @@ import (
 const (
 	Food = "food"
 	VTC  = "vtc"
-	Immo = "immo"
 )
 
 // All : les badges connus, dans l'ordre d'affichage.
-var All = []string{Food, VTC, Immo}
+var All = []string{Food, VTC}
 
 // Valid dit si `s` est un badge connu.
 func Valid(s string) bool {
@@ -106,8 +109,8 @@ func (r *Reporter) Middleware(next http.Handler) http.Handler {
 	})
 }
 
-// Note rapporte le compte du contexte s'il est CLIENT — un chauffeur, un
-// marchand ou un annonceur n'est pas un client de la verticale.
+// Note rapporte le compte du contexte s'il est CLIENT — un chauffeur ou un
+// marchand n'est pas un client de la verticale.
 func (r *Reporter) Note(ctx context.Context) {
 	if !r.Enabled() {
 		return

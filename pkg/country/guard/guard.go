@@ -464,15 +464,14 @@ func isIDName(lit *ast.BasicLit) bool {
 // commande, d'un pays ; `{"user_id": x}` désigne une PERSONNE, et ses documents
 // de tous les pays : le voyageur de Lomé qui commande une course à Libreville
 // garde le même compte. La règle « une clé en `_id` est une borne » laissait
-// passer ces lectures — le mutant « favoris sans pays » de l'immobilier avait
-// survécu à son test de frontière.
+// passer ces lectures — un mutant « favoris sans pays » avait survécu à son
+// test de frontière.
 //
 // La liste est celle des clés de compte de la plateforme ; une clé nouvelle
 // s'ajoute ICI, avec la même raison.
 var AccountKeys = map[string]bool{
 	"user_id": true, "user_ids": true, "account_id": true, "account_ids": true,
 	"client_id": true, "driver_id": true, "rider_id": true, "courier_id": true,
-	"seeker_id": true, "tenant_id": true,
 }
 
 func isRangeOp(n ast.Node) bool {

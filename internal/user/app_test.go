@@ -79,3 +79,20 @@ func TestTheRefusalNamesTheAppThroughReasonTheOnlyKeyThatIsServed(t *testing.T) 
 	assert.Equal(t, "client", apperr.From(err).Meta["reason"],
 		"`reason` doit nommer l'application à ouvrir — c'est la seule clé que la réponse porte")
 }
+
+// ⚠️ UNE APPLICATION ET UN RÔLE QUE LA PLATEFORME NE SERT PLUS. L'application
+// des annonceurs n'est plus une valeur de `app` (`422` à la connexion comme à
+// l'inscription) ; un compte resté sous ce rôle qui frappe à la porte d'une
+// application de Dira reçoit le refus ordinaire, sans application à nommer —
+// jamais une panne. Et sans application dite, le comportement d'avant.
+func TestARetiredAppAndARetiredRole(t *testing.T) {
+	for _, req := range []any{LoginRequest{}, RegisterRequest{}, OTPRequest{}, OTPVerifyRequest{}} {
+		assert.NotContains(t, appsAllowedOn(t, req), "immo_pro")
+	}
+	err := allowedIn("client", "publisher")
+	require.Error(t, err)
+	assert.Equal(t, "wrong_app", apperr.From(err).Code)
+	assert.Equal(t, "", apperr.From(err).Meta["reason"],
+		"aucune application à nommer : les applications replient sur le message")
+	assert.NoError(t, allowedIn("", "publisher"))
+}

@@ -38,28 +38,28 @@ func (e *envois) count() int {
 }
 
 func newRep(e *envois) *Reporter {
-	r := NewReporter("http://socle", "secret", Immo, nil)
+	r := NewReporter("http://socle", "secret", Food, nil)
 	r.post = e.post
 	return r
 }
 
 func call(r *Reporter, uid, role string) {
 	h := r.Middleware(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
-	req := httptest.NewRequest(http.MethodGet, "/immo/listings", nil)
+	req := httptest.NewRequest(http.MethodGet, "/food/orders", nil)
 	if uid != "" {
 		req = req.WithContext(auth.WithUser(req.Context(), uid, role))
 	}
 	h.ServeHTTP(httptest.NewRecorder(), req)
 }
 
-// ⚠️ UN CLIENT, UNE FOIS PAR PROCESSUS — et seulement un client : le chauffeur,
-// le marchand ou l'annonceur qui appelle la verticale n'en est pas un client.
+// ⚠️ UN CLIENT, UNE FOIS PAR PROCESSUS — et seulement un client : le chauffeur
+// ou le marchand qui appelle la verticale n'en est pas un client.
 func TestAClientIsReportedOnceAndOnlyAClient(t *testing.T) {
 	e := &envois{}
 	r := newRep(e)
 	call(r, "6b0f3c1a9e2d4f5a6b7c8d90", auth.RoleClient)
 	call(r, "6b0f3c1a9e2d4f5a6b7c8d90", auth.RoleClient)
-	call(r, "6b0f3c1a9e2d4f5a6b7c8d91", auth.RolePublisher)
+	call(r, "6b0f3c1a9e2d4f5a6b7c8d91", auth.RoleMerchant)
 	call(r, "6b0f3c1a9e2d4f5a6b7c8d92", auth.RoleDriver)
 	call(r, "", "")
 	require.Eventually(t, func() bool { return e.count() == 1 }, time.Second, 5*time.Millisecond)
@@ -87,10 +87,14 @@ func TestAFailedReportIsRetriedNextTime(t *testing.T) {
 // rend l'authentification telle quelle.
 func TestWithoutCoreNothingIsReportedAndAuthIsUnchanged(t *testing.T) {
 	for name, r := range map[string]*Reporter{
-		"sans adresse":  NewReporter("", "secret", Immo, nil),
-		"sans secret":   NewReporter("http://socle", "", Immo, nil),
+		"sans adresse":  NewReporter("", "secret", Food, nil),
+		"sans secret":   NewReporter("http://socle", "", Food, nil),
 		"badge inconnu": NewReporter("http://socle", "secret", "jardinage", nil),
-		"nul":           nil,
+		// ⚠️ UN BADGE RETIRÉ N'EST PLUS UN BADGE : une verticale qui le
+		// passerait encore ne rapporterait rien, plutôt que de recevoir un
+		// refus du socle à chaque client.
+		"badge retiré": NewReporter("http://socle", "secret", "immo", nil),
+		"nul":          nil,
 	} {
 		assert.False(t, r.Enabled(), name)
 		called := false
@@ -117,11 +121,15 @@ func TestAfterRunsTheReporterBehindTheAuth(t *testing.T) {
 	require.Eventually(t, func() bool { return e.count() == 1 }, time.Second, 5*time.Millisecond)
 }
 
-func TestTheBadgesAreTheThreeVerticals(t *testing.T) {
-	assert.Equal(t, []string{"food", "vtc", "immo"}, All)
-	assert.True(t, Valid("immo"))
-	assert.False(t, Valid("Immo"))
+func TestTheBadgesAreTheTwoVerticals(t *testing.T) {
+	assert.Equal(t, []string{"food", "vtc"}, All)
+	assert.True(t, Valid("food"))
+	assert.True(t, Valid("vtc"))
+	assert.False(t, Valid("Food"))
 	assert.False(t, Valid(""))
+	// ⚠️ Le badge d'une verticale qui ne fait plus partie de Dira n'est plus
+	// un badge, même s'il reste écrit sur des comptes anciens.
+	assert.False(t, Valid("immo"))
 }
 
 // L'envoi réel : la bonne route, le secret, le corps.
