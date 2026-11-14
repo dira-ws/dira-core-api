@@ -74,6 +74,12 @@ func TestADeliveryFeeFollowsItsReference(t *testing.T) {
 	assert.Equal(t, AccParcelClearing, debit)
 	assert.Equal(t, AccAgentPayables, credit)
 
+	// ⚠️ Le même trajet quand l'équipe rend TOUT : une dépense de la plateforme,
+	// jamais le passage des colis, qui serait alors sous zéro.
+	debit, credit = lineOf(t, EntryFor(tx(token.KindPurchase, token.ReasonParcelCancelGoodwill, token.UnitXOF, 440, token.RefShipmentLeg, nil), wallet("driver"), 100))
+	assert.Equal(t, AccExpenseCredits, debit)
+	assert.Equal(t, AccAgentPayables, credit)
+
 	// La commission sur ce gain, et les jetons rendus d'une étape, gardent leur ligne.
 	debit, credit = lineOf(t, EntryFor(tx(token.KindConsume, token.ReasonCommission, token.UnitXOF, 330, token.RefShipmentLeg, map[string]any{"on": "delivery_fee"}), wallet("driver"), 100))
 	assert.Equal(t, AccAgentPayables, debit)

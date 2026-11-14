@@ -150,6 +150,15 @@ const (
 	// qu'il portait est annulé sous lui — le trajet qu'il a fait, pris sur ce
 	// que l'expéditeur n'a pas récupéré.
 	ReasonParcelCancelCompensation = "parcel_cancel_compensation"
+	// ReasonParcelCancelGoodwill : le trajet d'un livreur annulé sous lui quand
+	// l'équipe rend TOUT à l'expéditeur — payé par la PLATEFORME, et non pris
+	// sur ce que l'expéditeur aurait laissé.
+	//
+	// ⚠️ UN MOTIF À PART de `parcel_cancel_compensation` : celui-ci débite le
+	// passage des colis, où l'argent de l'expéditeur attendait ; celui-là est
+	// une dépense de la plateforme. Les confondre laisserait le passage d'un
+	// envoi rendu en entier plus bas que zéro.
+	ReasonParcelCancelGoodwill = "parcel_cancel_goodwill"
 	// ReasonParcelReturnFee : le frais du retour d'un colis non remis, payé
 	// par l'expéditeur — pris sur son solde, porté à sa dette sinon (`Owe`,
 	// avec `payment_due`).

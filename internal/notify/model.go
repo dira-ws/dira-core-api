@@ -460,6 +460,15 @@ const (
 	// KeyParcelReturnAssigned va au LIVREUR : le colis qu'il n'a pas pu
 	// remettre repart avec lui vers l'expéditeur.
 	KeyParcelReturnAssigned = "parcel_return_assigned"
+	// KeyParcelDeliveryCancelled va au LIVREUR : l'envoi qu'il portait est
+	// annulé, il est libre. ⚠️ Un gabarit À PART de `delivery_cancelled`, dont
+	// la phrase parle d'une commande : un livreur de colis lirait « La
+	// commande… » pour un colis. Et comme tous les gabarits du colis, rien du
+	// destinataire ni de l'expéditeur — la référence de l'envoi suffit.
+	KeyParcelDeliveryCancelled = "parcel_delivery_cancelled"
+	// KeyParcelRetryRequested va au LIVREUR : après un échec de remise,
+	// l'expéditeur demande une nouvelle tentative — il repart vers le dépôt.
+	KeyParcelRetryRequested = "parcel_retry_requested"
 	// LES ALERTES DE L'ÉQUIPE DU COLIS (`staff_parcel_*`), poussées aux membres
 	// dont le périmètre couvre `parcel`. `staff_parcel_code_locked` : un code
 	// de remise s'est verrouillé ; `staff_parcel_incident` : un envoi demande
@@ -1344,6 +1353,24 @@ var defaults = map[string]Template{
 			LocaleEN: {Title: "Parcel return", Body: "Bring parcel [shipment_ref] back to the sender. The return is paid to you."},
 		},
 	},
+	KeyParcelDeliveryCancelled: {
+		Key:         KeyParcelDeliveryCancelled,
+		Description: "COLIS — l'envoi que le LIVREUR portait est annulé : il est libre. Message au LIVREUR, sans aucune adresse ni aucun nom.",
+		Enabled:     true,
+		Locales: map[string]Text{
+			LocaleFR: {Title: "Colis annulé", Body: "L'envoi [shipment_ref] que vous portiez est annulé. Vous êtes libre pour une autre course."},
+			LocaleEN: {Title: "Parcel cancelled", Body: "Shipment [shipment_ref] you were carrying is cancelled. You are free for another delivery."},
+		},
+	},
+	KeyParcelRetryRequested: {
+		Key:         KeyParcelRetryRequested,
+		Description: "COLIS — après un échec de remise, l'expéditeur demande une NOUVELLE TENTATIVE. Message au LIVREUR, sans aucune adresse ni aucun nom.",
+		Enabled:     true,
+		Locales: map[string]Text{
+			LocaleFR: {Title: "Nouvelle tentative", Body: "L'expéditeur de l'envoi [shipment_ref] demande une nouvelle tentative de remise."},
+			LocaleEN: {Title: "Try again", Body: "The sender of shipment [shipment_ref] asks for another delivery attempt."},
+		},
+	},
 	KeyStaffParcelCodeLocked: {
 		Key:         KeyStaffParcelCodeLocked,
 		Description: "STAFF — un code de remise de colis s'est verrouillé après trop d'essais faux.",
@@ -1500,17 +1527,19 @@ var provided = map[string][]string{
 	// ⚠️ RIEN DU DESTINATAIRE — ni nom, ni numéro, ni adresse (voir les clés).
 	// `courier` et `vehicle` : le livreur qui vient chez l'EXPÉDITEUR, qu'il
 	// va recevoir ; `amount` : un montant déjà mis en forme, avec sa monnaie.
-	KeyParcelConfirmed:      {"shipment_ref"},
-	KeyParcelAccepted:       {"shipment_ref", "courier", "vehicle"},
-	KeyParcelPickedUp:       {"shipment_ref", "courier"},
-	KeyParcelCourierNearby:  {"shipment_ref", "minutes"},
-	KeyParcelDelivered:      {"shipment_ref"},
-	KeyParcelFailedAttempt:  {"shipment_ref", "reason", "minutes"},
-	KeyParcelReturning:      {"shipment_ref"},
-	KeyParcelReturned:       {"shipment_ref"},
-	KeyParcelCancelled:      {"shipment_ref", "amount", "reason"},
-	KeyParcelPaymentKept:    {"shipment_ref", "amount"},
-	KeyParcelReturnAssigned: {"shipment_ref"},
+	KeyParcelConfirmed:         {"shipment_ref"},
+	KeyParcelAccepted:          {"shipment_ref", "courier", "vehicle"},
+	KeyParcelPickedUp:          {"shipment_ref", "courier"},
+	KeyParcelCourierNearby:     {"shipment_ref", "minutes"},
+	KeyParcelDelivered:         {"shipment_ref"},
+	KeyParcelFailedAttempt:     {"shipment_ref", "reason", "minutes"},
+	KeyParcelReturning:         {"shipment_ref"},
+	KeyParcelReturned:          {"shipment_ref"},
+	KeyParcelCancelled:         {"shipment_ref", "amount", "reason"},
+	KeyParcelPaymentKept:       {"shipment_ref", "amount"},
+	KeyParcelReturnAssigned:    {"shipment_ref"},
+	KeyParcelDeliveryCancelled: {"shipment_ref"},
+	KeyParcelRetryRequested:    {"shipment_ref"},
 	// ⚠️ `who` est le LIVREUR qui essayait le code : c'est lui que l'équipe
 	// appelle. `kind` et `detail` d'un incident sont des phrases déjà écrites
 	// par la verticale.

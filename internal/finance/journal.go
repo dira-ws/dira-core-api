@@ -149,6 +149,10 @@ func EntryFor(tx *token.Transaction, w *token.Wallet, tokenPriceXOF int) *Entry 
 		// Le trajet d'un livreur annulé sous lui : pris sur ce que
 		// l'expéditeur n'a pas récupéré, resté au passage des colis.
 		e.Lines = lines(clearing, AccAgentPayables, amount)
+	case token.ReasonParcelCancelGoodwill:
+		// Le même trajet, quand l'équipe a tout rendu : une dépense de la
+		// plateforme, un geste comme un crédit accordé.
+		e.Lines = lines(AccExpenseCredits, AccAgentPayables, amount)
 	case token.ReasonParcelReturnFee:
 		// Le frais d'un retour, pris sur le solde de l'expéditeur. Ce que le
 		// solde n'a pas couvert devient une créance (`payment_due`, plus bas).
