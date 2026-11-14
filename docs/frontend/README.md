@@ -1,6 +1,6 @@
 # Specs frontend — par rôle
 
-> **Version 4.139.0** · 14 novembre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics`
+> **Version 4.140.0** · 14 novembre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics`
 
 **Cinq** documents, un par application. Chacun est **autonome** : tout ce qu'un frontend doit savoir pour son rôle, sans avoir à ouvrir les vingt specs de modules.
 
@@ -387,6 +387,24 @@ Chaque document porte la même version en en-tête, et son propre journal des ch
 - [ ] ⚠️ **`TRACKING_JWT_SECRET` renseigné dans chaque environnement déployé.** Vide, l'authentification du service de suivi est **désactivée** : n'importe qui connaissant un `delivery_id` suit la course. Le secret doit valoir **exactement** le `JWT_SECRET` de `dira-food-api`.
 
 ## Journal
+
+### 4.140.0 — 14 novembre 2026
+
+🧪 **L'APPEL SÉPARÉ : essai avec essai, réel avec réel.** Une course d'essai
+(celle d'une commande d'un client d'essai) n'appelle QUE des livreurs d'essai,
+et une vraie course JAMAIS un livreur d'essai. L'appel, la liste des courses
+disponibles, l'acceptation et l'attribution par la console le respectent. Une
+recette au Togo ne fait donc plus sortir un vrai livreur, et un vrai repas ne
+part jamais chez un livreur émulé.
+
+- `FOOD-DELIVERY.md` : la règle, et le refus `409 testing_mismatch` à
+  l'acceptation — avant tout débit de jeton.
+- ⚠️ Un livreur dont la fiche ne se lit pas est réputé réel : il reste candidat
+  aux vraies courses, jamais aux courses d'essai.
+- Les alertes de l'équipe pour une course d'essai partent marquées « Essai ».
+
+🔧 **Ce qui ne change pas** : aucune route, aucune forme de réponse. Un vrai
+livreur voit et prend les vraies courses comme avant.
 
 ### 4.139.0 — 14 novembre 2026
 
