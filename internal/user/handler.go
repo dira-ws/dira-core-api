@@ -67,7 +67,34 @@ func (h *Handler) Mount(r chi.Router, authMW func(http.Handler) http.Handler) {
 		// personne — second téléphone, second portefeuille, second historique
 		// —, c'est-à-dire exactement le désordre que la règle évite.
 		g.With(admin).Delete("/admin/users/{id}/agent-app", h.releaseAgentApp)
+		// LES COMPTES D'ESSAI — voir `testing.go`. Une route à part de
+		// l'identité, comme l'état du compte : ce n'est pas une donnée de la
+		// personne, c'est ce que la plateforme fait de son activité.
+		g.With(admin).Patch("/admin/users/{id}/testing", h.setAccountTesting)
 	})
+}
+
+// PATCH /admin/users/{id}/testing {testing}
+//
+// Rend l'état AVANT, comme l'état du compte : marquer un compte déjà marqué
+// n'est pas la même chose que marquer un vrai compte, et seule la trace d'audit
+// le distinguerait sinon.
+func (h *Handler) setAccountTesting(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		// ⚠️ UN POINTEUR, ET OBLIGATOIRE : un corps vide ne doit pas se lire
+		// « sortir des essais ». Un `bool` nu vaudrait `false` faute de champ.
+		Testing *bool `json:"testing" validate:"required"`
+	}
+	if err := httpx.Decode(r, &req); err != nil {
+		httpx.Error(w, r, err)
+		return
+	}
+	before, err := h.svc.SetAccountTesting(r.Context(), chi.URLParam(r, "id"), *req.Testing)
+	if err != nil {
+		httpx.Error(w, r, err)
+		return
+	}
+	httpx.JSON(w, http.StatusOK, map[string]any{"before": before, "testing": *req.Testing})
 }
 
 // GET /admin/users?role=&status=&q=&interest=&cursor=&limit=

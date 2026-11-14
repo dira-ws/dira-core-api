@@ -380,6 +380,21 @@ func (r *Repository) AddInterest(ctx context.Context, userID primitive.ObjectID,
 	return nil
 }
 
+// SetTesting marque un compte d'essai, ou l'en sort.
+//
+// ⚠️ `$unset` pour l'en sortir, et non `false` : un vrai compte est un compte
+// SANS le champ, comme tous ceux d'avant — une seule forme à lire.
+func (r *Repository) SetTesting(ctx context.Context, userID primitive.ObjectID, testing bool) error {
+	update := bson.M{"$set": bson.M{"testing": true, "updated_at": time.Now().UTC()}}
+	if !testing {
+		update = bson.M{"$unset": bson.M{"testing": ""}, "$set": bson.M{"updated_at": time.Now().UTC()}}
+	}
+	if _, err := r.users.UpdateOne(ctx, bson.M{"_id": userID}, update); err != nil {
+		return fmt.Errorf("user: set testing: %w", err)
+	}
+	return nil
+}
+
 func (r *Repository) SetAgentApp(ctx context.Context, userID primitive.ObjectID, app string) error {
 	update := bson.M{"$set": bson.M{"agent_app": app}}
 	if app == "" {

@@ -1,6 +1,6 @@
 # App LIVREUR — LIVRAISON — contrat d'API
 
-> **Version 4.138.0** · 13 novembre 2026
+> **Version 4.139.0** · 14 novembre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Livraison : `https://api-staging.dira.llc/api/v1/food` · Suivi : `wss://tracking-staging.dira.llc` · SIG : `https://maps.dira.llc/api`
 
 
@@ -1865,9 +1865,18 @@ qui n'ont jamais existé pour la paie.
 > le réseau, recommencez — avec `app: "courier"` et les livreurs `+241 06 100 001`
 > à `003`, mot de passe `dira12345`. Trois enseignes y ont un catalogue.
 >
-> ⚠️ **Jamais sur le Togo ni le Sénégal.** Ce sont des pays réels : une
-> livraison d'essai y déclenche les alertes d'exploitation, qui notifient six
-> personnes.
+> ⚠️ **Jamais sur le Sénégal.** C'est un pays réel : une livraison d'essai y
+> déclenche les alertes d'exploitation, qui notifient six personnes.
+>
+> ⚠️ **Au Togo, seulement avec un COMPTE D'ESSAI** (v4.139.0). Le Togo est un
+> pays réel aussi, mais l'équipe Dira peut y marquer un compte d'essai — un
+> client de recette, un livreur émulé. Les commandes d'un client d'essai, et
+> les courses qui en naissent, ne comptent ni dans la supervision, ni dans les
+> rapports, ni dans les classements. ⚠️ C'est la COMMANDE qui le dit, pas le
+> livreur : la course d'un vrai client est vraie, même portée par un livreur
+> d'essai. Sans client marqué par l'équipe, une livraison au Togo est une vraie
+> livraison. Le marqueur part dans le jeton, au prochain jeton du compte : rien
+> ne change pour votre application.
 
 Le rattrapage ci-dessus porte les **positions**. Les **gestes** — collecter,
 terminer — se rejouent ici :

@@ -112,6 +112,23 @@ type User struct {
 	// repas. Un badge que plus aucune verticale ne pose peut rester écrit ici ;
 	// il ne sort plus (`AccountRow.fill`).
 	Interests []string `bson:"interests,omitempty"`
+	// Testing marque un compte d'ESSAI — un livreur émulé, un client de recette
+	// —, posé par l'équipe (`PATCH /admin/users/{id}/testing`).
+	//
+	// ⚠️ LE PAYS RESTE RÉEL. C'est la différence avec un pays d'essai (le Gabon,
+	// `testing` dans `GET /countries`), qui sort TOUTE son activité de ce qui
+	// compte : ici, seul ce que CE compte fait naître — ses commandes, et ce
+	// qu'elles produisent — est marqué, et écarté de la supervision, des
+	// rapports et des classements (`country.Counting`). Le Togo reste réel pour
+	// les repas et les courses de tous les autres.
+	//
+	// ⚠️ DANS LE JETON (`tst`), à chaque émission : une verticale le lit sans
+	// demander au socle. Changé, il s'applique donc au PROCHAIN jeton — la
+	// connexion suivante ou le prochain rafraîchissement.
+	//
+	// ⚠️ ABSENT = RÉEL (`omitempty`) : rien à migrer, et un compte d'avant ce
+	// champ est un vrai compte.
+	Testing bool `bson:"testing,omitempty"`
 }
 
 // Device est l'appareil qui détient la session d'un chauffeur ou d'un livreur.

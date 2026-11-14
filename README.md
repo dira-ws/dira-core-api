@@ -53,6 +53,16 @@ pkg/country     the COUNTRY layer: catalog, borders, request country, the `count
 > the console — Togo, Senegal, Guinea, Chad and Gabon are opened at first start
 > (`country.Preloaded`); the catalog (with currencies and phone prefixes) is code,
 > because opening a country needs a deployment anyway.
+>
+> ⚠️ **What COUNTS is part of the same boundary.** A country can be reserved
+> for testing (`testing` in `GET /countries`, the Gabon): none of its activity
+> enters supervision, reports or rankings. An **account** can be marked the same
+> way by the team (`PATCH /admin/users/{id}/testing`, the `tst` claim): what it
+> brings to life — an order, and everything that order produces — carries
+> `testing: true`, in a country that stays real for everyone else. A read that
+> feeds a figure runs under `country.Counting(ctx)`, and `country.Restrict` then
+> leaves the trials out — exactly as the list of real countries leaves a testing
+> country out. An ordinary read keeps them: the courier of a trial must see it.
 
 > ⚠️ **`pkg/chat` is a LIBRARY, not a service, and that is deliberate.**
 >

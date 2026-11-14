@@ -42,6 +42,8 @@ type Repo interface {
 	// compte, réclamée par les verticales — voir `agentapp.go`.
 	SetAgentApp(ctx context.Context, userID primitive.ObjectID, app string) error
 	AddInterest(ctx context.Context, userID primitive.ObjectID, interest string) error
+	// LES COMPTES D'ESSAI — voir `testing.go`.
+	SetTesting(ctx context.Context, userID primitive.ObjectID, testing bool) error
 
 	// LA SUPPRESSION D'UN COMPTE — fermer, lister ce qui est dû, anonymiser,
 	// et le carnet d'adresses qui part avec. Voir `erasure.go`.
@@ -877,7 +879,7 @@ func (s *Service) issueTokens(ctx context.Context, u *User, deviceID, sessionDev
 
 // grantFor assemble ce que le jeton d'un compte accorde.
 func (s *Service) grantFor(ctx context.Context, u *User, deviceID string) auth.Grant {
-	g := auth.Grant{UserID: u.ID.Hex(), Role: u.Role, Country: u.Country, Device: deviceID}
+	g := auth.Grant{UserID: u.ID.Hex(), Role: u.Role, Country: u.Country, Device: deviceID, Testing: u.Testing}
 	if u.Role != auth.RoleAdmin {
 		return g // la portée et le changement de pays sont des notions de STAFF
 	}

@@ -102,6 +102,22 @@ type Claims struct {
 	// d'avant : une application pas encore mise à jour ne doit pas voir ses
 	// utilisateurs enfermés dehors du jour au lendemain.
 	Device string
+	// Testing dit que ce compte est un compte d'ESSAI — un livreur émulé, un
+	// client de recette —, marqué par l'équipe.
+	//
+	// ⚠️ DANS LE JETON POUR LA MÊME RAISON QUE LE PAYS : la verticale qui crée
+	// une commande doit savoir, sans demander au socle, que ce qu'elle crée est
+	// un essai — et le marquer, pour que rien de ce qu'il produit n'entre dans
+	// la supervision, les rapports ni les classements (`country.Counting`).
+	//
+	// ⚠️ C'EST LE COMPTE QUI PORTE, PAS LA REQUÊTE. Un objet prend le marqueur
+	// de son ORIGINE — le client qui commande — et ce qu'il produit ensuite le
+	// recopie depuis l'objet. Le lire sur le jeton d'un autre acteur (le
+	// livreur qui accepte) marquerait une vraie commande comme un essai, et la
+	// ferait disparaître des chiffres sans que personne ne la cherche.
+	//
+	// Faux sur un jeton d'avant ce marqueur, et sur tout compte réel.
+	Testing bool
 }
 
 // Grant est ce qu'un jeton accorde : l'identité, et ses bornes.
@@ -119,6 +135,8 @@ type Grant struct {
 	// un client sur sa tablette et son téléphone, un membre du staff sur
 	// trois onglets de console.
 	Device string
+	// Testing : un compte d'essai — voir `Claims.Testing`.
+	Testing bool
 }
 
 // Portées connues. Une portée est une VERTICALE, pas une permission fine :
@@ -221,6 +239,11 @@ func (m *Manager) generate(g Grant, typ string, ttl time.Duration) (string, erro
 	if g.Device != "" {
 		claims["did"] = g.Device
 	}
+	// ⚠️ Omis sur un compte réel, pour la même raison : un jeton réel est
+	// celui d'avant, octet pour octet.
+	if g.Testing {
+		claims["tst"] = true
+	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	signed, err := token.SignedString(m.secret)
 	if err != nil {
@@ -261,6 +284,7 @@ func (m *Manager) Verify(tokenStr string) (Claims, error) {
 	out.Country, _ = mapClaims["cty"].(string)
 	out.CountryAny, _ = mapClaims["cty_any"].(bool)
 	out.Device, _ = mapClaims["did"].(string)
+	out.Testing, _ = mapClaims["tst"].(bool)
 	return out, nil
 }
 
@@ -272,6 +296,7 @@ type ctxUser struct {
 	role       string
 	country    string
 	countryAny bool
+	testing    bool
 }
 
 // WithUser stores the authenticated user in the context.
@@ -289,6 +314,7 @@ func WithClaims(ctx context.Context, c Claims) context.Context {
 	return context.WithValue(ctx, ctxKey{}, ctxUser{
 		id: c.UserID, role: c.Role, scopes: c.Scopes,
 		country: c.Country, countryAny: c.CountryAny,
+		testing: c.Testing,
 	})
 }
 
@@ -301,6 +327,15 @@ func WithClaims(ctx context.Context, c Claims) context.Context {
 func CountryFromContext(ctx context.Context) (code string, any bool) {
 	u, _ := ctx.Value(ctxKey{}).(ctxUser)
 	return u.country, u.countryAny
+}
+
+// TestingFromContext dit si le PORTEUR de la requête est un compte d'essai.
+//
+// ⚠️ À LIRE À LA NAISSANCE D'UN OBJET, PAR SON ORIGINE, ET NULLE PART AILLEURS
+// — voir `Claims.Testing`. Faux sans jeton, et sur un jeton d'avant le marqueur.
+func TestingFromContext(ctx context.Context) bool {
+	u, _ := ctx.Value(ctxKey{}).(ctxUser)
+	return u.testing
 }
 
 // ScopesFromContext rend les portées du porteur, vides si aucune restriction.
