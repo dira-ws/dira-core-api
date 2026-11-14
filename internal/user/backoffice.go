@@ -59,6 +59,11 @@ type AccountRow struct {
 	Interests []string `bson:"interests,omitempty" json:"interests"`
 	Status    string   `bson:"status" json:"status"`
 	Country   string   `bson:"country,omitempty" json:"country,omitempty"`
+	// Testing : un compte d'ESSAI, marqué par l'équipe. ⚠️ RENDU parce que la
+	// console doit le montrer — sans quoi on prendra ses commandes pour de
+	// vraies — et parce que c'est elle qui l'ôte quand la recette est finie.
+	// Absent sur un vrai compte.
+	Testing bool `bson:"testing,omitempty" json:"testing,omitempty"`
 	// DeletionRequestedAt : quand la personne (ou le support) a demandé la
 	// suppression de ce compte. Présent uniquement sur un compte `closed`.
 	//

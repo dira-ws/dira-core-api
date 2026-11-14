@@ -110,6 +110,19 @@ type Fact struct {
 	// Attrs porte ce que le métier veut ajouter (classe, montant, tentatives).
 	// Des chaînes, pour que le fil reste lisible par n'importe quoi.
 	Attrs map[string]string `json:"attrs,omitempty"`
+	// Testing dit que le fait vient d'un ESSAI — une course passée par un compte
+	// d'essai. L'analytique le range, et ne le compte nulle part : ni zone
+	// rouge, ni classement, ni rapport (`country.Counting`), exactement comme un
+	// fait d'un pays d'essai.
+	//
+	// ⚠️ POSÉ PAR LE PRODUCTEUR, DEPUIS L'OBJET — jamais déduit de la requête
+	// par `Emit`, contrairement au pays. Un fait part souvent de la requête d'un
+	// AUTRE acteur que celui qui a fait naître l'objet (le livreur qui accepte
+	// une commande) : le lire là marquerait une vraie course comme un essai.
+	//
+	// ⚠️ OMIS sur un vrai fait : le fil d'un repas réel est celui d'avant,
+	// octet pour octet, et un lecteur d'avant ce champ n'a rien à ignorer.
+	Testing bool `json:"testing,omitempty"`
 }
 
 // Emitter dépose un fait sur le fil.
@@ -140,16 +153,7 @@ func NewRedis(rdb *redis.Client, maxLen int64) *Redis {
 
 // Emit dépose le fait. Au mieux : une erreur est journalisée, jamais rendue.
 func (e *Redis) Emit(ctx context.Context, f Fact) {
-	if f.At.IsZero() {
-		f.At = time.Now().UTC()
-	}
-	// Le pays est posé ICI, à l'émission, plutôt que par chaque appelant :
-	// il y a une trentaine de points d'émission dans les deux verticales, et
-	// celui qu'on aurait oublié aurait produit un fait apatride — invisible
-	// dans toutes les consoles.
-	if f.Country == "" {
-		f.Country = country.FromContext(ctx)
-	}
+	f = stamp(ctx, f)
 	values, err := Encode(f)
 	if err != nil {
 		slog.WarnContext(ctx, "facts: unencodable fact dropped", "kind", f.Kind, "error", err)
@@ -166,6 +170,26 @@ func (e *Redis) Emit(ctx context.Context, f Fact) {
 		slog.WarnContext(ctx, "facts: fact dropped — the stream is unreachable",
 			"kind", f.Kind, "ref", f.Ref, "error", err)
 	}
+}
+
+// stamp pose ce que le fil déduit de la requête : l'heure et le pays — et RIEN
+// d'autre.
+//
+// Le pays est posé ICI, à l'émission, plutôt que par chaque appelant : il y a
+// une trentaine de points d'émission dans les deux verticales, et celui qu'on
+// aurait oublié aurait produit un fait apatride — invisible dans toutes les
+// consoles.
+//
+// ⚠️ LE MARQUEUR D'ESSAI N'EN FAIT PAS PARTIE, et il ne doit pas en faire
+// partie : voir `Fact.Testing`.
+func stamp(ctx context.Context, f Fact) Fact {
+	if f.At.IsZero() {
+		f.At = time.Now().UTC()
+	}
+	if f.Country == "" {
+		f.Country = country.FromContext(ctx)
+	}
+	return f
 }
 
 // Encode rend les champs d'une entrée de flux. Le fait entier est dans `json`

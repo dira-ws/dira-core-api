@@ -2516,6 +2516,12 @@ paths:
         livraison), ou **absent** tant qu'aucune verticale ne l'a réclamée.
         ⚠️ Montrez-le sur la fiche : le support ne peut pas libérer
         (`DELETE /admin/users/{id}/agent-app`) ce qu'il ne voit pas.
+
+
+        Une ligne porte aussi **`testing: true`** (v4.139.0) quand le compte
+        est un compte d'ESSAI, marqué par l'équipe
+        (`PATCH /admin/users/{id}/testing`). Absent sur un vrai compte.
+        ⚠️ Montrez-le : sans quoi on prendra ses commandes pour de vraies.
       parameters:
         - {name: role, in: query, schema: {type: string, enum: [client, driver, merchant, admin]}}
         - {name: status, in: query, schema: {type: string, enum: [active, suspended]}}
@@ -2646,6 +2652,58 @@ paths:
         "200": {description: Previous state and new status}
         "404": {description: user_not_found}
         "422": {description: status must be active or suspended}
+  /admin/users/{id}/testing:
+    patch:
+      tags: [admin]
+      summary: "Marquer un compte d'ESSAI, ou l'en sortir (v4.139.0)"
+      description: >-
+        Un pays peut être réservé aux essais (`testing` dans `GET /countries`) :
+        toute son activité sort de la supervision, des rapports et des
+        classements. **Ce geste fait la même chose pour UN compte** — un
+        livreur émulé, un client de recette —, dans un pays qui reste réel pour
+        tous les autres.
+
+
+        Ce que le compte fait naître (une commande, un envoi) porte
+        `testing: true`, et tout ce qui en découle le recopie : la course, ses
+        faits, ses gains. Rien de tout cela n'entre dans une jauge, une alerte,
+        un rapport ni un classement ; tout reste visible dans les listes de
+        l'exploitation, pour suivre la recette.
+
+
+        ⚠️ **Le marqueur part dans le JETON** : il s'applique au prochain jeton
+        du compte — sa connexion suivante, ou son prochain rafraîchissement
+        (quinze minutes au plus). Marquez d'abord, puis faites la recette.
+        Aucune session n'est coupée.
+
+
+        Réservé aux comptes `client` et `driver` (409 `testing_not_applicable`
+        ailleurs, `reason` = le rôle) ; l'ôter est toujours possible.
+        IDEMPOTENT : rejouer répond `200` sans rien écrire. Le geste est inscrit
+        au **journal d'audit** (`user.testing`).
+      parameters: [{name: id, in: path, required: true, schema: {type: string}}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [testing]
+              properties:
+                testing: {type: boolean, description: "`true` marque le compte, `false` l'en sort."}
+      responses:
+        "200":
+          description: L'état avant, et le nouveau
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  before: {type: boolean}
+                  testing: {type: boolean}
+        "404": {description: user_not_found}
+        "409": {description: testing_not_applicable}
+        "422": {description: "`testing` absent, ou champ inconnu"}
   /admin/users/{id}/agent-app:
     delete:
       tags: [admin]

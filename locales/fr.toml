@@ -239,6 +239,9 @@ other = "Configurez d'abord une clé Google Maps pour au moins une plateforme"
 [errors.country_default_testing]
 other = "Le pays par défaut ne peut pas être réservé aux essais"
 
+[errors.testing_not_applicable]
+other = "Seuls les comptes de client, de livreur ou de chauffeur peuvent être marqués comme comptes d'essai"
+
 # ── Ajoutés le 29 septembre 2026 ─────────────────────────────────────────────
 # ⚠️ Quarante et un refus du socle partaient en ANGLAIS. Aucun test ne le
 # disait ici ; il n'existait que dans les courses. Voir internal/boundary.

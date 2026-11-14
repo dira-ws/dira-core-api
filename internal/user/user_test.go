@@ -189,6 +189,18 @@ func (f *fakeUserRepo) SetAgentApp(_ context.Context, userID primitive.ObjectID,
 	return nil
 }
 
+// SetTesting, ciblé lui aussi : la marque d'essai ne touche rien d'autre.
+func (f *fakeUserRepo) SetTesting(_ context.Context, userID primitive.ObjectID, testing bool) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	u, ok := f.users[userID]
+	if !ok {
+		return errors.New("user not found")
+	}
+	u.Testing = testing
+	return nil
+}
+
 func (f *fakeUserRepo) AddInterest(_ context.Context, userID primitive.ObjectID, interest string) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()

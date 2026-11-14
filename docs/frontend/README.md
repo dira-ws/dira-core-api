@@ -1,6 +1,6 @@
 # Specs frontend — par rôle
 
-> **Version 4.138.0** · 13 novembre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics`
+> **Version 4.139.0** · 14 novembre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics`
 
 **Cinq** documents, un par application. Chacun est **autonome** : tout ce qu'un frontend doit savoir pour son rôle, sans avoir à ouvrir les vingt specs de modules.
 
@@ -244,6 +244,38 @@ jamais comptée, jamais lue par l'exploitation. Et **ne testez jamais sur un
 autre pays** : le Sénégal et le Togo sont des pays réels, et une course d'essai
 y déclenche les alertes qui notifient six personnes — c'est arrivé.
 
+### 🧪 Au TOGO, l'essai se fait avec un COMPTE D'ESSAI (v4.139.0)
+
+Le Togo reste un pays **réel**. Mais l'équipe Dira peut y marquer un compte
+**d'essai** — un client de recette, un livreur émulé —, et ce que ce compte fait
+**naître** est un essai : les commandes d'un client d'essai, et tout ce qui en
+découle (leur course, ses faits, ses gains). Un essai **n'entre ni dans la
+supervision, ni dans les rapports, ni dans les classements**, exactement comme ce
+qui se passe au Gabon — et le pays reste réel pour tous les autres.
+
+| | |
+|---|---|
+| Qui marque | l'équipe, depuis la console (`PATCH /admin/users/{id}/testing`) |
+| Ce qui est marqué | la **livraison** : les commandes d'un client d'essai, puis leurs courses |
+| Quand | au **prochain jeton** du compte : la connexion suivante, ou le prochain rafraîchissement (quinze minutes au plus) |
+
+⚠️ **C'est la COMMANDE qui dit si sa course est un essai, pas le livreur qui la
+porte.** Un livreur marqué ne fait naître aucune commande : la course d'un client
+d'essai est un essai, quel que soit son livreur ; celle d'un vrai client est
+vraie, même portée par un livreur émulé — et elle compte, pour qu'aucun vrai
+repas ne disparaisse des chiffres.
+
+⚠️ **Sans compte marqué, une commande au Togo est une vraie commande** : elle
+compte, et elle peut réveiller les alertes. Ne testez au Togo qu'avec un compte
+que l'équipe vous a donné comme compte d'essai.
+
+⚠️ **Les COURSES (VTC) ne lisent pas encore ce marqueur.** Au Togo, jamais de
+course VTC d'essai : elle compte comme une vraie. Les courses se testent au
+Gabon.
+
+⚠️ **Rien ne change pour une application.** Le marqueur voyage dans le jeton,
+que vous ne lisez pas ; aucune réponse ne change de forme.
+
 ## Ce que ces documents remplacent
 
 `docs/specs/*.md` reste la référence **du backend** : un module par fichier, avec ses raisons de conception. Ces trois-ci sont la référence **du frontend** : un rôle par fichier, avec les contrats.
@@ -355,6 +387,24 @@ Chaque document porte la même version en en-tête, et son propre journal des ch
 - [ ] ⚠️ **`TRACKING_JWT_SECRET` renseigné dans chaque environnement déployé.** Vide, l'authentification du service de suivi est **désactivée** : n'importe qui connaissant un `delivery_id` suit la course. Le secret doit valoir **exactement** le `JWT_SECRET` de `dira-food-api`.
 
 ## Journal
+
+### 4.139.0 — 14 novembre 2026
+
+🧪 **LES ESSAIS MARQUÉS : on peut tester au Togo avec un compte d'essai.** Le
+Togo reste un pays réel ; l'équipe y marque des comptes d'essai (un livreur
+émulé, un client de recette), et ce qu'ils font naître — une commande, puis sa
+course, ses faits, ses gains — porte le marqueur et n'entre ni dans la
+supervision, ni dans les rapports, ni dans les classements. La règle est décrite
+dans la section *Au Togo, l'essai se fait avec un compte d'essai*, ci-dessus.
+
+- Côté console : `PATCH /admin/users/{id}/testing` `{testing}` marque un compte
+  `client` ou `driver`, ou l'en sort (409 `testing_not_applicable` pour les
+  autres rôles), et les fiches de compte portent `testing: true`.
+- ⚠️ La livraison seulement : les courses (VTC) ne lisent pas encore le
+  marqueur, et le Gabon reste leur pays d'essai.
+
+🔧 **Ce qui ne change pas** : aucune route ni aucune réponse des applications.
+Une application n'a rien à faire.
 
 ### 4.138.0 — 13 novembre 2026
 
