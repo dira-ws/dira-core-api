@@ -1,6 +1,6 @@
 # App LIVREUR — LIVRAISON — contrat d'API
 
-> **Version 4.139.0** · 14 novembre 2026
+> **Version 4.140.0** · 14 novembre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Livraison : `https://api-staging.dira.llc/api/v1/food` · Suivi : `wss://tracking-staging.dira.llc` · SIG : `https://maps.dira.llc/api`
 
 
@@ -1417,6 +1417,7 @@ redémarrage — plus besoin d'en garder l'identifiant en local.
 | `409 no_active_vehicle` | aucun véhicule actif | renvoyer aux véhicules |
 | `409 driver_at_capacity` | déjà autant de courses que le véhicule en porte | **l'annoncer avant**, griser les courses inaccessibles |
 | `409 not_called` | course réservée aux appelés | ne devrait pas arriver — rafraîchir plutôt qu'insister |
+| `409 testing_mismatch` (v4.140.0) | une course d'essai et un vrai livreur, ou l'inverse | ne devrait pas arriver — rafraîchir la liste ; **aucun jeton n'a bougé** |
 | `409 delivery_not_available` | prise par un autre | retirer de la liste, **rafraîchir le solde** : le jeton est remboursé |
 
 > **`402` est un `402`, pas un `409`.** Une application qui filtre sur le mauvais statut proposera une recharge au mauvais moment.
@@ -1877,6 +1878,14 @@ qui n'ont jamais existé pour la paie.
 > d'essai. Sans client marqué par l'équipe, une livraison au Togo est une vraie
 > livraison. Le marqueur part dans le jeton, au prochain jeton du compte : rien
 > ne change pour votre application.
+>
+> ⚠️ **ESSAI AVEC ESSAI, RÉEL AVEC RÉEL** (v4.140.0). Une course d'essai
+> n'appelle QUE des livreurs d'essai, et une vraie course JAMAIS un livreur
+> d'essai : l'appel, la liste `/deliveries/available` et l'acceptation le
+> respectent, comme l'attribution par la console. Un livreur marqué d'essai ne
+> voit donc que des recettes, et un vrai livreur jamais une recette. Accepter
+> une course de l'autre espèce répond `409 testing_mismatch`, avant tout débit
+> de jeton. Un livreur dont l'équipe ne sait pas lire la fiche est réputé réel.
 
 Le rattrapage ci-dessus porte les **positions**. Les **gestes** — collecter,
 terminer — se rejouent ici :
