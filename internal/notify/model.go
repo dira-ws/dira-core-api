@@ -466,6 +466,9 @@ const (
 	// commande… » pour un colis. Et comme tous les gabarits du colis, rien du
 	// destinataire ni de l'expéditeur — la référence de l'envoi suffit.
 	KeyParcelDeliveryCancelled = "parcel_delivery_cancelled"
+	// KeyParcelRetryRequested va au LIVREUR : après un échec de remise,
+	// l'expéditeur demande une nouvelle tentative — il repart vers le dépôt.
+	KeyParcelRetryRequested = "parcel_retry_requested"
 	// LES ALERTES DE L'ÉQUIPE DU COLIS (`staff_parcel_*`), poussées aux membres
 	// dont le périmètre couvre `parcel`. `staff_parcel_code_locked` : un code
 	// de remise s'est verrouillé ; `staff_parcel_incident` : un envoi demande
@@ -1359,6 +1362,15 @@ var defaults = map[string]Template{
 			LocaleEN: {Title: "Parcel cancelled", Body: "Shipment [shipment_ref] you were carrying is cancelled. You are free for another delivery."},
 		},
 	},
+	KeyParcelRetryRequested: {
+		Key:         KeyParcelRetryRequested,
+		Description: "COLIS — après un échec de remise, l'expéditeur demande une NOUVELLE TENTATIVE. Message au LIVREUR, sans aucune adresse ni aucun nom.",
+		Enabled:     true,
+		Locales: map[string]Text{
+			LocaleFR: {Title: "Nouvelle tentative", Body: "L'expéditeur de l'envoi [shipment_ref] demande une nouvelle tentative de remise."},
+			LocaleEN: {Title: "Try again", Body: "The sender of shipment [shipment_ref] asks for another delivery attempt."},
+		},
+	},
 	KeyStaffParcelCodeLocked: {
 		Key:         KeyStaffParcelCodeLocked,
 		Description: "STAFF — un code de remise de colis s'est verrouillé après trop d'essais faux.",
@@ -1527,6 +1539,7 @@ var provided = map[string][]string{
 	KeyParcelPaymentKept:       {"shipment_ref", "amount"},
 	KeyParcelReturnAssigned:    {"shipment_ref"},
 	KeyParcelDeliveryCancelled: {"shipment_ref"},
+	KeyParcelRetryRequested:    {"shipment_ref"},
 	// ⚠️ `who` est le LIVREUR qui essayait le code : c'est lui que l'équipe
 	// appelle. `kind` et `detail` d'un incident sont des phrases déjà écrites
 	// par la verticale.
