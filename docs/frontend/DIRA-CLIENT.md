@@ -1,6 +1,6 @@
 # App CLIENT UNIFIÉE — LIVRAISON **et** COURSES — contrat d'API
 
-> **Version 4.140.0** · 14 novembre 2026
+> **Version 4.141.0** · 16 novembre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Livraison : `…/api/v1/food` · Courses : `…/api/v1/vtc` · Combiné : `…/api/v1/analytics` · Suivi : `wss://tracking-staging.dira.llc`
 
 ---
@@ -1116,8 +1116,14 @@ Idempotency-Key: <une clé par appui>
 - ⚠️ **Elle ne dépend ni de l'assistant ni de son quota** : ni modèle, ni budget, ni
   interrupteur de l'IA. Elle marche quand l'assistant est coupé, et c'est voulu.
 - **`reply` est déjà écrite dans le fil** (`role: "assistant"`), une seule fois : ne
-  l'ajoutez pas vous-même. Elle est dans `language` si vous l'envoyez et que le serveur
-  la sait dire, sinon dans la langue de `Accept-Language`.
+  l'ajoutez pas vous-même. Avec **un seul** de `language` et `Accept-Language`, elle
+  est dans celle-là, comme avant.
+- 🆕 ⚠️ **Avec les deux, et différents** (v4.141.0) : `reply` suit `Accept-Language`
+  — c'est l'écrit —, et un **`audio`** la dit dans `language` (§ 8 bis). **Faites
+  parler le téléphone avec `audio.text` et `audio.language`, pas avec `reply`.**
+  `audio` est absent quand le serveur ne sait pas dire cette langue ; il est remplacé
+  par `audio_error: "tts_unavailable"` quand elle est réglée sur une voix de serveur
+  (cette route ne paie aucune synthèse) : lisez alors `reply`.
 - **`reason`** dit d'où vient l'appui, pour le support : `refocus`, ou une courte
   valeur à vous (40 caractères au plus). **`turn_id`** : le tour qui a mené là.
 - **La réponse de l'équipe** arrive dans `GET /analytics/ai/thread`, en bulle
@@ -1356,6 +1362,9 @@ l'exploitation (au Sénégal ce peut être le wolof, au Togo le français).
 et un téléphone réglé en français n'empêche pas son propriétaire de parler
 wolof.
 
+🆕 ⚠️⚠️ **`language` CHOISIT LA VOIX, PAS L'ÉCRIT** (v4.141.0) : `reply` suit
+`Accept-Language`, `audio` suit `language` — voir § 8 bis.
+
 🆕 **Ce qu'on propose à la personne est dans `languages` de `/app/config`** (§4 ter,
 v4.119.0), pas ici. Treize codes sont admis, y compris ceux qu'aucune liste ne
 propose aujourd'hui ; tout autre est refusé (`422 unknown_language`) :
@@ -1496,6 +1505,49 @@ montant qui n'y est pas. Quand le tour porte une `action`, `audio.text` est son
 C'est la même règle que pour `action.say`, et elle existe pour la même raison :
 une personne qui **entend** un prix inventé dirait « oui » à ce prix-là.
 
+### 🆕 ⚠️⚠️ DEUX LANGUES : `reply` suit `Accept-Language`, `audio` suit `language` (v4.141.0)
+
+**L'écrit reste dans la langue de l'écran, l'audio est dans la langue parlée.**
+Une personne qui lit le français mais parle l'arabe tchadien envoie
+`Accept-Language: fr` et `language=shu` ; elle **lit** la phrase française et
+**entend** la phrase arabe :
+
+```jsonc
+// POST /analytics/ai/voice — language=shu, Accept-Language: fr
+{ "state": "ordered",
+  "reply": "Je réserve votre course : de Moursal à Chagoua, moto, 700 francs, en espèces.",
+  "audio": { "kind": "native_tts_instruction", "language": "shu",
+             "text": "أحجز مشوارك: من Moursal إلى Chagoua، moto، 700 فرنك، نقداً." } }
+```
+
+- **L'écrit** — `reply`, `action.say`, et le `text` de la bulle dans
+  `GET /analytics/ai/thread` — est dans la langue de `Accept-Language`, comme
+  quand `language` est absent.
+- **Le dit** — `audio.text` et `audio.language` — est dans la langue de
+  `language`, quand le serveur sait la dire : la proposition et son prix,
+  « c'est réservé », « d'accord, je ne commande rien », « quelqu'un vous
+  rappelle », « le prix d'avant avait expiré… » se composent dans les deux
+  langues, **avec les mêmes chiffres**. Aujourd'hui : le français, l'anglais et
+  l'arabe (dont `shu`).
+- ⚠️ **Sinon, `audio.language` est la langue dans laquelle `audio.text` est
+  écrit.** Une phrase libre de l'assistant — « d'où partez-vous ? » — est écrite
+  dans la langue de l'écran et dite telle quelle : `audio.language` vaut alors
+  `fr`, pas `shu`. Même chose pour une langue parlée que le serveur ne sait pas
+  encore dire (`wo`, `ee`, `sba`…). **Faites toujours parler le téléphone dans
+  `audio.language`** : c'est la langue du texte, et une phrase française lue par
+  une voix arabe ne se comprend pas.
+- **Une seule langue envoyée, ou `language` = `Accept-Language`** : rien ne
+  change.
+- **La relecture du fil** rend les deux : `text` pour l'écran, `audio` pour la
+  voix, sans rien recomposer. Un renvoi avec la même `Idempotency-Key` rend le
+  même tour.
+- **`POST /analytics/ai/confirm` et `/ai/decline`** sur la proposition d'un tel
+  vocal : `reply` dans la langue de l'écran de l'appel, et un `audio` dans la
+  langue du vocal (§ 8 bis bis). **`POST /analytics/ai/support`** aussi
+  (§ 8, « Joindre l'équipe »).
+- ⚠️ **Le direct** (§ 8 quater) ne change pas : il parle la langue de
+  `session.start`, et sa transcription est ce qui a été dit.
+
 ### Les deux façons de faire parler
 
 | `audio.kind` | Ce que vous faites |
@@ -1603,6 +1655,22 @@ POST /analytics/ai/confirm
   "reply": "C'est réservé. Nous cherchons un chauffeur." }
 ```
 
+🆕 **La proposition d'un vocal dit dans une autre langue que l'écran**
+(v4.141.0) : la réponse — de `/ai/confirm` comme de `/ai/decline` — porte en
+plus un `audio` dans la langue de ce vocal, et `reply` reste dans celle de
+l'écran de l'appel :
+
+```jsonc
+{ "state": "ordered", "vertical": "vtc", "ordered": { "kind": "ride", "id": "68f0aa…" },
+  "reply": "C'est réservé. Nous cherchons un chauffeur.",
+  "audio": { "kind": "native_tts_instruction", "language": "shu",
+             "text": "تم الحجز. نبحث لك عن سائق." } }
+```
+
+Absent sinon, comme avant. ⚠️ Ces routes ne paient aucune synthèse : une langue
+réglée sur une voix de serveur rend `audio_error: "tts_unavailable"` à la place —
+lisez `reply`.
+
 ### ⚠️⚠️ LISEZ `action.say`, JAMAIS `reply`, SI VOUS DITES UN PRIX À VOIX HAUTE
 
 `reply` est écrit par un **modèle qui n'a jamais vu le plan**. Il peut énoncer
@@ -1612,6 +1680,12 @@ qui n'existe pas, et découvrirait le vrai à l'arrivée.
 `action.say` et `action.summary` sont composés d'un **gabarit déterministe sur
 les champs du devis**, dans la langue de la personne. Ce sont eux qui disent la
 vérité du prix — et `summary.price_xof` est **le prix qui sera débité**.
+
+🆕 ⚠️ **Sur un vocal dit dans une autre langue que l'écran** (v4.141.0),
+`action.say` est dans la langue de l'**écran** — c'est la phrase à montrer — et
+sa version **dite** est `audio.text` du même tour, dans la langue de `language`.
+Mêmes champs, même prix, même proposition : un seul jeton. À voix haute, lisez
+`audio.text` (§ 8 bis).
 
 🆕 **`reply` est désormais VÉRIFIÉ contre le plan** (v4.105.0) : une phrase qui
 cite un chiffre absent du plan — ou de ce que la personne a dit — est remplacée
