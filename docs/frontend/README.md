@@ -1,6 +1,6 @@
 # Specs frontend — par rôle
 
-> **Version 4.140.0** · 14 novembre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics`
+> **Version 4.141.0** · 16 novembre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics`
 
 **Cinq** documents, un par application. Chacun est **autonome** : tout ce qu'un frontend doit savoir pour son rôle, sans avoir à ouvrir les vingt specs de modules.
 
@@ -387,6 +387,31 @@ Chaque document porte la même version en en-tête, et son propre journal des ch
 - [ ] ⚠️ **`TRACKING_JWT_SECRET` renseigné dans chaque environnement déployé.** Vide, l'authentification du service de suivi est **désactivée** : n'importe qui connaissant un `delivery_id` suit la course. Le secret doit valoir **exactement** le `JWT_SECRET` de `dira-food-api`.
 
 ## Journal
+
+### 4.141.0 — 16 novembre 2026
+
+🗣️ **DEUX LANGUES : `reply` suit `Accept-Language`, `audio` suit `language`.**
+L'écrit reste dans la langue de l'écran, l'audio est dans la langue parlée. Une
+personne qui lit le français mais parle l'arabe tchadien envoie
+`Accept-Language: fr` et `language=shu` : elle lit « Je réserve votre
+course… » et entend « أحجز مشوارك… ». Jusqu'ici, une course commandée seule
+s'écrivait dans la langue parlée, et une proposition se disait dans celle de
+l'écran.
+
+- `DIRA-CLIENT.md` § 8 bis : la règle, l'exemple, et ce que vaut
+  `audio.language` quand le serveur ne sait pas dire la langue parlée (une phrase
+  libre de l'assistant, une langue sans phrases composées) : la langue dans
+  laquelle `audio.text` est écrit. Faites toujours parler le téléphone dans
+  `audio.language`.
+- § 8 bis bis : `action.say` suit l'écran, sa version dite est `audio.text` ;
+  `POST /analytics/ai/confirm` et `/ai/decline` rendent un `audio` sur la
+  proposition d'un tel vocal.
+- § 8, « Joindre l'équipe » : avec `language` et `Accept-Language` différents,
+  `reply` suit l'écran et un `audio` la dit dans `language`.
+
+🔧 **Ce qui ne change pas** : une seule langue envoyée, ou `language` =
+`Accept-Language` ; la route de texte (`/ai/chat`) ; le direct. Aucune route
+nouvelle, aucun champ retiré — `audio` est ajouté là où il manquait.
 
 ### 4.140.0 — 14 novembre 2026
 
