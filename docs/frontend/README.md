@@ -1,6 +1,6 @@
 # Specs frontend — par rôle
 
-> **Version 4.141.0** · 16 novembre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics`
+> **Version 4.142.0** · 17 novembre 2026 · APIs `dira-core-api` + `dira-food-api` + `dira-vtc-api` + `dira-analytics`
 
 **Cinq** documents, un par application. Chacun est **autonome** : tout ce qu'un frontend doit savoir pour son rôle, sans avoir à ouvrir les vingt specs de modules.
 
@@ -387,6 +387,26 @@ Chaque document porte la même version en en-tête, et son propre journal des ch
 - [ ] ⚠️ **`TRACKING_JWT_SECRET` renseigné dans chaque environnement déployé.** Vide, l'authentification du service de suivi est **désactivée** : n'importe qui connaissant un `delivery_id` suit la course. Le secret doit valoir **exactement** le `JWT_SECRET` de `dira-food-api`.
 
 ## Journal
+
+### 4.142.0 — 17 novembre 2026
+
+🗣️ **LA LANGUE QUE VOUS ENVOYEZ DÉCIDE DE LA RÉPONSE DITE — et les questions
+libres de l'assistant se disent dans cette langue.** Suite de 4.141.0.
+
+- `DIRA-CLIENT.md` § 8 bis : quand le vocal porte `language`, c'est elle qui
+  décide de la réponse dite, jamais la langue que la transcription reconnaît
+  dans l'audio. Vous envoyez `shu`, la transcription rend `fr` : la réponse se
+  dit en `shu`.
+- Les questions libres de l'assistant (« d'où partez-vous ? ») ont désormais
+  leur version dite dans `audio.text`, écrite par le même appel que `reply`.
+- Ce que vaut `audio.language` : votre `language` quand le serveur sait la dire
+  (français, anglais, arabe dont `shu`) ; sinon la langue de l'écran, avec la
+  phrase de l'écran — jamais la langue reconnue dans l'audio.
+- § 8, « Joindre l'équipe » : l'exemple du nouveau champ `audio` de
+  `POST /analytics/ai/support`, et ce qu'il faut prononcer.
+
+🔧 **Ce qui ne change pas** : un vocal sans `language` ; la route de texte ; le
+direct. Aucune route nouvelle, aucun champ retiré.
 
 ### 4.141.0 — 16 novembre 2026
 
