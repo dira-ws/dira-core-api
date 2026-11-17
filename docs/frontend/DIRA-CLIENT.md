@@ -1,6 +1,6 @@
 # App CLIENT UNIFIÉE — LIVRAISON **et** COURSES — contrat d'API
 
-> **Version 4.141.0** · 16 novembre 2026
+> **Version 4.142.0** · 17 novembre 2026
 > Socle : `https://api-staging.dira.llc/api/v1` · Livraison : `…/api/v1/food` · Courses : `…/api/v1/vtc` · Combiné : `…/api/v1/analytics` · Suivi : `wss://tracking-staging.dira.llc`
 
 ---
@@ -1118,12 +1118,23 @@ Idempotency-Key: <une clé par appui>
 - **`reply` est déjà écrite dans le fil** (`role: "assistant"`), une seule fois : ne
   l'ajoutez pas vous-même. Avec **un seul** de `language` et `Accept-Language`, elle
   est dans celle-là, comme avant.
-- 🆕 ⚠️ **Avec les deux, et différents** (v4.141.0) : `reply` suit `Accept-Language`
-  — c'est l'écrit —, et un **`audio`** la dit dans `language` (§ 8 bis). **Faites
-  parler le téléphone avec `audio.text` et `audio.language`, pas avec `reply`.**
-  `audio` est absent quand le serveur ne sait pas dire cette langue ; il est remplacé
-  par `audio_error: "tts_unavailable"` quand elle est réglée sur une voix de serveur
-  (cette route ne paie aucune synthèse) : lisez alors `reply`.
+- 🆕 ⚠️⚠️ **Avec les deux, et différents** (v4.141.0) : `reply` suit
+  `Accept-Language` — c'est l'écrit —, et un **nouveau champ `audio`** la dit dans
+  `language` (§ 8 bis). **Faites parler le téléphone avec `audio.text` dans
+  `audio.language`, pas avec `reply`** : `reply` est désormais la phrase de
+  l'écran.
+
+  ```jsonc
+  // POST /analytics/ai/support — { "reason": "refocus", "language": "shu" }, Accept-Language: fr
+  { "request_id": "…", "state": "queued",
+    "reply": "L'équipe Dira a votre demande. Elle vous répondra ici.",
+    "audio": { "kind": "native_tts_instruction", "language": "shu",
+               "text": "وصل طلبك إلى فريق ديرا، وسيرد عليك هنا." } }
+  ```
+
+  `audio` est absent quand le serveur ne sait pas dire cette langue (dites alors
+  `reply`), et remplacé par `audio_error: "tts_unavailable"` quand elle est réglée
+  sur une voix de serveur — cette route ne paie aucune synthèse : lisez `reply`.
 - **`reason`** dit d'où vient l'appui, pour le support : `refocus`, ou une courte
   valeur à vous (40 caractères au plus). **`turn_id`** : le tour qui a mené là.
 - **La réponse de l'équipe** arrive dans `GET /analytics/ai/thread`, en bulle
@@ -1363,7 +1374,9 @@ et un téléphone réglé en français n'empêche pas son propriétaire de parle
 wolof.
 
 🆕 ⚠️⚠️ **`language` CHOISIT LA VOIX, PAS L'ÉCRIT** (v4.141.0) : `reply` suit
-`Accept-Language`, `audio` suit `language` — voir § 8 bis.
+`Accept-Language`, `audio` suit `language` — voir § 8 bis. 🆕 (v4.142.0) Et c'est
+**la langue que vous envoyez** qui décide de la réponse dite, jamais celle que la
+transcription reconnaît dans l'audio.
 
 🆕 **Ce qu'on propose à la personne est dans `languages` de `/app/config`** (§4 ter,
 v4.119.0), pas ici. Treize codes sont admis, y compris ceux qu'aucune liste ne
@@ -1527,17 +1540,32 @@ Une personne qui lit le français mais parle l'arabe tchadien envoie
   `language`, quand le serveur sait la dire : la proposition et son prix,
   « c'est réservé », « d'accord, je ne commande rien », « quelqu'un vous
   rappelle », « le prix d'avant avait expiré… » se composent dans les deux
-  langues, **avec les mêmes chiffres**. Aujourd'hui : le français, l'anglais et
-  l'arabe (dont `shu`).
-- ⚠️ **Sinon, `audio.language` est la langue dans laquelle `audio.text` est
-  écrit.** Une phrase libre de l'assistant — « d'où partez-vous ? » — est écrite
-  dans la langue de l'écran et dite telle quelle : `audio.language` vaut alors
-  `fr`, pas `shu`. Même chose pour une langue parlée que le serveur ne sait pas
-  encore dire (`wo`, `ee`, `sba`…). **Faites toujours parler le téléphone dans
-  `audio.language`** : c'est la langue du texte, et une phrase française lue par
-  une voix arabe ne se comprend pas.
-- **Une seule langue envoyée, ou `language` = `Accept-Language`** : rien ne
-  change.
+  langues, **avec les mêmes chiffres**. 🆕 (v4.142.0) **Les questions libres de
+  l'assistant aussi** — « d'où partez-vous ? », « quel plat voulez-vous ? » :
+  le même appel écrit la phrase de l'écran et sa version dite. Aujourd'hui, le
+  serveur sait dire le français, l'anglais et l'arabe (dont `shu`).
+- 🆕 ⚠️⚠️ **C'EST `language` QUI DÉCIDE, JAMAIS LA LANGUE ENTENDUE** (v4.142.0).
+  La réponse dite suit la langue que vous **envoyez**, pas celle que la
+  transcription reconnaît dans l'audio — `language` dans la réponse du vocal,
+  qui peut différer (une transcription en lettres arabes revient en `shu` ; un
+  moteur qui retombe rend une autre langue). Vous envoyez `shu`, la
+  transcription rend `fr` : la réponse se dit en `shu`. Vous envoyez `fr`, la
+  transcription rend `shu` : elle se dit en `fr`.
+- 🆕 **Ce que vaut `audio.language`** (v4.142.0), quand vous envoyez
+  `language` :
+
+  | Cas | `audio.text` | `audio.language` |
+  |---|---|---|
+  | le serveur sait dire votre `language` | la version dite | votre `language` |
+  | il ne sait pas encore la dire (`wo`, `ee`, `sba`…) | la phrase de l'écran | la langue de l'écran |
+  | la version dite a été refusée (ses chiffres ne sont pas ceux de l'écran) | la phrase de l'écran | la langue de l'écran |
+
+  Jamais la langue reconnue dans l'audio. **Faites toujours parler le téléphone
+  dans `audio.language`** : c'est la langue de `audio.text`, et une phrase
+  française lue par une voix arabe ne se comprend pas. Sans `language`, rien ne
+  change : c'est la langue reconnue qui répond, comme avant.
+- **`language` = `Accept-Language`** : l'écrit et le dit sont dans cette
+  langue — même quand la transcription en reconnaît une autre.
 - **La relecture du fil** rend les deux : `text` pour l'écran, `audio` pour la
   voix, sans rien recomposer. Un renvoi avec la même `Idempotency-Key` rend le
   même tour.
